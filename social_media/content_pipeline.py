@@ -147,6 +147,14 @@ class ContentPipeline:
         visual_assets = self._generate_visual_assets(template, text_payload)
         video_assets = self._generate_video_assets(template, text_payload)
 
+        (
+            visual_assets,
+            video_assets,
+            consistency_report,
+        ) = self.ensure_character_consistency(
+            template, text_payload, visual_assets, video_assets
+        )
+
         assembled_post = self._combine_assets(
             post_type,
             template,
@@ -155,6 +163,8 @@ class ContentPipeline:
             video_assets,
             generation_meta,
         )
+
+        assembled_post["consistency_report"] = consistency_report
 
         quality = self._run_quality_checks(assembled_post, template)
         assembled_post["quality"] = quality
@@ -193,6 +203,14 @@ class ContentPipeline:
                 prompts = self._build_image_prompts(template, text_payload)
                 visual_assets = self._batch_image_generation(prompts, template)
 
+            (
+                visual_assets,
+                video_assets,
+                consistency_report,
+            ) = self.ensure_character_consistency(
+                template, text_payload, visual_assets, video_assets
+            )
+
             episode_payload = self._combine_assets(
                 "video",
                 template,
@@ -204,6 +222,7 @@ class ContentPipeline:
             episode_payload["quality"] = self._run_quality_checks(
                 episode_payload, template
             )
+            episode_payload["consistency_report"] = consistency_report
             episodes.append(episode_payload)
 
         series_payload = {
@@ -253,54 +272,315 @@ class ContentPipeline:
 
         return batch
 
-    def ensure_character_consistency(self) -> Dict[str, Any]:
-        """Audit recent assets to confirm the Refiloe persona remains intact."""
+    def ensure_character_consistency(
+        self,
+        template: Dict[str, Any],
+        text_payload: Dict[str, Any],
+        visual_assets: List[Dict[str, Any]],
+        video_assets: Dict[str, Any],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
+        """Validate visual assets and regenerate anything that drifts off-model."""
 
-        recent_assets = self.asset_registry[-20:]
-        inconsistencies: List[Dict[str, Any]] = []
+        if not self.image_generator:
+            report = {
+                "status": "skipped",
+                "reason": "image_generator_unavailable",
+                "assets": [],
+                "average_score": None,
+                "threshold": None,
+            }
+            return visual_assets, video_assets, report
 
-        name_token = (self.character_profile.get("name") or "Refiloe").lower()
-        for asset in recent_assets:
-            caption_text = (
-                asset.get("content", {})
-                .get("caption", {})
-                .get("content", "")
-                .lower()
+        threshold = self._resolve_consistency_threshold()
+        reports: List[Dict[str, Any]] = []
+        scores: List[float] = []
+
+        baseline = getattr(self.image_generator, "character_reference_url", None)
+        baseline_source = "generator_reference" if baseline else None
+
+        first_image_url = next(
+            (
+                asset.get("image_url")
+                for asset in visual_assets
+                if isinstance(asset, dict) and asset.get("image_url")
+            ),
+            None,
+        )
+
+        if not baseline and first_image_url:
+            try:
+                if hasattr(self.image_generator, "set_character_reference") and self.image_generator.set_character_reference(first_image_url):
+                    baseline = getattr(
+                        self.image_generator, "character_reference_url", first_image_url
+                    )
+                    baseline_source = "visual_asset"
+                else:
+                    baseline = first_image_url
+                    baseline_source = "visual_asset"
+            except Exception as exc:  # pragma: no cover - defensive logging
+                log_warning(f"Failed to set initial reference image: {exc}")
+                baseline = first_image_url
+                baseline_source = "visual_asset"
+
+        for idx, asset in enumerate(visual_assets):
+            if not isinstance(asset, dict):
+                continue
+
+            asset_url = asset.get("image_url")
+            if not asset_url:
+                continue
+
+            reference = baseline or asset_url
+            _, distance = self.image_generator.validate_character_consistency(
+                reference, asset_url
             )
-            if name_token not in caption_text:
-                inconsistencies.append(
-                    {
-                        "asset_id": asset.get("id"),
-                        "issue": "Missing persona reference in caption",
-                    }
-                )
+            initial_score = self._consistency_distance_to_score(distance)
+            passed = initial_score >= threshold if baseline else True
 
-            prompts = [
-                (img or {}).get("prompt", "").lower()
-                for img in asset.get("assets", {}).get("images", [])
-            ]
-            if prompts and not any(name_token in prompt for prompt in prompts):
-                inconsistencies.append(
-                    {
-                        "asset_id": asset.get("id"),
-                        "issue": "Image prompt missing persona markers",
-                    }
-                )
+            asset_report: Dict[str, Any] = {
+                "type": "image",
+                "index": idx,
+                "asset_url": asset_url,
+                "initial_score": initial_score,
+                "score": initial_score,
+                "threshold": threshold,
+                "regenerated": False,
+                "passed": passed,
+            }
 
+            if not passed:
+                regenerated = self._regenerate_image_asset(
+                    template, asset, reference
+                )
+                asset_report["regenerated"] = True
+                if regenerated and regenerated.get("image_url"):
+                    visual_assets[idx] = regenerated
+                    regen_url = regenerated["image_url"]
+                    _, regen_distance = self.image_generator.validate_character_consistency(
+                        reference, regen_url
+                    )
+                    final_score = self._consistency_distance_to_score(regen_distance)
+                    asset_report["score"] = final_score
+                    asset_report["asset_url"] = regen_url
+                    asset_report["passed"] = final_score >= threshold
+                    asset_report.setdefault("notes", []).append("regenerated_with_reference")
+                    if final_score >= threshold and not baseline:
+                        baseline = regen_url
+                        baseline_source = baseline_source or "regenerated_image"
+                else:
+                    asset_report.setdefault("notes", []).append("regeneration_failed")
+            else:
+                if not baseline:
+                    baseline = asset_url
+                    baseline_source = baseline_source or "visual_asset"
+
+            scores.append(asset_report["score"])
+            reports.append(asset_report)
+
+        thumbnail_url = None
+        if isinstance(video_assets, dict):
+            thumbnail_url = video_assets.get("thumbnail_url") or (
+                (video_assets.get("result") or {}).get("thumbnail_url")
+                if isinstance(video_assets.get("result"), dict)
+                else None
+            )
+
+        if thumbnail_url:
+            reference = baseline or thumbnail_url
+            _, distance = self.image_generator.validate_character_consistency(
+                reference, thumbnail_url
+            )
+            initial_score = self._consistency_distance_to_score(distance)
+            passed = initial_score >= threshold if baseline else True
+
+            thumbnail_report: Dict[str, Any] = {
+                "type": "video_thumbnail",
+                "asset_url": thumbnail_url,
+                "initial_score": initial_score,
+                "score": initial_score,
+                "threshold": threshold,
+                "regenerated": False,
+                "passed": passed,
+            }
+
+            if not passed:
+                regenerated_thumb = self._regenerate_video_thumbnail(
+                    template, text_payload
+                )
+                thumbnail_report["regenerated"] = True
+                if regenerated_thumb and regenerated_thumb.get("image_url"):
+                    new_thumbnail_url = regenerated_thumb["image_url"]
+                    if isinstance(video_assets, dict):
+                        video_assets["thumbnail_url"] = new_thumbnail_url
+                        video_assets.setdefault("thumbnail_details", regenerated_thumb)
+                    _, regen_distance = self.image_generator.validate_character_consistency(
+                        reference, new_thumbnail_url
+                    )
+                    final_score = self._consistency_distance_to_score(regen_distance)
+                    thumbnail_report["score"] = final_score
+                    thumbnail_report["asset_url"] = new_thumbnail_url
+                    thumbnail_report["passed"] = final_score >= threshold
+                    thumbnail_report.setdefault("notes", []).append("thumbnail_replaced")
+                    if final_score >= threshold and not baseline:
+                        baseline = new_thumbnail_url
+                        baseline_source = baseline_source or "video_thumbnail"
+                else:
+                    thumbnail_report.setdefault(
+                        "notes", []
+                    ).append("thumbnail_regeneration_failed")
+            else:
+                if not baseline:
+                    baseline = thumbnail_url
+                    baseline_source = baseline_source or "video_thumbnail"
+
+            scores.append(thumbnail_report["score"])
+            reports.append(thumbnail_report)
+
+        average_score = sum(scores) / len(scores) if scores else None
         report = {
-            "passed": len(inconsistencies) == 0,
-            "issues": inconsistencies,
-            "checked_at": datetime.now(self.sa_tz).isoformat(),
+            "status": "completed" if reports else "skipped",
+            "threshold": threshold,
+            "average_score": average_score,
+            "baseline_source": baseline_source,
+            "assets": reports,
         }
 
-        if report["passed"]:
-            log_info("Character consistency healthy across recent assets")
-        else:
-            log_warning(
-                f"Character consistency issues detected | total={len(inconsistencies)}"
-            )
+        return visual_assets, video_assets, report
 
-        return report
+    def _resolve_consistency_threshold(self) -> float:
+        image_cfg = self.config.get("image_generation")
+        if isinstance(image_cfg, dict):
+            configured = image_cfg.get("consistency_score_threshold")
+            if configured is not None:
+                try:
+                    return float(configured)
+                except (TypeError, ValueError):
+                    log_warning("Invalid consistency_score_threshold in config; using fallback")
+
+        generator_threshold = getattr(self.image_generator, "_consistency_threshold", None)
+        if generator_threshold is not None:
+            try:
+                diff_threshold = float(generator_threshold)
+                return max(0.0, min(100.0, 100.0 - diff_threshold))
+            except (TypeError, ValueError):  # pragma: no cover - defensive log path
+                log_warning("Invalid generator consistency threshold; using fallback")
+
+        return 75.0
+
+    @staticmethod
+    def _consistency_distance_to_score(distance: float) -> float:
+        try:
+            value = float(distance)
+        except (TypeError, ValueError):
+            return 0.0
+
+        if not math.isfinite(value):
+            return 0.0
+
+        return max(0.0, min(100.0, 100.0 - value))
+
+    def _regenerate_image_asset(
+        self,
+        template: Dict[str, Any],
+        asset: Dict[str, Any],
+        reference_url: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        if not self.image_generator:
+            return None
+
+        prompt = (
+            asset.get("source_prompt")
+            or asset.get("original_prompt")
+            or asset.get("prompt")
+        )
+        if not prompt:
+            return None
+
+        style = (
+            asset.get("style")
+            or template.get("visual_style")
+            or template.get("thumbnail_style")
+            or "professional"
+        )
+        setting = asset.get("setting")
+
+        try:
+            if reference_url and hasattr(self.image_generator, "set_character_reference"):
+                self.image_generator.set_character_reference(reference_url)
+        except Exception as exc:  # pragma: no cover - defensive log path
+            log_warning(f"Failed to reinforce reference before regeneration: {exc}")
+
+        try:
+            if hasattr(self.image_generator, "_generate_character_image"):
+                regenerated = self.image_generator._generate_character_image(  # type: ignore[attr-defined]
+                    prompt=prompt,
+                    style=style,
+                    setting=setting,
+                    persist=True,
+                    use_cache=False,
+                    force_refresh=True,
+                )
+            else:
+                regenerated = self.image_generator.generate_influencer_image(
+                    prompt=prompt,
+                    style=style,
+                    setting=setting,
+                    use_cache=False,
+                )
+        except Exception as exc:
+            log_error(f"Image regeneration failed: {exc}")
+            return None
+
+        if isinstance(regenerated, dict):
+            regenerated.setdefault("source_prompt", prompt)
+            regenerated.setdefault("style", style)
+            if setting:
+                regenerated.setdefault("setting", setting)
+            regenerated["regenerated_from"] = asset.get("image_url")
+            return regenerated
+
+        return None
+
+    def _regenerate_video_thumbnail(
+        self,
+        template: Dict[str, Any],
+        text_payload: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        if not self.image_generator:
+            return None
+
+        prompts = self._build_image_prompts(template, text_payload)
+        if not prompts:
+            return None
+
+        prompt, style = prompts[0]
+
+        try:
+            if hasattr(self.image_generator, "_generate_character_image"):
+                regenerated = self.image_generator._generate_character_image(  # type: ignore[attr-defined]
+                    prompt=prompt,
+                    style=style,
+                    setting=None,
+                    persist=False,
+                    use_cache=False,
+                    force_refresh=True,
+                )
+            else:
+                regenerated = self.image_generator.generate_consistent_character(
+                    prompt=prompt,
+                    style=style,
+                    force_refresh=True,
+                )
+        except Exception as exc:
+            log_error(f"Thumbnail regeneration failed: {exc}")
+            return None
+
+        if isinstance(regenerated, dict):
+            regenerated.setdefault("source_prompt", prompt)
+            regenerated.setdefault("style", style)
+            return regenerated
+
+        return None
 
     # ------------------------------------------------------------------
     # Text generation helpers
@@ -749,7 +1029,21 @@ class ContentPipeline:
         else:
             result = self.image_generator.generate_batch(prompt_payload)
 
-        valid_results = [res for res in result if isinstance(res, dict) and "error" not in res]
+        annotated_results: List[Any] = []
+        for idx, res in enumerate(result):
+            if isinstance(res, dict):
+                payload = prompt_payload[idx] if idx < len(prompt_payload) else {}
+                res.setdefault("source_prompt", payload.get("prompt"))
+                res.setdefault("style", payload.get("style"))
+                if payload.get("setting"):
+                    res.setdefault("setting", payload.get("setting"))
+                annotated_results.append(res)
+            else:
+                annotated_results.append(res)
+
+        valid_results = [
+            res for res in annotated_results if isinstance(res, dict) and "error" not in res
+        ]
 
         self._record_cost(
             "flux",
