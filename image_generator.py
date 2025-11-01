@@ -70,6 +70,13 @@ class ImageGenerator:
                 'black-forest-labs/flux-1.1-pro'
             )
             self._flux_version = self.config.get('image_generation', {}).get('flux_version')
+
+            env_reference_url = os.getenv('REFILOE_REFERENCE_IMAGE_URL')
+            if env_reference_url:
+                if self.set_character_reference(env_reference_url):
+                    log_info("Character reference loaded from environment")
+                else:
+                    log_warning("Failed to load character reference from environment")
             
             log_info("ImageGenerator initialized successfully")
             
@@ -427,6 +434,10 @@ class ImageGenerator:
             if not reference_image:
                 raise ValueError("Reference image path or URL is required")
 
+            if self._is_remote_reference(reference_image):
+                if not self._validate_reference_url(reference_image):
+                    raise ValueError("Reference image URL is not accessible")
+
             image_bytes = self._resolve_image_bytes(reference_image)
             self.character_reference_url = reference_image
             self._character_reference_bytes = image_bytes
@@ -559,6 +570,26 @@ class ImageGenerator:
                     return file.read()
 
         raise ValueError("Unsupported image source for consistency validation")
+
+    @staticmethod
+    def _is_remote_reference(reference: Any) -> bool:
+        return isinstance(reference, str) and reference.startswith(('http://', 'https://'))
+
+    def _validate_reference_url(self, url: str) -> bool:
+        response = None
+        try:
+            response = requests.head(url, allow_redirects=True, timeout=10)
+            if response.status_code >= 400 or response.status_code == 405:
+                response.close()
+                response = requests.get(url, stream=True, timeout=10)
+            response.raise_for_status()
+            return True
+        except requests.RequestException as exc:
+            log_warning(f"Reference image URL validation failed: {exc}")
+            return False
+        finally:
+            if response is not None:
+                response.close()
 
     def _generate_with_retry(
         self,
