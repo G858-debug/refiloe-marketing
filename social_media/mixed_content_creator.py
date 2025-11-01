@@ -40,6 +40,8 @@ class RenderResult:
     status: str
     preview_url: Optional[str]
     webhook_url: Optional[str]
+    asset_type: str = "video"
+    error: Optional[str] = None
 
 
 class MixedContentCreator:
@@ -154,6 +156,11 @@ class MixedContentCreator:
         self.shotstack_api_key = os.getenv("SHOTSTACK_API_KEY")
         self.shotstack_host = os.getenv("SHOTSTACK_API_HOST", "https://api.shotstack.io/stage")
         self.remotion_endpoint = os.getenv("REMOTION_RENDER_URL")
+
+        if self.renderer_provider == "shotstack" and not self.shotstack_api_key:
+            raise EnvironmentError(
+                "Shotstack renderer selected but SHOTSTACK_API_KEY is not configured."
+            )
 
         # Avatar generation
         self.heygen_api_key = os.getenv("HEYGEN_API_KEY")
@@ -608,7 +615,7 @@ class MixedContentCreator:
         variants: Dict[str, Dict[str, Any]] = {}
 
         for aspect_ratio, preset in self.ASPECT_RATIO_PRESETS.items():
-            payload = self._build_renderer_payload(
+            payloads = self._build_renderer_payload(
                 template_id=template_id,
                 storyboard=storyboard,
                 overlays=overlays,
@@ -617,9 +624,14 @@ class MixedContentCreator:
                 music_track=music_track,
             )
 
-            render_response = self._dispatch_render_job(payload)
+            render_response = self._dispatch_render_job(
+                shotstack_payload=payloads.get("shotstack"),
+                remotion_payload=payloads.get("remotion"),
+                storyboard=storyboard,
+                aspect_ratio=aspect_ratio,
+            )
 
-            variants[aspect_ratio] = {
+            variant_payload = {
                 "render_job_id": render_response.render_job_id,
                 "status": render_response.status,
                 "preview_url": render_response.preview_url,
@@ -631,6 +643,12 @@ class MixedContentCreator:
                 "platform": preset.get("platform"),
             }
 
+            variant_payload["asset_type"] = render_response.asset_type
+            if render_response.error:
+                variant_payload["error"] = render_response.error
+
+            variants[aspect_ratio] = variant_payload
+
         return variants
 
     def _build_renderer_payload(
@@ -641,14 +659,36 @@ class MixedContentCreator:
         aspect_ratio: str,
         resolution: Dict[str, int],
         music_track: Optional[str],
-    ) -> Dict[str, Any]:
-        if self.renderer_provider == "remotion":
-            return self._build_remotion_payload(
-                template_id, storyboard, overlays, aspect_ratio, resolution, music_track
-            )
-        return self._build_shotstack_payload(
-            template_id, storyboard, overlays, aspect_ratio, resolution, music_track
-        )
+    ) -> Dict[str, Dict[str, Any]]:
+        payloads: Dict[str, Dict[str, Any]] = {}
+
+        if self.shotstack_api_key:
+            try:
+                payloads["shotstack"] = self._build_shotstack_payload(
+                    template_id,
+                    storyboard,
+                    overlays,
+                    aspect_ratio,
+                    resolution,
+                    music_track,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                log_warning(f"Unable to assemble Shotstack payload for {aspect_ratio}: {exc}")
+
+        if self.remotion_endpoint or self.renderer_provider == "remotion":
+            try:
+                payloads["remotion"] = self._build_remotion_payload(
+                    template_id,
+                    storyboard,
+                    overlays,
+                    aspect_ratio,
+                    resolution,
+                    music_track,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                log_warning(f"Unable to assemble Remotion payload for {aspect_ratio}: {exc}")
+
+        return payloads
 
     def _build_shotstack_payload(
         self,
@@ -659,18 +699,27 @@ class MixedContentCreator:
         resolution: Dict[str, int],
         music_track: Optional[str],
     ) -> Dict[str, Any]:
-        track_clips = self._compose_track_clips(storyboard, overlays)
+        track_layers = self._compose_track_layers(storyboard, overlays)
 
-        timeline = {
+        timeline_tracks: List[Dict[str, Any]] = []
+        if track_layers["primary"]:
+            timeline_tracks.append({"clips": track_layers["primary"]})
+        if track_layers["overlay"]:
+            timeline_tracks.append({"clips": track_layers["overlay"]})
+
+        timeline: Dict[str, Any] = {
             "background": "#000000",
-            "tracks": [{"clips": track_clips}],
+            "tracks": timeline_tracks,
         }
         if music_track:
-            timeline["soundtrack"] = {"src": music_track}
+            timeline["soundtrack"] = {"src": music_track, "volume": 0.85}
 
         return {
-            "templateId": template_id,
+            "template_id": template_id,
             "timeline": timeline,
+            "merge_fields": self._build_shotstack_merge_fields(
+                storyboard, overlays, music_track, aspect_ratio
+            ),
             "output": {
                 "format": "mp4",
                 "resolution": f"{resolution['width']}x{resolution['height']}",
@@ -681,6 +730,40 @@ class MixedContentCreator:
                 "generatedAt": datetime.now(self.sa_tz).isoformat(),
             },
         }
+
+    def _build_shotstack_merge_fields(
+        self,
+        storyboard: Dict[str, Any],
+        overlays: List[Dict[str, Any]],
+        music_track: Optional[str],
+        aspect_ratio: str,
+    ) -> List[Dict[str, Any]]:
+        merge_fields: List[Dict[str, Any]] = []
+
+        for idx, segment in enumerate(storyboard.get("segments", []), start=1):
+            placeholder = f"segment_{idx}"
+            src = segment.get("src")
+            text = segment.get("text")
+            overlay_text = segment.get("overlay_text")
+
+            if src:
+                merge_fields.append({"find": f"{placeholder}_src", "replace": src})
+            if text:
+                merge_fields.append({"find": f"{placeholder}_text", "replace": text})
+            if overlay_text:
+                merge_fields.append({"find": f"{placeholder}_overlay", "replace": overlay_text})
+
+        for idx, overlay in enumerate(overlays, start=1):
+            overlay_text = overlay.get("text")
+            if overlay_text:
+                merge_fields.append({"find": f"overlay_{idx}_text", "replace": overlay_text})
+
+        if music_track:
+            merge_fields.append({"find": "soundtrack_src", "replace": music_track})
+
+        merge_fields.append({"find": "aspect_ratio", "replace": aspect_ratio})
+
+        return merge_fields
 
     def _build_remotion_payload(
         self,
@@ -718,128 +801,329 @@ class MixedContentCreator:
             },
         }
 
-    def _compose_track_clips(self, storyboard: Dict[str, Any], overlays: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        clips: List[Dict[str, Any]] = []
+    def _compose_track_layers(
+        self, storyboard: Dict[str, Any], overlays: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        primary_clips: List[Dict[str, Any]] = []
+        overlay_clips: List[Dict[str, Any]] = []
         current_start = 0.0
 
         for segment in storyboard.get("segments", []):
-            length = segment.get("length", 4)
+            length = float(segment.get("length", 4))
+            length = max(length, 1.0)
+            segment_type = segment.get("type")
+
+            asset: Dict[str, Any]
+            filters: List[Dict[str, Any]] = []
+
+            if segment_type == "image":
+                asset = {"type": "image", "src": segment.get("src")}
+                filters.append({"type": "contrast", "strength": 0.1})
+            elif segment_type == "avatar":
+                asset = {"type": "video", "src": segment.get("src")}
+                filters.append({"type": "warm", "strength": 0.1})
+            else:
+                asset = {
+                    "type": "title",
+                    "text": segment.get("text", ""),
+                    "style": segment.get("style", "subtitle"),
+                }
+
             clip: Dict[str, Any] = {
-                "asset": {},
+                "asset": asset,
                 "start": current_start,
                 "length": length,
-                "transition": {"in": segment.get("transition", "fade")},
             }
 
-            if segment["type"] == "image":
-                clip["asset"].update({"type": "image", "src": segment.get("src")})
-                if segment.get("overlay_text"):
-                    clip["animations"] = [
-                        {
-                            "type": "zoomIn",
-                            "start": current_start,
-                            "length": length,
-                        }
-                    ]
-                    clip.setdefault("filters", []).append({"type": "contrast", "strength": 0.1})
-            elif segment["type"] == "avatar":
-                clip["asset"].update({"type": "video", "src": segment.get("src")})
-                clip["transition"] = {"in": "crossfade"}
-                clip.setdefault("filters", []).append({"type": "warm", "strength": 0.1})
-            else:  # title
-                clip["asset"].update(
-                    {
+            transition_in = self._resolve_transition(segment.get("transition"))
+            if segment_type == "avatar":
+                transition_in = self._resolve_transition("crossfade")
+            if transition_in:
+                clip["transition"] = {"in": transition_in}
+
+            if filters:
+                clip["filters"] = filters
+
+            if segment_type == "image" and segment.get("overlay_text"):
+                overlay_clip = {
+                    "asset": {
                         "type": "title",
-                        "text": segment.get("text"),
-                        "style": "subtitle",
+                        "text": segment.get("overlay_text"),
+                        "style": segment.get("overlay_style", "label"),
+                    },
+                    "start": current_start + 0.35,
+                    "length": min(max(length - 0.5, 2.0), 6.0),
+                    "position": segment.get("overlay_position", "center"),
+                    "transition": {
+                        "in": self._resolve_transition("fade", duration=0.3),
+                        "out": self._resolve_transition("fade", duration=0.3),
+                    },
+                }
+                overlay_clips.append(overlay_clip)
+                clip.setdefault("animations", []).append(
+                    {
+                        "type": segment.get("animation", "zoomIn"),
+                        "start": current_start,
+                        "length": length,
                     }
                 )
 
-            clips.append(clip)
+            primary_clips.append(clip)
             current_start += length
 
         for overlay in overlays:
-            clips.append(
-                {
-                    "asset": {
-                        "type": "title",
-                        "text": overlay["text"],
-                        "style": overlay.get("style", "cta-pill"),
-                        "position": overlay.get("position", "bottom"),
-                    },
-                    "start": overlay.get("start", 0),
-                    "length": overlay.get("length", 3),
-                }
-            )
+            overlay_clip = {
+                "asset": {
+                    "type": "title",
+                    "text": overlay.get("text", ""),
+                    "style": overlay.get("style", "cta-pill"),
+                },
+                "start": float(overlay.get("start", 0.0)),
+                "length": float(overlay.get("length", 3.5)),
+                "position": overlay.get("position", "bottom"),
+                "transition": {
+                    "in": self._resolve_transition("fade", duration=0.3),
+                    "out": self._resolve_transition("fade", duration=0.3),
+                },
+            }
+            overlay_clips.append(overlay_clip)
 
-        return clips
+        return {"primary": primary_clips, "overlay": overlay_clips}
 
-    def _dispatch_render_job(self, payload: Dict[str, Any]) -> RenderResult:
-        if self.renderer_provider == "remotion":
-            return self._render_with_remotion(payload)
-        return self._render_with_shotstack(payload)
+    def _resolve_transition(self, effect: Optional[str], duration: float = 0.6) -> Optional[Dict[str, Any]]:
+        if not effect:
+            return None
+
+        transition_map = {
+            "fade": "fade",
+            "slideUp": "slideUp",
+            "slideLeft": "slideLeft",
+            "slideRight": "slideRight",
+            "zoomIn": "zoomIn",
+            "morph": "morph",
+            "crossfade": "crossfade",
+        }
+
+        normalized = transition_map.get(effect, "fade")
+        return {"effect": normalized, "duration": round(duration, 2)}
+
+    def _dispatch_render_job(
+        self,
+        *,
+        shotstack_payload: Optional[Dict[str, Any]],
+        remotion_payload: Optional[Dict[str, Any]],
+        storyboard: Dict[str, Any],
+        aspect_ratio: str,
+    ) -> RenderResult:
+        failure_messages: List[str] = []
+
+        def _is_failure(result: RenderResult) -> bool:
+            return result.status in {"failed", "error"}
+
+        if self.renderer_provider == "shotstack":
+            if shotstack_payload:
+                shotstack_result = self._render_with_shotstack(shotstack_payload)
+                if not _is_failure(shotstack_result):
+                    return shotstack_result
+                failure_messages.append(f"shotstack:{shotstack_result.error or shotstack_result.status}")
+            else:
+                if self.shotstack_api_key:
+                    failure_messages.append("shotstack:no payload")
+
+            if remotion_payload:
+                remotion_result = self._render_with_remotion(remotion_payload)
+                if not _is_failure(remotion_result):
+                    return remotion_result
+                failure_messages.append(f"remotion:{remotion_result.error or remotion_result.status}")
+            elif self.remotion_endpoint:
+                failure_messages.append("remotion:no payload")
+        else:
+            if remotion_payload:
+                remotion_result = self._render_with_remotion(remotion_payload)
+                if not _is_failure(remotion_result):
+                    return remotion_result
+                failure_messages.append(f"remotion:{remotion_result.error or remotion_result.status}")
+            else:
+                failure_messages.append("remotion:no payload")
+
+            if shotstack_payload:
+                shotstack_result = self._render_with_shotstack(shotstack_payload)
+                if not _is_failure(shotstack_result):
+                    return shotstack_result
+                failure_messages.append(f"shotstack:{shotstack_result.error or shotstack_result.status}")
+            elif self.shotstack_api_key:
+                failure_messages.append("shotstack:no payload")
+
+        reason = ", ".join(failure_messages) if failure_messages else "no renderer available"
+        return self._static_fallback_render_result(storyboard, aspect_ratio, reason)
 
     def _render_with_shotstack(self, payload: Dict[str, Any]) -> RenderResult:
         if not self.shotstack_api_key:
-            log_warning("SHOTSTACK_API_KEY missing. Returning mock render response")
-            return self._mock_render_response()
+            message = "Shotstack API key missing"
+            log_warning(message)
+            return RenderResult(
+                render_job_id=f"shotstack-missing-{uuid.uuid4()}",
+                status="failed",
+                preview_url=None,
+                webhook_url=None,
+                error=message,
+            )
+
+        template_id = payload.get("template_id")
+        if not template_id:
+            message = "Shotstack payload missing template_id"
+            log_error(message)
+            return RenderResult(
+                render_job_id=f"shotstack-invalid-{uuid.uuid4()}",
+                status="failed",
+                preview_url=None,
+                webhook_url=None,
+                error=message,
+            )
+
+        request_body = {
+            "timeline": payload.get("timeline"),
+            "merge": payload.get("merge_fields"),
+            "output": payload.get("output"),
+            "meta": payload.get("meta"),
+        }
+        shotstack_request = {key: value for key, value in request_body.items() if value}
 
         try:
             response = requests.post(
-                f"{self.shotstack_host}/render",
+                f"{self.shotstack_host}/templates/{template_id}/merge",
                 headers={
                     "x-api-key": self.shotstack_api_key,
                     "Content-Type": "application/json",
                 },
-                json=payload,
-                timeout=30,
+                json=shotstack_request,
+                timeout=45,
             )
             response.raise_for_status()
             data = response.json()
-            render_id = data.get("response", {}).get("id") or data.get("id") or str(uuid.uuid4())
+            render_id = (
+                data.get("response", {}).get("id")
+                or data.get("id")
+                or str(uuid.uuid4())
+            )
+            status = (
+                data.get("status")
+                or data.get("response", {}).get("status")
+                or "queued"
+            )
+            preview_url = (
+                data.get("response", {}).get("url")
+                or data.get("response", {}).get("output", {}).get("url")
+                or data.get("url")
+            )
+            webhook_url = (
+                data.get("response", {}).get("webhook")
+                or data.get("response", {}).get("webhookUrl")
+                or data.get("webhookUrl")
+            )
+
             return RenderResult(
                 render_job_id=render_id,
-                status=data.get("status", "queued"),
-                preview_url=data.get("response", {}).get("url"),
-                webhook_url=data.get("response", {}).get("webhook"),
+                status=status,
+                preview_url=preview_url,
+                webhook_url=webhook_url,
+                asset_type="video",
+                error=data.get("message") if status in {"failed", "error"} else None,
             )
-        except requests.RequestException as exc:
-            log_error(f"Shotstack render failed: {exc}")
-            return self._mock_render_response(status="failed")
+        except (requests.RequestException, ValueError) as exc:
+            log_error(f"Shotstack merge render failed: {exc}")
+            return RenderResult(
+                render_job_id=f"shotstack-failed-{uuid.uuid4()}",
+                status="failed",
+                preview_url=None,
+                webhook_url=None,
+                asset_type="video",
+                error=str(exc),
+            )
 
     def _render_with_remotion(self, payload: Dict[str, Any]) -> RenderResult:
         if not self.remotion_endpoint:
-            log_warning("REMOTION_RENDER_URL missing. Returning mock render response")
-            return self._mock_render_response()
+            message = "Remotion render endpoint not configured"
+            log_warning(message)
+            return RenderResult(
+                render_job_id=f"remotion-missing-{uuid.uuid4()}",
+                status="failed",
+                preview_url=None,
+                webhook_url=None,
+                asset_type="video",
+                error=message,
+            )
 
         try:
             response = requests.post(
                 self.remotion_endpoint,
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=30,
+                timeout=45,
             )
             response.raise_for_status()
             data = response.json()
-            render_id = data.get("renderId") or str(uuid.uuid4())
+            render_id = data.get("renderId") or data.get("id") or str(uuid.uuid4())
+            status = data.get("status", "queued")
+            preview_url = (
+                data.get("url")
+                or data.get("previewUrl")
+                or data.get("response", {}).get("url")
+            )
+            webhook_url = data.get("webhookUrl") or data.get("response", {}).get("webhookUrl")
+
             return RenderResult(
                 render_job_id=render_id,
-                status=data.get("status", "queued"),
-                preview_url=data.get("url"),
-                webhook_url=data.get("webhookUrl"),
+                status=status,
+                preview_url=preview_url,
+                webhook_url=webhook_url,
+                asset_type="video",
+                error=data.get("message") if status in {"failed", "error"} else None,
             )
-        except requests.RequestException as exc:
+        except (requests.RequestException, ValueError) as exc:
             log_error(f"Remotion render failed: {exc}")
-            return self._mock_render_response(status="failed")
+            return RenderResult(
+                render_job_id=f"remotion-failed-{uuid.uuid4()}",
+                status="failed",
+                preview_url=None,
+                webhook_url=None,
+                asset_type="video",
+                error=str(exc),
+            )
 
-    def _mock_render_response(self, status: str = "queued") -> RenderResult:
-        render_id = f"mock-{uuid.uuid4()}"
-        preview_url = f"https://cdn.refiloe.ai/mock/{render_id}.mp4"
+    def _static_fallback_render_result(
+        self, storyboard: Dict[str, Any], aspect_ratio: str, reason: str
+    ) -> RenderResult:
+        image_candidates: List[Optional[str]] = [
+            segment.get("src")
+            for segment in storyboard.get("segments", [])
+            if segment.get("type") == "image" and segment.get("src")
+        ]
+
+        placeholders = self.config.get("placeholders", {})
+        image_candidates.extend(
+            [
+                placeholders.get("fallback"),
+                placeholders.get("before"),
+                placeholders.get("after"),
+            ]
+        )
+
+        fallback_image = next((src for src in image_candidates if src), None)
+        if not fallback_image:
+            fallback_image = "https://cdn.refiloe.ai/static/fallback.jpg"
+
+        log_warning(
+            f"Falling back to static image for aspect ratio {aspect_ratio}: {reason}"
+        )
+
         return RenderResult(
-            render_job_id=render_id,
-            status=status,
-            preview_url=preview_url,
+            render_job_id=f"static-fallback-{uuid.uuid4()}",
+            status="fallback",
+            preview_url=fallback_image,
             webhook_url=None,
+            asset_type="image",
+            error=reason,
         )
 
     def _generate_avatar_clips(
