@@ -1,0 +1,32 @@
+# Refiloe Marketing - Social Media Automation
+# Python Dependencies for Railway Deployment
+
+# Web Framework
+Flask==3.0.0
+gunicorn==21.2.0
+
+# Database
+supabase==2.3.0
+psycopg2-binary==2.9.9
+
+# Scheduling
+APScheduler==3.10.4
+
+# AI & Content Generation
+anthropic==0.8.1
+replicate==0.22.0
+
+# Image Processing
+Pillow==10.1.0
+requests==2.31.0
+
+# Utilities
+python-dotenv==1.0.0
+PyYAML==6.0.1
+pytz==2023.3
+
+# Social Media APIs
+facebook-sdk==3.1.0
+
+# Async support
+aiohttp==3.9.1
