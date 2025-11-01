@@ -51,6 +51,9 @@ class VideoGenerator:
         self.video_table = os.getenv("HEYGEN_VIDEO_TABLE", "generated_videos")
 
         self.config = self._load_config(config_path)
+        self.default_voice_id = os.getenv("HEYGEN_DEFAULT_VOICE_ID") or self.config.get(
+            "heygen_settings", {}
+        ).get("default_voice_id")
         self.style_presets = self._build_style_presets()
 
         log_info("VideoGenerator initialized with HeyGen integration")
@@ -62,7 +65,7 @@ class VideoGenerator:
         self,
         script_text: str,
         avatar_id: str,
-        voice_id: str,
+        voice_id: Optional[str] = None,
         *,
         style: str = "educational",
         background_music: bool = True,
@@ -73,7 +76,7 @@ class VideoGenerator:
         Args:
             script_text: Full narration script that will be chunked for pacing.
             avatar_id: HeyGen avatar identifier.
-            voice_id: HeyGen voice identifier.
+            voice_id: HeyGen voice identifier. Defaults to configured default if omitted.
             style: Content style preset (educational, motivational, tips, etc.).
             background_music: Whether to include background music.
             metadata: Optional metadata to persist with the video record.
@@ -92,9 +95,13 @@ class VideoGenerator:
         if not script_chunks:
             raise ValueError("Script text is empty after processing")
 
+        resolved_voice_id = voice_id or self.default_voice_id
+        if not resolved_voice_id:
+            raise ValueError("Voice ID is required for HeyGen video generation")
+
         payload = self._build_generate_payload(
             avatar_id=avatar_id,
-            voice_id=voice_id,
+            voice_id=resolved_voice_id,
             style_settings=style_settings,
             script_chunks=script_chunks,
             background_music=background_music,
@@ -140,7 +147,7 @@ class VideoGenerator:
             video_data=video_data,
             script_chunks=script_chunks,
             avatar_id=avatar_id,
-            voice_id=voice_id,
+            voice_id=resolved_voice_id,
             style=style,
             background_music=background_music,
             metadata=metadata or {},
@@ -154,7 +161,7 @@ class VideoGenerator:
             "duration": video_data.get("duration"),
             "style": style,
             "avatar_id": avatar_id,
-            "voice_id": voice_id,
+            "voice_id": resolved_voice_id,
             "script_chunks": script_chunks,
         }
 
