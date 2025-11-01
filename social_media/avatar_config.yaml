@@ -1,0 +1,155 @@
+metadata:
+  version: 1.0.0
+  owner: "CreativeOps Team"
+  last_reviewed: "2025-11-01"
+  notes: "Defines the canonical Refiloe avatar configuration across all creative platforms."
+
+character_specifications:
+  physical_appearance:
+    complexion: "Deep brown skin tone with warm undertones"
+    hair: "Tightly coiled natural afro, medium length, side part with subtle copper highlights"
+    facial_features:
+      eyes: "Dark brown almond-shaped eyes with subtle gold flecks"
+      eyebrows: "Full, well-defined arch"
+      smile: "Expressive, warm smile showing upper teeth"
+    accessories:
+      default: ["Gold hoop earrings", "Minimalist wrist cuff"]
+      optional: ["Lightweight patterned scarf", "Thin rim glasses"]
+    posture: "Upright, confident stance with relaxed shoulders"
+  voice_characteristics:
+    accent: "South African English with mild Setswana inflection"
+    pitch: "Medium-low, warm timbre"
+    pacing: "Measured pacing with deliberate emphasis on key phrases"
+    energy: "Assured, inviting; ramps up during calls to action"
+    filler_management: "Avoid filler words; use purposeful pauses"
+    sample_line: "Hello, I'm Refiloe. Let's explore today's story together."
+  personality_traits:
+    core_traits:
+      - "Empathetic mentor"
+      - "Data-grounded storyteller"
+      - "Optimistic problem-solver"
+    communication_style: "Balances warmth with authority; uses inclusive language"
+    decision_framework: "Leads with evidence, acknowledges community impact"
+  behavioral_guidelines:
+    do:
+      - "Start every segment with a brief situational anchor"
+      - "Reference community insights when offering advice"
+      - "Maintain open hand gestures within frame"
+    avoid:
+      - "Sarcasm or dismissive humor"
+      - "Overly casual slang not part of core lexicon"
+      - "Crossed arms or closed-off body language"
+
+platform_settings:
+  heygen_avatar:
+    avatar_id: "refiloe_hg_v3"
+    voice_id: "refiloe_voice_hg_midwarm"
+    animation_profile: "natural_expressive"
+    gesture_pack: ["open_palm", "nod_emphatic", "hand_overlay"]
+    lighting_preset: "studio_warm_front"
+    camera_framing: "Mid-shot waist up; slight left-to-right pan optional"
+    notes: "Sync voice pitch shift to -2 semitones for calmer segments."
+  flux1_prompt_templates:
+    default: |
+      Create a high-resolution portrait of Refiloe, an empathetic South African mentor in her early 30s with deep brown skin and a medium-length natural afro. She wears a tailored charcoal blazer over a taupe blouse, gold hoop earrings, and a confident, welcoming expression. Scene uses warm studio lighting with soft bokeh background.
+    educational_series: |
+      Render Refiloe delivering practical advice, mid-shot, holding a digital tablet. Outfit: emerald green wrap dress, minimalist wrist cuff, and gold earrings. Capture poised confidence with subtle smile and attentive eye contact. Lighting: warm key light with cool rim accent.
+    community_feature: |
+      Generate Refiloe engaging with community members (abstract silhouettes) in an open market setting at golden hour. She wears a patterned Ankara blazer over neutral top, arms open in welcoming gesture. Maintain consistent facial features and hair styling.
+  did_backup_avatar:
+    avatar_id: "refiloe_did_v2"
+    voice_id: "refiloe_voice_did_warm"
+    lip_sync: "precision"
+    stabilization: "medium"
+    usage_rules:
+      primary_triggers:
+        - "HeyGen service interruption"
+        - "HeyGen rendering backlog > 12 hours"
+      restrictions:
+        - "Limit session length to 90 seconds"
+        - "Confirm voice sync after each render"
+
+content_style_guides:
+  video_scripts:
+    tone: "Empowering, solution-oriented, lightly conversational"
+    structure:
+      intro: "Situational hook + empathetic acknowledgment"
+      body: "Three key insights framed as collective actions"
+      close: "Actionable next step + appreciative sign-off"
+    lexical_field:
+      preferred: ["community", "together", "insight", "evidence", "imagine"]
+      avoid: ["guys", "random", "whatever", "literally"]
+  image_pose_preferences:
+    default_pose: "Three-quarter angle, shoulders relaxed, right hand open at chest height"
+    variations:
+      - "Hands clasped at waist, slight forward lean"
+      - "Left hand gesturing outward, weight shifted to right leg"
+      - "Seated posture, hands resting on notebook"
+    facial_expression: "Warm smile with engaged eyes; slight eyebrow lift when emphasizing data"
+  outfit_guidelines:
+    by_content_type:
+      educational:
+        palette: ["charcoal", "forest green", "cream"]
+        garments: ["tailored blazer", "wrap dress", "structured blouse"]
+        accessories: ["gold hoop earrings", "minimalist bracelet"]
+      announcement:
+        palette: ["royal blue", "white", "silver"]
+        garments: ["modern pantsuit", "pleated midi skirt", "silk blouse"]
+        accessories: ["sleek necklace", "silver stud earrings"]
+      community_highlight:
+        palette: ["burnt orange", "mustard", "earth brown"]
+        garments: ["Ankara blazer", "linen jumpsuit", "patterned scarf"]
+        accessories: ["stacked bangles", "beaded earrings"]
+
+fallback_options:
+  secondary_avatars:
+    - platform: "HeyGen"
+      avatar_id: "refiloe_hg_v2"
+      differentiator: "Softer jawline; reserve for nostalgic storytelling"
+    - platform: "D-ID"
+      avatar_id: "refiloe_did_v1"
+      differentiator: "Lower frame rate; use only for short updates"
+  backup_generation_methods:
+    - method: "Flux.1 + ElevenLabs voiceover"
+      trigger: "Both HeyGen and D-ID unavailable"
+      checklist: ["Render silent video", "Overlay ElevenLabs voice", "Manual sync review"]
+    - method: "Static image + narrated carousel"
+      trigger: "Video rendering exceeds 24h window"
+      checklist: ["Select latest FLUX.1 portrait", "Draft concise captions", "Schedule staggered posts"]
+  emergency_content_templates:
+    video_script: |
+      INTRO: "Hi, it's Refiloe. I'm stepping in with an important update for our community."
+      BODY: "Here are the three things you need to know right now..."
+      CTA: "Stay with us and share this message so we can reach everyone who needs it."
+    social_caption: |
+      Immediate update from Refiloe ??
+      1?? Key fact one
+      2?? Key fact two
+      3?? How you can help today
+      Save & share so our community stays in the know.
+
+consistency_documentation:
+  maintenance_principles:
+    - "Treat this file as the single source of truth for Refiloe's representation."
+    - "Validate any visual or voice change against the character specifications section."
+    - "Share updates with CreativeOps review group before deployment."
+  update_process:
+    cadence: "Quarterly review or within 48 hours of major campaign shift"
+    steps:
+      - "Propose change via change log entry with rationale, assets, and impact assessment."
+      - "Run A/B test across one HeyGen video and one FLUX.1 render."
+      - "Collect stakeholder approval from CreativeOps lead and Brand Integrity officer."
+      - "Version bump metadata.version and document in README change log."
+  validation_checklist:
+    - "Voice sample alignment with accent, pitch, and pacing requirements"
+    - "Visual comparison against latest approved portrait reference"
+    - "Script audit ensuring lexical field compliance"
+    - "Accessibility review for captions, color contrast, and audio clarity"
+  escalation_contacts:
+    creative_ops_lead: "refiloe-ops@brandstudio.io"
+    brand_integrity_officer: "integrity@brandstudio.io"
+    emergency_slack_channel: "#refiloe-emergency"
+  documentation_links:
+    portrait_reference: "https://brandstudio.io/refiloe/portrait-master"
+    voice_samples: "https://brandstudio.io/refiloe/voice-bank"
+    scripting_guide: "https://brandstudio.io/refiloe/script-style"
