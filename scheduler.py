@@ -28,6 +28,11 @@ from .image_generator import ImageGenerator
 from .facebook_poster import FacebookPoster
 from .video_generator import VideoGenerator  # New import
 
+try:
+    from .mixed_content_creator import MixedContentCreator
+except ImportError:  # pragma: no cover - fallback for absolute imports
+    from social_media.mixed_content_creator import MixedContentCreator
+
 
 class SocialMediaScheduler:
     """
@@ -58,6 +63,7 @@ class SocialMediaScheduler:
             
             # Load configuration
             self.config = self._load_config()
+            self.default_trainer_id = self.config.get('default_trainer_id', 'refiloe_ai')
             
             # Initialize components
             self.db = SocialMediaDatabase(supabase_client)
@@ -75,6 +81,17 @@ class SocialMediaScheduler:
                 'social_media/config.yaml',
                 supabase_client
             )
+
+            # Initialize mixed media content creator
+            try:
+                self.mixed_content_creator = MixedContentCreator(
+                    'social_media/config.yaml',
+                    supabase_client,
+                    renderer_provider=self.config.get('video_renderer', 'shotstack')
+                )
+            except Exception as creator_exc:
+                log_warning(f"Failed to initialize MixedContentCreator: {creator_exc}")
+                self.mixed_content_creator = None
             
             # Initialize Facebook poster with credentials from environment
             page_access_token = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN')
@@ -183,6 +200,18 @@ class SocialMediaScheduler:
         8. Check content queue (every hour)
         """
         try:
+            # MIXED MEDIA CONTENT JOB - Runs before daily video generation
+            if self.mixed_content_creator:
+                self.scheduler.add_job(
+                    self.job_generate_mixed_media_content,
+                    CronTrigger(hour=4, minute=30, timezone=self.sa_tz),
+                    id='generate_mixed_media_content',
+                    name='Generate Mixed Media Content',
+                    replace_existing=True
+                )
+            else:
+                log_warning("MixedContentCreator not initialized. Mixed media job will be skipped")
+
             # VIDEO GENERATION JOB - Runs first to create videos for the day
             self.scheduler.add_job(
                 self.job_generate_daily_videos,
@@ -263,6 +292,56 @@ class SocialMediaScheduler:
             log_error(f"Failed to start scheduler: {str(e)}")
             raise
     
+    def job_generate_mixed_media_content(self):
+        """
+        DAILY JOB (4:30 AM SAST)
+        
+        Generate a bundle of mixed-media assets that combine multiple formats:
+        - Before/after comparison video
+        - Tips carousel style video
+        - Tutorial walkthrough with avatar narration
+        - Motivational reel with dynamic pacing
+        """
+        if not self.mixed_content_creator:
+            log_warning("MixedContentCreator unavailable. Skipping mixed media generation job")
+            return
+
+        try:
+            log_info("Starting mixed media content generation job")
+
+            briefs = self._build_mixed_media_brief()
+            results: List[Dict[str, Any]] = []
+
+            before_after_brief = briefs.get('before_after')
+            if before_after_brief:
+                results.append(self.mixed_content_creator.create_before_after_comparison(before_after_brief))
+
+            tips_brief = briefs.get('tips')
+            if tips_brief:
+                results.append(self.mixed_content_creator.create_tips_carousel_video(tips_brief))
+
+            tutorial_brief = briefs.get('tutorial')
+            if tutorial_brief:
+                results.append(self.mixed_content_creator.create_tutorial_with_avatar(tutorial_brief))
+
+            motivational_brief = briefs.get('motivational')
+            if motivational_brief:
+                results.append(
+                    self.mixed_content_creator.create_motivational_reel(
+                        motivational_brief,
+                        motivational_brief.get('music_track')
+                    )
+                )
+
+            success_count = len([res for res in results if res and res.get('success')])
+            log_info(
+                f"Mixed media content job completed with {success_count}/{len(results)} successful packages"
+            )
+
+        except Exception as e:
+            log_error(f"Error in mixed media content job: {str(e)}")
+            self._send_error_notification("Mixed Media Content", str(e))
+
     def job_generate_daily_videos(self):
         """
         DAILY JOB (5:00 AM SAST)
@@ -361,7 +440,7 @@ class SocialMediaScheduler:
                     'thumbnail_url': video_result.get('thumbnail_url'),
                     'video_type': 'reactive_content',
                     'video_duration': 30,
-                    'caption': f"🔥 HOT TOPIC: {trending_topic['title']}\n\n{script.get('caption', '')}",
+                    'caption': f"?? HOT TOPIC: {trending_topic['title']}\n\n{script.get('caption', '')}",
                     'trending_topic_id': trending_topic.get('id'),
                     'is_reactive': True
                 }
@@ -420,9 +499,9 @@ class SocialMediaScheduler:
                     'thumbnail_url': video_result.get('thumbnail_url'),
                     'video_type': 'weekly_compilation',
                     'video_duration': 120,
-                    'caption': f"🎯 WEEK {self.calculate_week_number()} HIGHLIGHTS!\n\n"
-                              f"Here's what we learned this week 💪\n\n"
-                              f"Which tip will you implement first? Comment below! 👇",
+                    'caption': f"?? WEEK {self.calculate_week_number()} HIGHLIGHTS!\n\n"
+                              f"Here's what we learned this week ??\n\n"
+                              f"Which tip will you implement first? Comment below! ??",
                     'is_compilation': True
                 }
                 
@@ -492,6 +571,131 @@ class SocialMediaScheduler:
         except Exception as e:
             log_error(f"Error in content generation job: {str(e)}")
             self._send_error_notification("Content Generation", str(e))
+
+    def _build_mixed_media_brief(self) -> Dict[str, Any]:
+        """Assemble input briefs for mixed media content generation."""
+        mixed_media_config = self.config.get('mixed_media', {}) or {}
+        placeholders = mixed_media_config.get('placeholders', {}) or {}
+
+        brief: Dict[str, Any] = {}
+
+        if mixed_media_config.get('enable_before_after', True):
+            brief['before_after'] = {
+                'before_media': placeholders.get('before_asset', 'https://cdn.refiloe.ai/placeholders/before-trainer.jpg'),
+                'after_media': placeholders.get('after_asset', 'https://cdn.refiloe.ai/placeholders/after-trainer.jpg'),
+                'headline': placeholders.get('headline', 'Trainer Transformation Tuesday'),
+                'metrics': placeholders.get('metrics', {
+                    'Lead response time': '48h -> 3h',
+                    'Monthly revenue': '+26%',
+                    'Client retention': '62% -> 88%'
+                }),
+                'script': placeholders.get('script'),
+                'music_track': mixed_media_config.get('soundtracks', {}).get('transformation'),
+                'cta_overlays': placeholders.get('cta_overlays'),
+            }
+
+        if mixed_media_config.get('enable_tips', True):
+            tip_slides = self._collect_tip_slides()
+            if tip_slides:
+                brief['tips'] = tip_slides
+
+        if mixed_media_config.get('enable_tutorial', True):
+            tutorial_steps = self._collect_tutorial_steps()
+            if tutorial_steps:
+                brief['tutorial'] = tutorial_steps
+
+        if mixed_media_config.get('enable_motivational', True):
+            motivational_script = self._collect_motivational_script()
+            if motivational_script:
+                brief['motivational'] = motivational_script
+
+        return brief
+
+    def _collect_tip_slides(self) -> List[str]:
+        """Collect carousel tips from config or content generator examples."""
+        tips_from_config = self.config.get('mixed_media', {}).get('tip_slides', [])
+        if tips_from_config:
+            return tips_from_config[:6]
+
+        try:
+            examples = self.content_generator.get_theme_examples('admin_hacks')
+            if examples:
+                return [example.replace('\n', ' ') for example in examples[:6]]
+        except Exception as e:
+            log_warning(f"Unable to fetch tip slides from content generator: {str(e)}")
+
+        return [
+            "Automate onboarding in under 10 minutes",
+            "Batch client check-ins using voice notes",
+            "Use calendar links with buffer windows",
+            "Tag every lead with source + intent",
+            "Schedule your content review hour",
+            "Templatize your consult follow-ups",
+        ]
+
+    def _collect_tutorial_steps(self) -> List[Dict[str, Any]]:
+        """Build tutorial steps for avatar walkthrough."""
+        tutorial_from_config = self.config.get('mixed_media', {}).get('tutorial_steps')
+        if tutorial_from_config:
+            return tutorial_from_config
+
+        return [
+            {
+                'title': 'Map your intake journey',
+                'instruction': 'Outline every touchpoint from lead to signed client in a shared doc.',
+                'duration': 6,
+                'voiceover': 'Start by mapping the exact experience you want every new client to feel.',
+            },
+            {
+                'title': 'Automate follow-ups',
+                'instruction': 'Create two email templates: one for day 1 recap, one for day 3 accountability.',
+                'duration': 6,
+                'voiceover': 'Use your CRM to trigger emails automatically after the consult call.',
+            },
+            {
+                'title': 'Close the loop weekly',
+                'instruction': 'Schedule a 15-minute Friday audit to plug gaps and celebrate wins.',
+                'duration': 6,
+                'voiceover': 'Consistency happens when you review what worked and course-correct quickly.',
+            },
+        ]
+
+    def _collect_motivational_script(self) -> Dict[str, Any]:
+        """Create motivational reel script leveraging trending topics when possible."""
+        trending_topic = None
+        try:
+            trending_topics = self.db.get_trending_topics(self.default_trainer_id, limit=1)
+            if trending_topics:
+                trending_topic = trending_topics[0]
+        except Exception as e:
+            log_warning(f"Unable to fetch trending topics for motivational reel: {str(e)}")
+
+        topic_text = trending_topic.get('topic') if trending_topic else 'Train the way you want to be remembered'
+
+        script_sections = [
+            {
+                'text': f"Trainer, remember: {topic_text} is a moment, but your consistency is the legacy.",
+                'duration': 4,
+            },
+            {
+                'text': "Clients aren't buying another program?they're buying certainty that you can lead.",
+                'duration': 4,
+            },
+            {
+                'text': "Stack the wins, track the data, and keep showing up louder than your self-doubt.",
+                'duration': 4,
+            },
+        ]
+
+        return {
+            'title': f"Own The Room: {topic_text}",
+            'script': script_sections,
+            'hashtags': ['#TrainerMindset', '#LeadWithImpact'],
+            'music_track': self.config.get('mixed_media', {}).get('soundtracks', {}).get(
+                'motivational',
+                'https://cdn.refiloe.ai/audio/motivational_mix.mp3'
+            ),
+        }
     
     def _generate_quick_tip_video(self, trending_audio: Optional[Dict]) -> Optional[Dict]:
         """Generate a quick tip video (15-30 seconds)."""
