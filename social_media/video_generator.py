@@ -8,7 +8,7 @@ import re
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
 import requests
@@ -151,18 +151,21 @@ class VideoGenerator:
 
         for attempt_index, candidate in enumerate(candidate_chain):
             current_avatar_id = candidate["avatar_id"]
+            avatar_type = self._determine_avatar_type(current_avatar_id)
             attempt_detail: Dict[str, Any] = {
                 "avatar_id": current_avatar_id,
                 "reason": candidate.get("reason"),
                 "source": candidate.get("source"),
                 "attempt_index": attempt_index,
                 "status": "pending",
+                "avatar_type": avatar_type,
             }
             if candidate.get("context"):
                 attempt_detail["context"] = candidate["context"]
             selection_attempts.append(attempt_detail)
 
             attempt_metadata = dict(base_metadata)
+            attempt_metadata.setdefault("avatar_type", avatar_type)
             avatar_selection_meta: Dict[str, Any] = {
                 "avatar_id": current_avatar_id,
                 "reason": candidate.get("reason"),
@@ -179,6 +182,7 @@ class VideoGenerator:
                     for chain_item in candidate_chain
                 ],
                 "attempts": selection_attempts,
+                "avatar_type": avatar_type,
             }
             if candidate.get("context"):
                 avatar_selection_meta["context"] = candidate["context"]
@@ -201,8 +205,9 @@ class VideoGenerator:
             )
 
             try:
-                payload = self._build_generate_payload(
+                endpoint, payload = self._build_generate_payload(
                     avatar_id=current_avatar_id,
+                    avatar_type=avatar_type,
                     voice_id=resolved_voice_id,
                     style_settings=style_settings,
                     script_chunks=script_chunks,
@@ -211,11 +216,11 @@ class VideoGenerator:
                 )
 
                 log_debug(
-                    "Prepared HeyGen payload with %d chunks for avatar %s"
-                    % (len(script_chunks), current_avatar_id)
+                    "Prepared HeyGen payload with %d chunks for avatar %s (endpoint=%s, type=%s)"
+                    % (len(script_chunks), current_avatar_id, endpoint, avatar_type)
                 )
 
-                response = self._post_with_retry("/video/generate", json=payload)
+                response = self._post_with_retry(endpoint, json=payload)
                 video_id = (
                     response.get("data", {}).get("video_id")
                     or response.get("video_id")
@@ -296,6 +301,7 @@ class VideoGenerator:
                     "duration": video_data.get("duration"),
                     "style": style,
                     "avatar_id": current_avatar_id,
+                    "avatar_type": avatar_type,
                     "voice_id": resolved_voice_id,
                     "script_chunks": script_chunks,
                     "avatar_selection": avatar_selection_meta,
@@ -911,12 +917,13 @@ class VideoGenerator:
         self,
         *,
         avatar_id: str,
+        avatar_type: str,
         voice_id: str,
         style_settings: Dict[str, Any],
         script_chunks: List[str],
         background_music: bool,
         metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    ) -> Tuple[str, Dict[str, Any]]:
         script_sections = [
             {
                 "text": chunk,
@@ -924,6 +931,9 @@ class VideoGenerator:
             }
             for chunk in script_chunks
         ]
+
+        metadata_payload: Dict[str, Any] = dict(metadata) if metadata is not None else {}
+        metadata_payload.setdefault("avatar_type", avatar_type)
 
         payload: Dict[str, Any] = {
             "avatar_id": avatar_id,
@@ -941,8 +951,15 @@ class VideoGenerator:
                 "type": "text",
                 "sections": script_sections,
             },
-            "metadata": metadata,
+            "metadata": metadata_payload,
         }
+
+        endpoint = "/video/generate"
+        if avatar_type == "photo":
+            endpoint = "/talking_photo/generate"
+            payload["talking_photo_id"] = avatar_id
+            payload.pop("avatar_id", None)
+            payload.pop("video_style", None)
 
         # Remove None values for cleaner payloads
         payload = {
@@ -951,7 +968,27 @@ class VideoGenerator:
             if value is not None
         }
 
-        return payload
+        return endpoint, payload
+
+    @staticmethod
+    def _is_photo_avatar_id(avatar_id: Optional[str]) -> bool:
+        if not avatar_id:
+            return False
+
+        normalised = avatar_id.strip()
+        if not normalised:
+            return False
+
+        if len(normalised) == 32 and "-" not in normalised:
+            return True
+
+        if len(normalised) == 36 and "-" in normalised:
+            return True
+
+        return False
+
+    def _determine_avatar_type(self, avatar_id: Optional[str]) -> str:
+        return "photo" if self._is_photo_avatar_id(avatar_id) else "standard"
 
     def _ensure_within_limit(self) -> None:
         if self.monthly_limit <= 0:
