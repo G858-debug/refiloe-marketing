@@ -379,28 +379,34 @@ def test_generate_video():
     """Manually trigger a test video generation"""
     if not supabase_client:
         return jsonify({'error': 'Supabase not initialized'}), 503
-
+    
     try:
+        log_info("=== Starting test video generation ===")
+        
         from social_media.video_generator import VideoGenerator
         import os
-
+        
         # Initialize video generator
+        log_info("Initializing VideoGenerator...")
         video_gen = VideoGenerator(
             config_path='social_media/config.yaml',
             supabase_client=supabase_client
         )
-
+        log_info("VideoGenerator initialized successfully")
+        
         # Get request data
         data = request.get_json() or {}
         script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
-
+        
         # Get voice and avatar from environment
         voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
         avatar_id = os.getenv('HEYGEN_AVATAR_DEFAULT')
-
-        log_info(f"Generating test video with avatar: {avatar_id}")
-
+        
+        log_info(f"Using avatar: {avatar_id}, voice: {voice_id}")
+        log_info(f"Script: {script[:100]}...")
+        
         # Generate video
+        log_info("Calling generate_avatar_video...")
         result = video_gen.generate_avatar_video(
             script_text=script,
             avatar_id=avatar_id,
@@ -413,43 +419,80 @@ def test_generate_video():
                 'triggered_by': 'api'
             }
         )
-
+        
+        log_info(f"Video generation result: {result}")
+        
+        # Check if we got a video URL
+        video_url = result.get('video_url')
+        video_id = result.get('video_id')
+        
+        if not video_url:
+            log_error(f"No video URL in result: {result}")
+            return jsonify({
+                'success': False,
+                'error': 'Video generated but no URL returned',
+                'result': result
+            }), 500
+        
+        log_info(f"Video URL obtained: {video_url}")
+        
         # Create post with pending_approval status
+        from datetime import datetime, timedelta
         scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
-
+        
         post_data = {
-            'content': 'Test video post - Please review and approve',
-            'video_url': result.get('video_url'),
+            'content': f'Test video post - Please review and approve\n\nScript: {script[:100]}...',
             'format': 'video',
             'platform': 'facebook',
             'status': 'pending_approval',
             'scheduled_time': scheduled_time.isoformat(),
             'metadata': {
-                'video_id': result.get('video_id'),
+                'video_url': video_url,
+                'video_id': video_id,
                 'avatar_id': result.get('avatar_id'),
                 'test': True
             }
         }
-
+        
+        log_info(f"Saving post to database: {post_data}")
+        
         # Save to database
         from social_media.database import SocialMediaDatabase
         db = SocialMediaDatabase(supabase_client)
         post_id = db.save_post(post_data)
-
+        
+        log_info(f"Post saved with ID: {post_id}")
+        
+        if not post_id:
+            log_error("Failed to save post - no ID returned")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save post to database',
+                'video_url': video_url,
+                'video_id': video_id
+            }), 500
+        
+        log_info("=== Test video generation completed successfully ===")
+        
         return jsonify({
             'success': True,
-            'video_id': result.get('video_id'),
-            'video_url': result.get('video_url'),
+            'video_id': video_id,
+            'video_url': video_url,
             'post_id': post_id,
             'message': 'Video generated successfully! Check /approval/pending to review.',
             'approval_url': f'/approval/view/{post_id}'
         }), 200
-
+        
     except Exception as e:
         log_error(f"Error generating test video: {str(e)}")
         import traceback
-        log_error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        error_traceback = traceback.format_exc()
+        log_error(f"Full traceback:\n{error_traceback}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': error_traceback
+        }), 500
 
 
 @app.errorhandler(404)
