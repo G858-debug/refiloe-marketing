@@ -951,7 +951,7 @@ class VideoGenerator:
             character_payload = {
                 "type": "talking_photo",
                 "talking_photo_id": avatar_id,
-                "talking_photo_style": "normal",
+                "talking_photo_style": "expressive",
             }
         else:
             character_payload = {
