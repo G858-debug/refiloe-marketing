@@ -16,6 +16,7 @@ from flask import (
     url_for,
 )
 from social_media.database import SocialMediaDatabase
+from supabase import create_client
 from utils.logger import log_error, log_info
 
 
@@ -59,21 +60,7 @@ def _ensure_database() -> Optional[SocialMediaDatabase]:
         return None
 
     try:
-        from supabase._sync.client import SyncClient
-        from supabase.lib.client_options import ClientOptions
-
-        options = ClientOptions(
-            schema="public",
-            headers={},
-            auto_refresh_token=True,
-            persist_session=True,
-        )
-
-        _supabase_client = SyncClient(
-            supabase_url=url,
-            supabase_key=key,
-            options=options,
-        )
+        _supabase_client = create_client(url, key)
         _database_service = SocialMediaDatabase(_supabase_client)
         log_info("Approval routes connected to Supabase")
     except Exception as exc:  # pragma: no cover - defensive logging
