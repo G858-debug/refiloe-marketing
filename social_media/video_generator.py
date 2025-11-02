@@ -1222,17 +1222,43 @@ class VideoGenerator:
     def _poll_video_status(self, video_id: str) -> Dict[str, Any]:
         deadline = time.time() + self.poll_timeout
 
+        status_url = "https://api.heygen.com/v1/video_status.get"
+        params = {"video_id": video_id}
+        headers = {
+            "X-API-KEY": self.api_key,
+            "Content-Type": "application/json",
+        }
+
         while time.time() < deadline:
-            params = {"video_id": video_id}
-            response = self._get_with_retry("/v1/video_status.get", params=params)
-            data = response.get("data") or response
-            status = data.get("status")
+            for attempt in range(self.max_retries):
+                try:
+                    response = requests.get(
+                        status_url,
+                        headers=headers,
+                        params=params,
+                        timeout=30,
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                    data = payload.get("data") or payload
+                    status = data.get("status")
 
-            log_debug(f"HeyGen video {video_id} status: {status}")
+                    log_debug(f"HeyGen video {video_id} status: {status}")
 
-            if status in {"completed", "failed", "cancelled"}:
-                data.setdefault("video_id", video_id)
-                return data
+                    if status in {"completed", "failed", "cancelled"}:
+                        data.setdefault("video_id", video_id)
+                        return data
+
+                    break
+                except Exception as exc:  # pylint: disable=broad-except
+                    if attempt < self.max_retries - 1:
+                        log_warning(
+                            "HeyGen status check failed (attempt %s/%s): %s"
+                            % (attempt + 1, self.max_retries, exc)
+                        )
+                        time.sleep(self.retry_backoff)
+                        continue
+                    raise
 
             time.sleep(self.poll_interval)
 
