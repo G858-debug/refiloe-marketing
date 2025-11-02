@@ -60,24 +60,9 @@ def init_supabase():
             log_error("Supabase credentials not found in environment")
             return False
 
-        # Import the sync client directly to avoid proxy parameter
-        from supabase._sync.client import SyncClient
-        from supabase.lib.client_options import ClientOptions
+        from supabase import create_client
 
-        # Create options without proxy parameter
-        options = ClientOptions(
-            schema="public",
-            headers={},
-            auto_refresh_token=True,
-            persist_session=True,
-        )
-
-        # Create client using direct instantiation
-        supabase_client = SyncClient(
-            supabase_url=url,
-            supabase_key=key,
-            options=options
-        )
+        supabase_client = create_client(url, key)
 
         log_info("✅ Supabase client initialized successfully")
         return True
