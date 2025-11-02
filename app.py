@@ -297,26 +297,52 @@ app.register_blueprint(approval_bp, url_prefix='/approval')
 @app.route('/test-video-form')
 def test_video_form():
     """Simple form to trigger test video generation"""
-    html = '''
+    
+    # Get available avatars from environment
+    import os
+    avatars = {
+        'Default': os.getenv('HEYGEN_AVATAR_DEFAULT'),
+        'Professional Closeup': os.getenv('HEYGEN_AVATAR_PROFESSIONAL_CLOSEUP'),
+        'Casual Closeup': os.getenv('HEYGEN_AVATAR_CASUAL_CLOSEUP'),
+        'Fitness Fullbody': os.getenv('HEYGEN_AVATAR_FITNESS_FULLBODY'),
+        'Confident Swimwear': os.getenv('HEYGEN_AVATAR_CONFIDENT_SWIMWEAR_FULLBODY'),
+        'Serious Closeup': os.getenv('HEYGEN_AVATAR_SERIOUS_CLOSEUP'),
+        'Warm Smile Closeup': os.getenv('HEYGEN_AVATAR_WARMSMILE_CLOSEUP'),
+        'Laughing Closeup': os.getenv('HEYGEN_AVATAR_LAUGHING_CLOSEUP'),
+        'Three Quarters Closeup': os.getenv('HEYGEN_AVATAR_THREEQUARTERS_CLOSEUP'),
+        'Summer Casual': os.getenv('HEYGEN_AVATAR_SUMMERCASUAL_THREEQUARTERBODY'),
+    }
+    
+    html = f'''
     <!DOCTYPE html>
     <html>
     <head>
         <title>Test Video Generation</title>
         <style>
-            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-            button { background: #4CAF50; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
-            button:hover { background: #45a049; }
-            .result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; display: none; }
-            .loading { display: none; margin-top: 20px; }
+            body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }}
+            label {{ display: block; margin-top: 15px; font-weight: bold; }}
+            textarea, select {{ width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; }}
+            textarea {{ height: 100px; }}
+            button {{ background: #4CAF50; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 20px; }}
+            button:hover {{ background: #45a049; }}
+            button:disabled {{ background: #ccc; cursor: not-allowed; }}
+            .result {{ margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; display: none; }}
+            .loading {{ display: none; margin-top: 20px; color: #666; }}
+            .avatar-preview {{ margin-top: 10px; color: #666; font-size: 14px; }}
         </style>
     </head>
     <body>
         <h1>🎬 Test Video Generation</h1>
-        <p>Click the button below to generate a test video with HeyGen</p>
+        <p>Generate a test video with HeyGen using different avatars</p>
         
-        <textarea id="script" style="width: 100%; height: 100px; padding: 10px; margin-bottom: 10px;">
-Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.
-        </textarea>
+        <label for="avatar">Select Avatar:</label>
+        <select id="avatar" onchange="showAvatarId()">
+            {''.join(f'<option value="{avatar_id}">{name} ({avatar_id})</option>' for name, avatar_id in avatars.items() if avatar_id)}
+        </select>
+        <div class="avatar-preview" id="avatarPreview"></div>
+        
+        <label for="script">Video Script:</label>
+        <textarea id="script">Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.</textarea>
         
         <button onclick="generateVideo()">Generate Test Video</button>
         
@@ -327,9 +353,18 @@ Hello from Refiloe! This is a test video to verify our HeyGen integration is wor
         <div class="result" id="result"></div>
         
         <script>
-            async function generateVideo() {
+            function showAvatarId() {{
+                const select = document.getElementById('avatar');
+                const preview = document.getElementById('avatarPreview');
+                preview.textContent = 'Avatar ID: ' + select.value;
+            }}
+            
+            showAvatarId(); // Show initial selection
+            
+            async function generateVideo() {{
                 const button = event.target;
                 const script = document.getElementById('script').value;
+                const avatarId = document.getElementById('avatar').value;
                 const loading = document.getElementById('loading');
                 const result = document.getElementById('result');
                 
@@ -338,35 +373,38 @@ Hello from Refiloe! This is a test video to verify our HeyGen integration is wor
                 loading.style.display = 'block';
                 result.style.display = 'none';
                 
-                try {
-                    const response = await fetch('/api/test/generate-video', {
+                try {{
+                    const response = await fetch('/api/test/generate-video', {{
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ script: script })
-                    });
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ 
+                            script: script,
+                            avatar_id: avatarId
+                        }})
+                    }});
                     
                     const data = await response.json();
                     
-                    if (data.success) {
+                    if (data.success) {{
                         result.innerHTML = `
                             <h3>✅ Success!</h3>
-                            <p><strong>Video ID:</strong> ${data.video_id}</p>
-                            <p><strong>Video URL:</strong> <a href="${data.video_url}" target="_blank">View Video</a></p>
-                            <p><strong>Post ID:</strong> ${data.post_id}</p>
+                            <p><strong>Video ID:</strong> ${{data.video_id}}</p>
+                            <p><strong>Video URL:</strong> <a href="${{data.video_url}}" target="_blank">View Video</a></p>
+                            <p><strong>Post ID:</strong> ${{data.post_id}}</p>
                             <p><a href="/approval/pending" target="_blank">👉 Go to Approval Dashboard</a></p>
                         `;
-                    } else {
-                        result.innerHTML = `<h3>❌ Error:</h3><p>${data.error}</p>`;
-                    }
-                } catch (error) {
-                    result.innerHTML = `<h3>❌ Error:</h3><p>${error.message}</p>`;
-                }
+                    }} else {{
+                        result.innerHTML = `<h3>❌ Error:</h3><p>${{data.error}}</p>`;
+                    }}
+                }} catch (error) {{
+                    result.innerHTML = `<h3>❌ Error:</h3><p>${{error.message}}</p>`;
+                }}
                 
                 loading.style.display = 'none';
                 result.style.display = 'block';
                 button.disabled = false;
                 button.textContent = 'Generate Test Video';
-            }
+            }}
         </script>
     </body>
     </html>
