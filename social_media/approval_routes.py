@@ -66,10 +66,14 @@ def _ensure_database() -> Optional[SocialMediaDatabase]:
             schema="public",
             headers={},
             auto_refresh_token=True,
-            persist_session=True
+            persist_session=True,
         )
 
-        _supabase_client = SyncClient(url, key, options)
+        _supabase_client = SyncClient(
+            supabase_url=url,
+            supabase_key=key,
+            options=options,
+        )
         _database_service = SocialMediaDatabase(_supabase_client)
         log_info("Approval routes connected to Supabase")
     except Exception as exc:  # pragma: no cover - defensive logging
