@@ -35,6 +35,10 @@ class SupabaseRestClient:
                 params=params,
                 timeout=30
             )
+            if response.status_code >= 400:
+                log_error(f"Supabase request failed: {method} {url}")
+                log_error(f"Status: {response.status_code}")
+                log_error(f"Response: {response.text}")
             response.raise_for_status()
             return response.json() if response.content else {}
         except Exception as e:
