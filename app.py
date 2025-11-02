@@ -478,19 +478,20 @@ def test_generate_video():
         scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
         
         post_data = {
-            'format': 'video',
+            'post_type': 'video',  # Changed from 'format' to 'post_type'
             'platform': 'facebook',
             'status': 'pending_approval',
             'scheduled_time': scheduled_time.isoformat(),
-            'video_url': video_url,  # Add video_url directly
-            'thumbnail_url': result.get('thumbnail_url'),  # Add thumbnail
-            'metadata': {
-                'video_url': video_url,
-                'video_id': video_id,
-                'avatar_id': result.get('avatar_id'),
-                'test': True,
-                'caption': f'Test video - {script[:100]}...'
-            }
+            'video_url': video_url,
+            'thumbnail_url': result.get('thumbnail_url'),
+            'video_duration': int(result.get('duration', 0)),
+            'video_type': 'test_video',
+            'video_style': result.get('style', 'educational'),
+            'content_text': f'Test video - {script[:100]}...',  # Changed from caption
+            'content_theme': 'test',
+            'has_captions': True,
+            'completion_rate': 0,
+            'avg_watch_time': 0
         }
         
         log_info(f"Saving post to database: {post_data}")
