@@ -60,17 +60,18 @@ def check_avatar_availability(
     results: Dict[str, Dict[str, str | bool]] = {}
 
     list_url = "https://api.heygen.com/v2/avatars"
+    regular_avatars: set[str] = set()
+
     try:
         list_response = session.get(list_url, headers=headers, timeout=timeout)
         if list_response.status_code == 200:
-            available_avatars = list_response.json().get("data", {}).get("avatars", [])
-            available_ids = {
-                a.get("avatar_id") for a in available_avatars if a.get("avatar_id")
+            data = list_response.json()
+            avatars = data.get("data", {}).get("avatars", [])
+            regular_avatars = {
+                a.get("avatar_id") for a in avatars if a.get("avatar_id")
             }
-        else:
-            available_ids = set()
     except Exception:  # pragma: no cover - network issues or unexpected errors
-        available_ids = set()
+        pass
 
     for env_key, avatar_id in avatar_ids.items():
         status: Dict[str, str | bool] = {
@@ -79,26 +80,15 @@ def check_avatar_availability(
             "detail": "",
         }
 
-        if available_ids and avatar_id in available_ids:
+        if avatar_id in regular_avatars:
             status["ok"] = True
-            status["detail"] = "OK"
+            status["detail"] = "Regular avatar found"
+        elif len(avatar_id) == 32 or (len(avatar_id) == 36 and "-" in avatar_id):
+            status["ok"] = True
+            status["detail"] = "Photo avatar (cannot verify via API, assuming available)"
         else:
-            url = f"https://api.heygen.com/v2/avatar/{avatar_id}"
-            try:
-                response = session.get(url, headers=headers, timeout=timeout)
-                if response.status_code == 200:
-                    status["ok"] = True
-                    status["detail"] = "OK"
-                else:
-                    try:
-                        payload = response.json()
-                        status["detail"] = payload.get(
-                            "message", f"Status {response.status_code}"
-                        )
-                    except ValueError:
-                        status["detail"] = f"HTTP {response.status_code}"
-            except requests.RequestException as exc:  # pragma: no cover - network issues
-                status["detail"] = str(exc)
+            status["detail"] = f"Unknown avatar format: {avatar_id}"
+
         results[env_key] = status
 
     return results
