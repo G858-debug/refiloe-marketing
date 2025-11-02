@@ -864,7 +864,7 @@ class SocialMediaScheduler:
                 'video_duration': video_data.get('video_duration', 30),
                 'format': 'video',
                 'scheduled_time': scheduled_time.isoformat(),
-                'status': 'scheduled',
+                'status': 'pending_approval',
                 'platform': 'facebook',
                 'script_id': video_data.get('script_id'),
                 'trending_audio_id': video_data.get('trending_audio_id'),
