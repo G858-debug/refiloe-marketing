@@ -51,32 +51,41 @@ SA_TZ = pytz.timezone('Africa/Johannesburg')
 def init_supabase():
     """Initialize Supabase client"""
     global supabase_client
-    
-    try:
-        from supabase._sync.client import SyncClient
-        from supabase.lib.client_options import ClientOptions
 
+    try:
         url = app.config['SUPABASE_URL']
-        # Try SERVICE_KEY first, fallback to ANON_KEY
         key = app.config.get('SUPABASE_SERVICE_KEY') or app.config.get('SUPABASE_ANON_KEY')
-        
+
         if not url or not key:
             log_error("Supabase credentials not found in environment")
             return False
-        
+
+        # Import the sync client directly to avoid proxy parameter
+        from supabase._sync.client import SyncClient
+        from supabase.lib.client_options import ClientOptions
+
+        # Create options without proxy parameter
         options = ClientOptions(
             schema="public",
             headers={},
             auto_refresh_token=True,
-            persist_session=True
+            persist_session=True,
         )
 
-        supabase_client = SyncClient(url, key, options)
+        # Create client using direct instantiation
+        supabase_client = SyncClient(
+            supabase_url=url,
+            supabase_key=key,
+            options=options
+        )
+
         log_info("✅ Supabase client initialized successfully")
         return True
-        
+
     except Exception as e:
         log_error(f"Failed to initialize Supabase: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
         return False
 
 
