@@ -20,6 +20,8 @@ from config import config
 from utils.logger import log_info, log_error, log_warning
 from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
 
+from social_media.approval_routes import approval_bp
+
 
 load_dotenv()
 
@@ -198,6 +200,9 @@ def health_check():
             'scheduler': scheduler is not None,
             'social_media_enabled': app.config.get('ENABLE_SOCIAL_MEDIA', False),
             'heygen': heygen_avatar_status,
+        },
+        'links': {
+            'approval_pending': '/approval/pending'
         }
     }), 200
 
@@ -283,6 +288,9 @@ def test_content_generation():
     except Exception as e:
         log_error(f"Error testing content generation: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+app.register_blueprint(approval_bp, url_prefix='/approval')
 
 
 @app.errorhandler(404)
