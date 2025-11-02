@@ -308,7 +308,6 @@ def test_video_form():
         'Confident Swimwear': os.getenv('HEYGEN_AVATAR_CONFIDENT_SWIMWEAR_FULLBODY'),
         'Serious Closeup': os.getenv('HEYGEN_AVATAR_SERIOUS_CLOSEUP'),
         'Warm Smile Closeup': os.getenv('HEYGEN_AVATAR_WARMSMILE_CLOSEUP'),
-        'Laughing Closeup': os.getenv('HEYGEN_AVATAR_LAUGHING_CLOSEUP'),
         'Three Quarters Closeup': os.getenv('HEYGEN_AVATAR_THREEQUARTERS_CLOSEUP'),
         'Summer Casual': os.getenv('HEYGEN_AVATAR_SUMMERCASUAL_THREEQUARTERBODY'),
     }
