@@ -53,8 +53,9 @@ def init_supabase():
     global supabase_client
     
     try:
-        from supabase import create_client, Client
-        
+        from supabase._sync.client import SyncClient
+        from supabase.lib.client_options import ClientOptions
+
         url = app.config['SUPABASE_URL']
         # Try SERVICE_KEY first, fallback to ANON_KEY
         key = app.config.get('SUPABASE_SERVICE_KEY') or app.config.get('SUPABASE_ANON_KEY')
@@ -63,7 +64,14 @@ def init_supabase():
             log_error("Supabase credentials not found in environment")
             return False
         
-        supabase_client = create_client(url, key)
+        options = ClientOptions(
+            schema="public",
+            headers={},
+            auto_refresh_token=True,
+            persist_session=True
+        )
+
+        supabase_client = SyncClient(url, key, options)
         log_info("✅ Supabase client initialized successfully")
         return True
         
