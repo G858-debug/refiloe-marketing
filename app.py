@@ -8,7 +8,7 @@ This is the entry point for the Railway deployment.
 
 import os
 from flask import Flask, jsonify, request
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 from dotenv import load_dotenv
@@ -292,6 +292,84 @@ def test_content_generation():
 
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
+
+
+@app.route('/api/test/generate-video', methods=['POST'])
+def test_generate_video():
+    """Manually trigger a test video generation"""
+    if not supabase_client:
+        return jsonify({'error': 'Supabase not initialized'}), 503
+
+    try:
+        from social_media.video_generator import VideoGenerator
+        import os
+
+        # Initialize video generator
+        video_gen = VideoGenerator(
+            config_path='social_media/config.yaml',
+            supabase_client=supabase_client
+        )
+
+        # Get request data
+        data = request.get_json() or {}
+        script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
+
+        # Get voice and avatar from environment
+        voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+        avatar_id = os.getenv('HEYGEN_AVATAR_DEFAULT')
+
+        log_info(f"Generating test video with avatar: {avatar_id}")
+
+        # Generate video
+        result = video_gen.generate_avatar_video(
+            script_text=script,
+            avatar_id=avatar_id,
+            voice_id=voice_id,
+            style='educational',
+            background_music=True,
+            metadata={
+                'test': True,
+                'purpose': 'production_test',
+                'triggered_by': 'api'
+            }
+        )
+
+        # Create post with pending_approval status
+        scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
+
+        post_data = {
+            'content': 'Test video post - Please review and approve',
+            'video_url': result.get('video_url'),
+            'format': 'video',
+            'platform': 'facebook',
+            'status': 'pending_approval',
+            'scheduled_time': scheduled_time.isoformat(),
+            'metadata': {
+                'video_id': result.get('video_id'),
+                'avatar_id': result.get('avatar_id'),
+                'test': True
+            }
+        }
+
+        # Save to database
+        from social_media.database import SocialMediaDatabase
+        db = SocialMediaDatabase(supabase_client)
+        post_id = db.save_post(post_data)
+
+        return jsonify({
+            'success': True,
+            'video_id': result.get('video_id'),
+            'video_url': result.get('video_url'),
+            'post_id': post_id,
+            'message': 'Video generated successfully! Check /approval/pending to review.',
+            'approval_url': f'/approval/view/{post_id}'
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error generating test video: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 
 @app.errorhandler(404)
