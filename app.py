@@ -51,32 +51,24 @@ SA_TZ = pytz.timezone('Africa/Johannesburg')
 def init_supabase():
     """Initialize Supabase client"""
     global supabase_client
-
+    
     try:
-        from supabase import create_client
-
+        from utils.supabase_rest import SupabaseRestClient
+        
         url = app.config['SUPABASE_URL']
         key = app.config.get('SUPABASE_SERVICE_KEY') or app.config.get('SUPABASE_ANON_KEY')
-
+        
         if not url or not key:
             log_error("Supabase credentials not found in environment")
             return False
-
-        log_info(f"Attempting Supabase connection to: {url[:30]}...")
-        log_info(
-            "Using key type: "
-            f"{'SERVICE_KEY' if app.config.get('SUPABASE_SERVICE_KEY') else 'ANON_KEY'}"
-        )
-
-        supabase_client = create_client(url, key)
-
-        log_info("✅ Supabase client initialized successfully")
+        
+        supabase_client = SupabaseRestClient(url, key)
+        log_info("✅ Supabase REST client initialized successfully")
         return True
-
+        
     except Exception as e:
         log_error(f"Failed to initialize Supabase: {str(e)}")
         import traceback
-
         log_error(f"Full traceback:\n{traceback.format_exc()}")
         return False
 
