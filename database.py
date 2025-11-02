@@ -39,14 +39,17 @@ class SocialMediaDatabase:
             post_id = str(uuid.uuid4())
             
             # Prepare data for insertion
+            # Don't add content field - table doesn't have it
             db_data = {
                 'id': post_id,
-                'content': post_data.get('content', ''),
                 'platform': post_data.get('platform', 'facebook'),
                 'scheduled_time': post_data.get('scheduled_time'),
                 'status': post_data.get('status', 'draft'),
                 'trainer_id': post_data.get('trainer_id'),
                 'template_id': post_data.get('template_id'),
+                'format': post_data.get('format'),
+                'video_url': post_data.get('video_url'),
+                'thumbnail_url': post_data.get('thumbnail_url'),
                 'metadata': post_data.get('metadata', {}),
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
