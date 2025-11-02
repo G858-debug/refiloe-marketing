@@ -1221,10 +1221,9 @@ class VideoGenerator:
 
     def _poll_video_status(self, video_id: str) -> Dict[str, Any]:
         deadline = time.time() + self.poll_timeout
-        params = {"video_id": video_id}
 
         while time.time() < deadline:
-            response = self._get_with_retry("/video/status", params=params)
+            response = self._get_with_retry(f"/video_status/{video_id}")
             data = response.get("data") or response
             status = data.get("status")
 
