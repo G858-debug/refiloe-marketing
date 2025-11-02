@@ -959,11 +959,26 @@ class VideoGenerator:
                 "avatar_style": "normal",
             }
 
+        background_setting = style_settings.get("background")
+        if isinstance(background_setting, dict):
+            background_config = dict(background_setting)
+        else:
+            background_color = style_settings.get("background_color", "#FFFFFF")
+            background_config = {
+                "type": "color",
+                "value": background_color,
+            }
+
         video_input: Dict[str, Any] = {
             "character": character_payload,
             "voice": voice_payload,
-            "background": background_music,
+            "background": background_config,
         }
+
+        if isinstance(background_music, dict):
+            video_input["background_music"] = background_music
+        else:
+            video_input["background_music"] = bool(background_music)
 
         payload: Dict[str, Any] = {
             "video_inputs": [video_input],
