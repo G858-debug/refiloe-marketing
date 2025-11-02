@@ -398,9 +398,9 @@ def test_generate_video():
         data = request.get_json() or {}
         script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
         
-        # Get voice and avatar from environment
-        voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
-        avatar_id = os.getenv('HEYGEN_AVATAR_DEFAULT')
+        # Get voice and avatar from request or environment
+        voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+        avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
         
         log_info(f"Using avatar: {avatar_id}, voice: {voice_id}")
         log_info(f"Script: {script[:100]}...")
