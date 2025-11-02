@@ -8,7 +8,11 @@ from datetime import datetime, timedelta
 import pytz
 from anthropic import Anthropic
 from utils.logger import log_info, log_error, log_warning
-from .database import SocialMediaDatabase
+
+try:  # Allow use both as package module and standalone
+    from .database import SocialMediaDatabase  # type: ignore
+except ImportError:  # pragma: no cover - fallback when imported from package wrapper
+    from database import SocialMediaDatabase  # type: ignore
 
 
 class ContentGenerator:
