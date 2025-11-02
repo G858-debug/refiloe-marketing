@@ -294,6 +294,86 @@ def test_content_generation():
 app.register_blueprint(approval_bp, url_prefix='/approval')
 
 
+@app.route('/test-video-form')
+def test_video_form():
+    """Simple form to trigger test video generation"""
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Video Generation</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            button { background: #4CAF50; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+            button:hover { background: #45a049; }
+            .result { margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 5px; display: none; }
+            .loading { display: none; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <h1>🎬 Test Video Generation</h1>
+        <p>Click the button below to generate a test video with HeyGen</p>
+        
+        <textarea id="script" style="width: 100%; height: 100px; padding: 10px; margin-bottom: 10px;">
+Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.
+        </textarea>
+        
+        <button onclick="generateVideo()">Generate Test Video</button>
+        
+        <div class="loading" id="loading">
+            <p>⏳ Generating video... This takes 2-5 minutes. Please wait...</p>
+        </div>
+        
+        <div class="result" id="result"></div>
+        
+        <script>
+            async function generateVideo() {
+                const button = event.target;
+                const script = document.getElementById('script').value;
+                const loading = document.getElementById('loading');
+                const result = document.getElementById('result');
+                
+                button.disabled = true;
+                button.textContent = 'Generating...';
+                loading.style.display = 'block';
+                result.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/test/generate-video', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script: script })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        result.innerHTML = `
+                            <h3>✅ Success!</h3>
+                            <p><strong>Video ID:</strong> ${data.video_id}</p>
+                            <p><strong>Video URL:</strong> <a href="${data.video_url}" target="_blank">View Video</a></p>
+                            <p><strong>Post ID:</strong> ${data.post_id}</p>
+                            <p><a href="/approval/pending" target="_blank">👉 Go to Approval Dashboard</a></p>
+                        `;
+                    } else {
+                        result.innerHTML = `<h3>❌ Error:</h3><p>${data.error}</p>`;
+                    }
+                } catch (error) {
+                    result.innerHTML = `<h3>❌ Error:</h3><p>${error.message}</p>`;
+                }
+                
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                button.disabled = false;
+                button.textContent = 'Generate Test Video';
+            }
+        </script>
+    </body>
+    </html>
+    '''
+    return html
+
+
 @app.route('/api/test/generate-video', methods=['POST'])
 def test_generate_video():
     """Manually trigger a test video generation"""
