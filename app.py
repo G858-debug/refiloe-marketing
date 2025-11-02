@@ -53,6 +53,8 @@ def init_supabase():
     global supabase_client
 
     try:
+        from supabase import create_client
+
         url = app.config['SUPABASE_URL']
         key = app.config.get('SUPABASE_SERVICE_KEY') or app.config.get('SUPABASE_ANON_KEY')
 
@@ -60,17 +62,12 @@ def init_supabase():
             log_error("Supabase credentials not found in environment")
             return False
 
-        from supabase import create_client
-
         supabase_client = create_client(url, key)
-
         log_info("✅ Supabase client initialized successfully")
         return True
 
     except Exception as e:
         log_error(f"Failed to initialize Supabase: {str(e)}")
-        import traceback
-        log_error(traceback.format_exc())
         return False
 
 
