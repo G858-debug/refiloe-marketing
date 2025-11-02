@@ -85,7 +85,13 @@ class SupabaseTable:
 
     def insert(self, data: Dict):
         """Insert data."""
-        result = self.client._request('POST', self.table_name, json=data)
+        # Ensure data is a list for batch insert, or convert single dict to list
+        if isinstance(data, dict):
+            payload = [data]
+        else:
+            payload = data
+
+        result = self.client._request('POST', self.table_name, json=payload)
         return ExecuteResult(result)
 
     def update(self, data: Dict):
