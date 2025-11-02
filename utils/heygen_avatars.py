@@ -21,7 +21,7 @@ AVATAR_ENV_DEFAULTS: Dict[str, str] = {
     "HEYGEN_AVATAR_DEFAULT": "5637676d31d54946b7585b012a3ce182",
 }
 
-HEYGEN_API_BASE_URL = "https://api.heygen.com/v1/avatars"
+HEYGEN_API_BASE_URL = "https://api.heygen.com/v2/avatars"
 
 
 class AvatarAvailabilityError(RuntimeError):
@@ -56,29 +56,49 @@ def check_avatar_availability(
     """Call the HeyGen API for each avatar and return status details."""
 
     session = requests.Session()
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
     results: Dict[str, Dict[str, str | bool]] = {}
 
+    list_url = "https://api.heygen.com/v2/avatars"
+    try:
+        list_response = session.get(list_url, headers=headers, timeout=timeout)
+        if list_response.status_code == 200:
+            available_avatars = list_response.json().get("data", {}).get("avatars", [])
+            available_ids = {
+                a.get("avatar_id") for a in available_avatars if a.get("avatar_id")
+            }
+        else:
+            available_ids = set()
+    except Exception:  # pragma: no cover - network issues or unexpected errors
+        available_ids = set()
+
     for env_key, avatar_id in avatar_ids.items():
-        url = f"{HEYGEN_API_BASE_URL}/{avatar_id}"
         status: Dict[str, str | bool] = {
             "avatar_id": avatar_id,
             "ok": False,
             "detail": "",
         }
-        try:
-            response = session.get(url, headers=headers, timeout=timeout)
-            if response.status_code == 200:
-                status["ok"] = True
-                status["detail"] = "OK"
-            else:
-                try:
-                    payload = response.json()
-                    status["detail"] = payload.get("message") or payload
-                except ValueError:
-                    status["detail"] = response.text
-        except requests.RequestException as exc:  # pragma: no cover - network issues
-            status["detail"] = str(exc)
+
+        if available_ids and avatar_id in available_ids:
+            status["ok"] = True
+            status["detail"] = "OK"
+        else:
+            url = f"https://api.heygen.com/v2/avatar/{avatar_id}"
+            try:
+                response = session.get(url, headers=headers, timeout=timeout)
+                if response.status_code == 200:
+                    status["ok"] = True
+                    status["detail"] = "OK"
+                else:
+                    try:
+                        payload = response.json()
+                        status["detail"] = payload.get(
+                            "message", f"Status {response.status_code}"
+                        )
+                    except ValueError:
+                        status["detail"] = f"HTTP {response.status_code}"
+            except requests.RequestException as exc:  # pragma: no cover - network issues
+                status["detail"] = str(exc)
         results[env_key] = status
 
     return results
