@@ -57,6 +57,42 @@ ENABLE_SOCIAL_MEDIA=true
 PORT=5000
 ```
 
+#### HeyGen Avatars
+
+HeyGen avatar IDs are required for video generation. Use the helper script to provision them locally and copy the values into Railway:
+
+1. Generate or update the local `.env` file:
+   ```bash
+   python scripts/setup_avatar_env.py
+   ```
+   The script writes all required `HEYGEN_AVATAR_*` variables to `.env`, creates `scripts/test_avatar_availability.py`, and prints Railway bulk-import instructions.
+2. In Railway, open **Variables → Bulk Edit** and paste the following JSON payload:
+   ```json
+   {
+     "HEYGEN_AVATAR_PROFESSIONAL_CLOSEUP": "110f75a397604454ba6f822c68f29949",
+     "HEYGEN_AVATAR_CASUAL_CLOSEUP": "e39d22ad46c34b5599dc939c63ba1d89",
+     "HEYGEN_AVATAR_FITNESS_FULLBODY": "3fa139effeb348a99b959065a2425363",
+     "HEYGEN_AVATAR_CONFIDENT_SWIMWEAR_FULLBODY": "5d511d22069d4a7d9d75ffd78d1a0bda",
+     "HEYGEN_AVATAR_SERIOUS_CLOSEUP": "efe8efb12f0a4bc8b961e22220fc974d",
+     "HEYGEN_AVATAR_WARMSMILE_CLOSEUP": "9648b4e9da9c444c877214312c5ad27c",
+     "HEYGEN_AVATAR_LAUGHING_CLOSEUP": "89c3da65880249e78e26070732b52f53",
+     "HEYGEN_AVATAR_THREEQUARTERS_CLOSEUP": "5637676d31d54946b7585b012a3ce182",
+     "HEYGEN_AVATAR_SUMMERCASUAL_THREEQUARTERBODY": "12e5e8c825e547a0a67ad0057288a4da",
+     "HEYGEN_AVATAR_GROUP": "89c3da65880249e78e26070732b52f53",
+     "HEYGEN_AVATAR_DEFAULT": "5637676d31d54946b7585b012a3ce182"
+   }
+   ```
+3. Add your HeyGen API key:
+   ```bash
+   HEYGEN_API_KEY=your_heygen_token
+   ```
+4. (Optional) Validate access locally before deploying:
+   ```bash
+   python scripts/test_avatar_availability.py
+   ```
+
+On application startup the Flask app now checks for the required HeyGen environment variables and verifies avatar availability. Status details are exposed on `/health` and `/api/status` under the `heygen` component.
+
 ### 2. Deploy to Railway
 
 1. Create new Railway project
