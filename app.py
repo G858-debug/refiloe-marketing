@@ -479,16 +479,18 @@ def test_generate_video():
         scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
         
         post_data = {
-            'content': f'Test video post - Please review and approve\n\nScript: {script[:100]}...',
             'format': 'video',
             'platform': 'facebook',
             'status': 'pending_approval',
             'scheduled_time': scheduled_time.isoformat(),
+            'video_url': video_url,  # Add video_url directly
+            'thumbnail_url': result.get('thumbnail_url'),  # Add thumbnail
             'metadata': {
                 'video_url': video_url,
                 'video_id': video_id,
                 'avatar_id': result.get('avatar_id'),
-                'test': True
+                'test': True,
+                'caption': f'Test video - {script[:100]}...'
             }
         }
         
