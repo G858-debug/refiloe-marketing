@@ -38,22 +38,32 @@ class SocialMediaDatabase:
             # Generate UUID for the post
             post_id = str(uuid.uuid4())
             
-            # Prepare data for insertion
-            # Don't add content field - table doesn't have it
+            # Prepare data for insertion using fallback defaults and aligned schema fields
             db_data = {
                 'id': post_id,
+                'post_type': post_data.get('post_type', post_data.get('format', 'text')),
                 'platform': post_data.get('platform', 'facebook'),
+                'content_text': post_data.get('content_text', post_data.get('content', '')),
+                'content_theme': post_data.get('content_theme', post_data.get('theme', '')),
+                'image_ids': post_data.get('image_ids', []),
                 'scheduled_time': post_data.get('scheduled_time'),
                 'status': post_data.get('status', 'draft'),
-                'trainer_id': post_data.get('trainer_id'),
-                'template_id': post_data.get('template_id'),
-                'format': post_data.get('format'),
                 'video_url': post_data.get('video_url'),
+                'video_duration': post_data.get('video_duration'),
+                'video_type': post_data.get('video_type'),
                 'thumbnail_url': post_data.get('thumbnail_url'),
-                'metadata': post_data.get('metadata', {}),
+                'video_style': post_data.get('video_style'),
+                'has_captions': post_data.get('has_captions', False),
+                'completion_rate': post_data.get('completion_rate', 0),
+                'avg_watch_time': post_data.get('avg_watch_time', 0),
+                'generation_prompt': post_data.get('generation_prompt'),
+                'week_number': post_data.get('week_number'),
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
+
+            # Remove None values to avoid inserting nulls where not allowed
+            db_data = {k: v for k, v in db_data.items() if v is not None}
             
             # Insert into database
             result = self.db.table('social_posts').insert(db_data).execute()
