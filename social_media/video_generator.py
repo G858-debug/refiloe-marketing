@@ -1223,7 +1223,8 @@ class VideoGenerator:
         deadline = time.time() + self.poll_timeout
 
         while time.time() < deadline:
-            response = self._get_with_retry(f"/video_status/{video_id}")
+            params = {"video_id": video_id}
+            response = self._get_with_retry("/v1/video_status.get", params=params)
             data = response.get("data") or response
             status = data.get("status")
 
