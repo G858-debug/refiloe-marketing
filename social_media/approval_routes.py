@@ -16,6 +16,7 @@ from flask import (
     url_for,
 )
 from social_media.database import SocialMediaDatabase
+from supabase import create_client
 from utils.logger import log_error, log_info
 
 
@@ -59,8 +60,6 @@ def _ensure_database() -> Optional[SocialMediaDatabase]:
         return None
 
     try:
-        from supabase import create_client
-
         _supabase_client = create_client(url, key)
         _database_service = SocialMediaDatabase(_supabase_client)
         log_info("Approval routes connected to Supabase")
