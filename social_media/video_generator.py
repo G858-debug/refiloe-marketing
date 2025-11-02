@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -14,6 +15,30 @@ import requests
 import yaml
 
 from utils.logger import log_debug, log_error, log_info, log_warning
+
+try:  # Attempt package-relative import first
+    from . import avatar_mapping as _avatar_mapping_module  # type: ignore
+except ImportError:  # pragma: no cover - fallback when running from project root
+    try:
+        import avatar_mapping as _avatar_mapping_module  # type: ignore
+    except ImportError:  # pragma: no cover - avatar mapping optional at runtime
+        _avatar_mapping_module = None
+
+if _avatar_mapping_module is not None:
+    get_avatar_for_content = getattr(_avatar_mapping_module, "get_avatar_for_content", None)
+    get_fallback_avatar_id = getattr(_avatar_mapping_module, "get_fallback_avatar_id", None)
+    AvatarSelectionError = getattr(
+        _avatar_mapping_module,
+        "AvatarSelectionError",
+        type("AvatarSelectionError", (Exception,), {}),
+    )
+else:  # pragma: no cover - defensive defaults when module missing
+    get_avatar_for_content = None
+    get_fallback_avatar_id = None
+
+    class AvatarSelectionError(Exception):
+        """Raised when dynamic avatar selection fails."""
+
 
 
 HEYGEN_API_BASE_URL = "https://api.heygen.com/v2"
@@ -56,6 +81,10 @@ class VideoGenerator:
         ).get("default_voice_id")
         self.style_presets = self._build_style_presets()
 
+        self.group_avatar_id = os.getenv("HEYGEN_GROUP_AVATAR_ID")
+        self.closeup_avatar_id = os.getenv("HEYGEN_THREEQUARTERS_CLOSEUP_AVATAR_ID")
+        self.analytics_table = os.getenv("HEYGEN_VIDEO_ANALYTICS_TABLE", "video_analytics")
+
         log_info("VideoGenerator initialized with HeyGen integration")
 
     # ------------------------------------------------------------------
@@ -64,22 +93,26 @@ class VideoGenerator:
     def generate_avatar_video(
         self,
         script_text: str,
-        avatar_id: str,
+        avatar_id: Optional[str] = None,
         voice_id: Optional[str] = None,
         *,
         style: str = "educational",
         background_music: bool = True,
         metadata: Optional[Dict[str, Any]] = None,
+        content_text: Optional[str] = None,
+        content_type: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Generate a talking avatar video using HeyGen.
+        """Generate a talking avatar video using HeyGen with dynamic avatar selection.
 
         Args:
             script_text: Full narration script that will be chunked for pacing.
-            avatar_id: HeyGen avatar identifier.
+            avatar_id: Optional explicit HeyGen avatar identifier supplied by caller.
             voice_id: HeyGen voice identifier. Defaults to configured default if omitted.
             style: Content style preset (educational, motivational, tips, etc.).
             background_music: Whether to include background music.
             metadata: Optional metadata to persist with the video record.
+            content_text: Optional free-form content text used to influence avatar selection.
+            content_type: Optional content category used by avatar mapping logic.
 
         Returns:
             Dict with video metadata including video_url on success.
@@ -99,74 +132,362 @@ class VideoGenerator:
         if not resolved_voice_id:
             raise ValueError("Voice ID is required for HeyGen video generation")
 
-        payload = self._build_generate_payload(
-            avatar_id=avatar_id,
-            voice_id=resolved_voice_id,
-            style_settings=style_settings,
-            script_chunks=script_chunks,
-            background_music=background_music,
-            metadata=metadata or {},
+        primary_content_text = (content_text or script_text or "").strip()
+
+        base_metadata: Dict[str, Any] = dict(metadata or {})
+
+        candidate_chain = self._build_avatar_candidate_chain(
+            avatar_id,
+            content_text=primary_content_text,
+            content_type=content_type,
+            metadata=base_metadata,
         )
 
-        log_debug(f"HeyGen payload prepared with {len(script_chunks)} chunks")
+        if not candidate_chain:
+            raise VideoGenerationError("No HeyGen avatar candidates available for generation")
 
-        response = self._post_with_retry("/video/generate", json=payload)
-        video_id = (
-            response.get("data", {}).get("video_id")
-            or response.get("video_id")
-            or response.get("task_id")
-        )
+        selection_attempts: List[Dict[str, Any]] = []
+        last_error: Optional[Exception] = None
 
-        if not video_id:
-            raise VideoGenerationError("HeyGen response did not include a video identifier")
+        for attempt_index, candidate in enumerate(candidate_chain):
+            current_avatar_id = candidate["avatar_id"]
+            attempt_detail: Dict[str, Any] = {
+                "avatar_id": current_avatar_id,
+                "reason": candidate.get("reason"),
+                "source": candidate.get("source"),
+                "attempt_index": attempt_index,
+                "status": "pending",
+            }
+            if candidate.get("context"):
+                attempt_detail["context"] = candidate["context"]
+            selection_attempts.append(attempt_detail)
 
-        log_info(f"HeyGen video request accepted (video_id={video_id})")
+            attempt_metadata = dict(base_metadata)
+            avatar_selection_meta: Dict[str, Any] = {
+                "avatar_id": current_avatar_id,
+                "reason": candidate.get("reason"),
+                "source": candidate.get("source"),
+                "attempt_index": attempt_index,
+                "content_type": content_type,
+                "content_text_excerpt": primary_content_text[:160] if primary_content_text else None,
+                "fallback_chain": [
+                    {
+                        "avatar_id": chain_item["avatar_id"],
+                        "reason": chain_item.get("reason"),
+                        "source": chain_item.get("source"),
+                    }
+                    for chain_item in candidate_chain
+                ],
+                "attempts": selection_attempts,
+            }
+            if candidate.get("context"):
+                avatar_selection_meta["context"] = candidate["context"]
+            selector_context = (
+                base_metadata.get("avatar_selection", {}).get("selector_context")
+                if isinstance(base_metadata.get("avatar_selection"), dict)
+                else None
+            )
+            if selector_context and "selector_context" not in avatar_selection_meta:
+                avatar_selection_meta["selector_context"] = selector_context
+            attempt_metadata["avatar_selection"] = avatar_selection_meta
 
-        video_data = self._poll_video_status(video_id)
-
-        if video_data.get("status") != "completed":
-            self._record_usage(video_id, success=False, style=style)
-            raise VideoGenerationError(
-                f"Video generation failed with status: {video_data.get('status')}"
+            log_info(
+                "Attempting HeyGen video with avatar '%s' (reason=%s, source=%s)"
+                % (
+                    current_avatar_id,
+                    candidate.get("reason"),
+                    candidate.get("source"),
+                )
             )
 
-        video_url = video_data.get("video_url")
-        if not video_url:
-            self._record_usage(video_id, success=False, style=style)
-            raise VideoGenerationError("HeyGen completed without returning a video URL")
+            try:
+                payload = self._build_generate_payload(
+                    avatar_id=current_avatar_id,
+                    voice_id=resolved_voice_id,
+                    style_settings=style_settings,
+                    script_chunks=script_chunks,
+                    background_music=background_music,
+                    metadata=attempt_metadata,
+                )
 
-        self._record_usage(
-            video_id,
-            success=True,
-            style=style,
-            duration_seconds=video_data.get("duration"),
+                log_debug(
+                    "Prepared HeyGen payload with %d chunks for avatar %s"
+                    % (len(script_chunks), current_avatar_id)
+                )
+
+                response = self._post_with_retry("/video/generate", json=payload)
+                video_id = (
+                    response.get("data", {}).get("video_id")
+                    or response.get("video_id")
+                    or response.get("task_id")
+                )
+
+                if not video_id:
+                    raise VideoGenerationError(
+                        "HeyGen response did not include a video identifier"
+                    )
+
+                log_info(
+                    "HeyGen video request accepted (video_id=%s, avatar=%s)"
+                    % (video_id, current_avatar_id)
+                )
+
+                video_data = self._poll_video_status(video_id)
+
+                if video_data.get("status") != "completed":
+                    self._record_usage(video_id, success=False, style=style)
+                    attempt_detail["status"] = "failed"
+                    attempt_detail["error"] = f"status={video_data.get('status')}"
+                    last_error = VideoGenerationError(
+                        f"Video generation failed with status: {video_data.get('status')}"
+                    )
+                    log_warning(
+                        "Video generation incomplete for avatar '%s' (status=%s)"
+                        % (current_avatar_id, video_data.get("status"))
+                    )
+                    continue
+
+                video_url = video_data.get("video_url")
+                if not video_url:
+                    self._record_usage(video_id, success=False, style=style)
+                    attempt_detail["status"] = "failed"
+                    attempt_detail["error"] = "missing_video_url"
+                    last_error = VideoGenerationError(
+                        "HeyGen completed without returning a video URL"
+                    )
+                    log_warning(
+                        "HeyGen completed without video URL for avatar '%s'"
+                        % current_avatar_id
+                    )
+                    continue
+
+                self._record_usage(
+                    video_id,
+                    success=True,
+                    style=style,
+                    duration_seconds=video_data.get("duration"),
+                )
+
+                attempt_detail["status"] = "success"
+                attempt_detail["video_id"] = video_id
+                attempt_detail["video_url"] = video_url
+                attempt_detail["duration"] = video_data.get("duration")
+
+                avatar_selection_meta["attempts"] = selection_attempts
+                avatar_selection_meta["selected_index"] = attempt_index
+                avatar_selection_meta["video_id"] = video_id
+
+                self._store_video_record(
+                    video_id=video_id,
+                    video_data=video_data,
+                    script_chunks=script_chunks,
+                    avatar_id=current_avatar_id,
+                    voice_id=resolved_voice_id,
+                    style=style,
+                    background_music=background_music,
+                    metadata=attempt_metadata,
+                )
+
+                result = {
+                    "video_id": video_id,
+                    "video_url": video_url,
+                    "thumbnail_url": video_data.get("thumbnail_url"),
+                    "status": video_data.get("status"),
+                    "duration": video_data.get("duration"),
+                    "style": style,
+                    "avatar_id": current_avatar_id,
+                    "voice_id": resolved_voice_id,
+                    "script_chunks": script_chunks,
+                    "avatar_selection": avatar_selection_meta,
+                }
+
+                log_info(
+                    "HeyGen video generation complete with avatar '%s' (reason=%s)"
+                    % (current_avatar_id, candidate.get("reason"))
+                )
+                return result
+
+            except requests.RequestException as exc:
+                attempt_detail["status"] = "failed"
+                attempt_detail["error"] = str(exc)
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                if status_code in {404, 422}:
+                    log_warning(
+                        "HeyGen avatar '%s' unavailable (status_code=%s); trying fallback"
+                        % (current_avatar_id, status_code)
+                    )
+                else:
+                    log_warning(
+                        "HeyGen request failed for avatar '%s': %s"
+                        % (current_avatar_id, exc)
+                    )
+                last_error = exc
+            except VideoGenerationError as exc:
+                attempt_detail["status"] = "failed"
+                attempt_detail["error"] = str(exc)
+                log_warning(
+                    "Video generation attempt failed for avatar '%s': %s"
+                    % (current_avatar_id, exc)
+                )
+                last_error = exc
+            except Exception as exc:  # pylint: disable=broad-except
+                attempt_detail["status"] = "failed"
+                attempt_detail["error"] = str(exc)
+                log_error(
+                    "Unexpected error during HeyGen generation with avatar '%s': %s"
+                    % (current_avatar_id, exc)
+                )
+                last_error = exc
+
+        failure_summary = ", ".join(
+            f"{attempt['avatar_id']}: {attempt.get('error')}"
+            for attempt in selection_attempts
+            if attempt.get("error")
         )
-
-        self._store_video_record(
-            video_id=video_id,
-            video_data=video_data,
-            script_chunks=script_chunks,
-            avatar_id=avatar_id,
-            voice_id=resolved_voice_id,
-            style=style,
-            background_music=background_music,
-            metadata=metadata or {},
+        log_error(
+            "All avatar options failed for HeyGen video generation%s"
+            % (f" ({failure_summary})" if failure_summary else "")
         )
+        raise VideoGenerationError(
+            "All avatar options failed for HeyGen video generation"
+        ) from last_error
 
-        result = {
-            "video_id": video_id,
-            "video_url": video_url,
-            "thumbnail_url": video_data.get("thumbnail_url"),
-            "status": video_data.get("status"),
-            "duration": video_data.get("duration"),
-            "style": style,
-            "avatar_id": avatar_id,
-            "voice_id": resolved_voice_id,
-            "script_chunks": script_chunks,
-        }
+    def _build_avatar_candidate_chain(
+        self,
+        requested_avatar_id: Optional[str],
+        *,
+        content_text: Optional[str],
+        content_type: Optional[str],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Assemble avatar candidates honoring primary and fallback rules."""
 
-        log_info(f"HeyGen video generation complete: {video_url}")
-        return result
+        candidates: List[Dict[str, Any]] = []
+        selection_context: Optional[Dict[str, Any]] = None
+
+        if requested_avatar_id:
+            candidates.append(
+                {
+                    "avatar_id": requested_avatar_id,
+                    "reason": "caller_provided_avatar",
+                    "source": "caller",
+                }
+            )
+
+        if callable(get_avatar_for_content):  # pragma: no branch - runtime guarded
+            selection_kwargs: Dict[str, Any] = {}
+            if content_text:
+                selection_kwargs["content_text"] = content_text
+            if content_type:
+                selection_kwargs["content_type"] = content_type
+
+            try:
+                selection_result = get_avatar_for_content(**selection_kwargs)
+                selection_context = selection_result if isinstance(selection_result, dict) else None
+
+                derived_avatar_id: Optional[str] = None
+                derived_reason: Optional[str] = None
+
+                if isinstance(selection_result, dict):
+                    derived_avatar_id = selection_result.get("avatar_id") or selection_result.get("id")
+                    derived_reason = selection_result.get("reason") or selection_result.get("strategy")
+                elif isinstance(selection_result, (list, tuple)) and selection_result:
+                    primary = selection_result[0]
+                    if isinstance(primary, dict):
+                        derived_avatar_id = primary.get("avatar_id") or primary.get("id")
+                        derived_reason = primary.get("reason") or primary.get("strategy")
+                        selection_context = primary
+                    elif isinstance(primary, str):
+                        derived_avatar_id = primary
+                elif isinstance(selection_result, str):
+                    derived_avatar_id = selection_result
+
+                if derived_avatar_id:
+                    candidates.append(
+                        {
+                            "avatar_id": derived_avatar_id,
+                            "reason": derived_reason or "avatar_mapping_selection",
+                            "source": "avatar_mapping",
+                            "context": selection_context,
+                        }
+                    )
+            except AvatarSelectionError as exc:
+                log_warning(f"Dynamic avatar selection failed: {exc}")
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Unexpected error during avatar mapping selection: {exc}")
+
+        if not candidates and self.default_avatar_id:
+            candidates.append(
+                {
+                    "avatar_id": self.default_avatar_id,
+                    "reason": "default_avatar_configured",
+                    "source": "default",
+                }
+            )
+
+        group_avatar = self._resolve_named_avatar("GROUP")
+        if group_avatar:
+            candidates.append(
+                {
+                    "avatar_id": group_avatar,
+                    "reason": "group_avatar_fallback",
+                    "source": "fallback_group",
+                }
+            )
+
+        closeup_avatar = self._resolve_named_avatar("THREEQUARTERS_CLOSEUP")
+        if closeup_avatar:
+            candidates.append(
+                {
+                    "avatar_id": closeup_avatar,
+                    "reason": "threequarters_closeup_fallback",
+                    "source": "fallback_closeup",
+                }
+            )
+
+        deduped: List[Dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for candidate in candidates:
+            candidate_id = candidate.get("avatar_id")
+            if not candidate_id or candidate_id in seen_ids:
+                continue
+            deduped.append(candidate)
+            seen_ids.add(candidate_id)
+
+        if metadata is not None:
+            avatar_meta = metadata.setdefault("avatar_selection", {})
+            if selection_context:
+                avatar_meta.setdefault("selector_context", selection_context)
+
+        return deduped
+
+    def _resolve_named_avatar(self, name: str) -> Optional[str]:
+        """Resolve a named fallback avatar to a HeyGen identifier."""
+
+        normalised = name.upper()
+        if normalised == "GROUP" and self.group_avatar_id:
+            return self.group_avatar_id
+        if normalised == "THREEQUARTERS_CLOSEUP" and self.closeup_avatar_id:
+            return self.closeup_avatar_id
+
+        resolved: Optional[str] = None
+        if callable(get_fallback_avatar_id):
+            try:
+                resolved = get_fallback_avatar_id(normalised)  # type: ignore[misc]
+            except TypeError:
+                try:
+                    resolved = get_fallback_avatar_id(name=normalised)  # type: ignore[call-arg]
+                except Exception as exc:  # pylint: disable=broad-except
+                    log_debug(f"Fallback avatar resolver rejected keyword argument: {exc}")
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Failed to resolve fallback avatar '{name}': {exc}")
+
+        if normalised == "GROUP" and resolved:
+            self.group_avatar_id = resolved
+        elif normalised == "THREEQUARTERS_CLOSEUP" and resolved:
+            self.closeup_avatar_id = resolved
+
+        return resolved
 
     def list_available_avatars(self) -> List[Dict[str, Any]]:
         """Return the available HeyGen avatars for the account."""
@@ -175,6 +496,192 @@ class VideoGenerator:
         avatars = response.get("data") or response.get("avatars") or []
         log_info(f"Fetched {len(avatars)} HeyGen avatars")
         return avatars
+
+    def get_avatar_analytics(
+        self,
+        *,
+        limit: Optional[int] = None,
+        min_samples: int = 1,
+    ) -> List[Dict[str, Any]]:
+        """Aggregate engagement metrics per avatar to identify top performers."""
+
+        if not self.supabase_client:
+            log_warning("Supabase client not configured; returning empty avatar analytics")
+            return []
+
+        try:
+            video_query = (
+                self.supabase_client.table(self.video_table)
+                .select("video_id, avatar_id, metadata")
+                .execute()
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            log_warning(f"Failed to fetch generated videos for analytics: {exc}")
+            return []
+
+        video_records = [record for record in (video_query.data or []) if record.get("avatar_id")]
+        if not video_records:
+            log_info("No generated video records found for avatar analytics computation")
+            return []
+
+        analytics_map: Dict[str, Dict[str, Any]] = {}
+        if self.analytics_table:
+            try:
+                analytics_query = (
+                    self.supabase_client.table(self.analytics_table)
+                    .select("*")
+                    .execute()
+                )
+                analytics_map = {
+                    row.get("video_id") or row.get("id"): row
+                    for row in (analytics_query.data or [])
+                }
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Unable to retrieve detailed video analytics: {exc}")
+
+        def _normalise_metadata(value: Any) -> Dict[str, Any]:
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError:
+                    return {}
+            return {}
+
+        def _as_float(value: Any) -> Optional[float]:
+            try:
+                if value is None:
+                    return None
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        avatar_stats: Dict[str, Dict[str, Any]] = {}
+
+        for record in video_records:
+            avatar_key = record.get("avatar_id") or "UNKNOWN"
+            stats = avatar_stats.setdefault(
+                avatar_key,
+                {
+                    "avatar_id": avatar_key,
+                    "video_count": 0,
+                    "engagement_rates": [],
+                    "completion_rates": [],
+                    "view_counts": [],
+                    "reason_counts": {},
+                },
+            )
+
+            stats["video_count"] += 1
+
+            metadata = _normalise_metadata(record.get("metadata"))
+            selection_meta = (
+                metadata.get("avatar_selection")
+                if isinstance(metadata.get("avatar_selection"), dict)
+                else {}
+            )
+
+            reason_value = selection_meta.get("reason")
+            if reason_value:
+                stats["reason_counts"][reason_value] = stats["reason_counts"].get(reason_value, 0) + 1
+
+            engagement_candidates = [
+                metadata.get("engagement_rate"),
+                selection_meta.get("engagement_rate"),
+            ]
+            analytics_row = analytics_map.get(record.get("video_id"))
+            if analytics_row:
+                engagement_candidates.append(analytics_row.get("engagement_rate"))
+                view_candidate = _as_float(
+                    analytics_row.get("view_count")
+                    or analytics_row.get("views")
+                    or analytics_row.get("impressions")
+                )
+                if view_candidate is not None:
+                    stats["view_counts"].append(view_candidate)
+
+                completion_candidate = _as_float(
+                    analytics_row.get("completion_rate")
+                    or analytics_row.get("average_view_duration")
+                )
+                if completion_candidate is not None:
+                    stats["completion_rates"].append(completion_candidate)
+            else:
+                view_candidate = _as_float(metadata.get("view_count"))
+                if view_candidate is not None:
+                    stats["view_counts"].append(view_candidate)
+
+                completion_candidate = _as_float(metadata.get("completion_rate"))
+                if completion_candidate is not None:
+                    stats["completion_rates"].append(completion_candidate)
+
+            engagement = next((value for value in engagement_candidates if _as_float(value) is not None), None)
+            stats["engagement_rates"].append(_as_float(engagement))
+
+        analytics_summary: List[Dict[str, Any]] = []
+        for avatar_key, stats in avatar_stats.items():
+            engagement_values = [value for value in stats["engagement_rates"] if value is not None]
+            completion_values = [value for value in stats["completion_rates"] if value is not None]
+            view_values = [value for value in stats["view_counts"] if value is not None]
+
+            if stats["video_count"] < min_samples:
+                continue
+
+            average_engagement = (
+                round(sum(engagement_values) / len(engagement_values), 2)
+                if engagement_values
+                else None
+            )
+            average_completion = (
+                round(sum(completion_values) / len(completion_values), 2)
+                if completion_values
+                else None
+            )
+            average_views = (
+                round(sum(view_values) / len(view_values), 2)
+                if view_values
+                else None
+            )
+
+            top_reasons = sorted(
+                stats["reason_counts"].items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )[:3]
+
+            analytics_summary.append(
+                {
+                    "avatar_id": avatar_key,
+                    "video_count": stats["video_count"],
+                    "average_engagement_rate": average_engagement,
+                    "average_completion_rate": average_completion,
+                    "average_view_count": average_views,
+                    "engagement_samples": len(engagement_values),
+                    "top_selection_reasons": top_reasons,
+                }
+            )
+
+        analytics_summary.sort(
+            key=lambda item: (
+                item["average_engagement_rate"] is None,
+                -(item["average_engagement_rate"] or 0.0),
+            )
+        )
+
+        if limit:
+            analytics_summary = analytics_summary[: limit]
+
+        if analytics_summary:
+            best_avatar = analytics_summary[0]
+            log_info(
+                "Avatar analytics computed | top_avatar=%s avg_engagement=%s"
+                % (best_avatar.get("avatar_id"), best_avatar.get("average_engagement_rate"))
+            )
+        else:
+            log_info("Avatar analytics computed but no qualifying records met sample threshold")
+
+        return analytics_summary
 
     def set_default_avatar(self, avatar_id: str) -> None:
         """Set the default avatar after validating its existence."""
@@ -235,6 +742,8 @@ class VideoGenerator:
                     "requested_duration": duration,
                     "avatar_style": avatar_style,
                 },
+                content_text=script_text,
+                content_type=avatar_style,
             )
 
             result["video_type"] = "ai_avatar"
