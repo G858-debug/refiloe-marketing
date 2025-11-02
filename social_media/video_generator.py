@@ -207,7 +207,6 @@ class VideoGenerator:
             try:
                 endpoint, payload = self._build_generate_payload(
                     avatar_id=current_avatar_id,
-                    avatar_type=avatar_type,
                     voice_id=resolved_voice_id,
                     style_settings=style_settings,
                     script_chunks=script_chunks,
@@ -502,6 +501,19 @@ class VideoGenerator:
         avatars = response.get("data") or response.get("avatars") or []
         log_info(f"Fetched {len(avatars)} HeyGen avatars")
         return avatars
+
+    def get_photo_avatar_group(self, group_id: str) -> List[Dict[str, Any]]:
+        """Get all avatar looks within a photo avatar group."""
+
+        try:
+            response = self._get_with_retry(f"/avatar_group/{group_id}/avatars")
+            data = response.get("data", {})
+            avatars = data.get("avatars", [])
+            log_info(f"Found {len(avatars)} avatar looks in group {group_id}")
+            return avatars
+        except Exception as exc:  # pylint: disable=broad-except
+            log_error(f"Failed to get photo avatar group: {exc}")
+            return []
 
     def get_avatar_analytics(
         self,
@@ -917,75 +929,92 @@ class VideoGenerator:
         self,
         *,
         avatar_id: str,
-        avatar_type: str,
         voice_id: str,
         style_settings: Dict[str, Any],
         script_chunks: List[str],
         background_music: bool,
         metadata: Dict[str, Any],
     ) -> Tuple[str, Dict[str, Any]]:
-        script_sections = [
-            {
-                "text": chunk,
-                "pause_after": style_settings.get("default_pause", 0.6),
-            }
-            for chunk in script_chunks
-        ]
+        is_photo_avatar = self._is_photo_avatar_id(avatar_id)
 
-        metadata_payload: Dict[str, Any] = dict(metadata) if metadata is not None else {}
-        metadata_payload.setdefault("avatar_type", avatar_type)
+        dimension_value = style_settings.get("dimension", "1080x1920")
+        width, height = self._parse_dimension(dimension_value)
+
+        voice_payload: Dict[str, Any] = {
+            "type": "text",
+            "input_text": " ".join(script_chunks),
+            "voice_id": voice_id,
+        }
+
+        character_payload: Dict[str, Any]
+        if is_photo_avatar:
+            character_payload = {
+                "type": "talking_photo",
+                "talking_photo_id": avatar_id,
+                "talking_photo_style": "normal",
+            }
+        else:
+            character_payload = {
+                "type": "avatar",
+                "avatar_id": avatar_id,
+                "avatar_style": "normal",
+            }
+
+        video_input: Dict[str, Any] = {
+            "character": character_payload,
+            "voice": voice_payload,
+            "background": background_music,
+        }
 
         payload: Dict[str, Any] = {
-            "avatar_id": avatar_id,
-            "voice_id": voice_id,
-            "video_style": style_settings.get("style_key", "custom"),
-            "background_music": background_music,
-            "music_track": style_settings.get("background_track"),
-            "subtitles": style_settings.get("subtitles", True),
-            "config": {
-                "dimension": style_settings.get("dimension", "1080x1920"),
-                "pace": style_settings.get("pace", "balanced"),
-                "language": style_settings.get("language", "en"),
-            },
-            "script": {
-                "type": "text",
-                "sections": script_sections,
-            },
-            "metadata": metadata_payload,
+            "video_inputs": [video_input],
+            "dimension": {"width": width, "height": height},
+            "test": False,
+            "caption": style_settings.get("subtitles", True),
         }
+
+        if metadata:
+            payload["metadata"] = dict(metadata)
 
         endpoint = "/video/generate"
-        if avatar_type == "photo":
-            endpoint = "/talking_photo/generate"
-            payload["talking_photo_id"] = avatar_id
-            payload.pop("avatar_id", None)
-            payload.pop("video_style", None)
-
-        # Remove None values for cleaner payloads
-        payload = {
-            key: value
-            for key, value in payload.items()
-            if value is not None
-        }
-
         return endpoint, payload
+
+    @staticmethod
+    def _parse_dimension(dimension_value: Any) -> Tuple[int, int]:
+        default_width, default_height = 1080, 1920
+
+        if isinstance(dimension_value, dict):
+            width = dimension_value.get("width", default_width)
+            height = dimension_value.get("height", default_height)
+            try:
+                return int(width), int(height)
+            except (TypeError, ValueError):
+                return default_width, default_height
+
+        if isinstance(dimension_value, str):
+            parts = dimension_value.lower().replace(" ", "").split("x")
+            if len(parts) == 2:
+                try:
+                    return int(parts[0]), int(parts[1])
+                except (TypeError, ValueError):
+                    pass
+
+        return default_width, default_height
 
     @staticmethod
     def _is_photo_avatar_id(avatar_id: Optional[str]) -> bool:
         if not avatar_id:
             return False
 
-        normalised = avatar_id.strip()
-        if not normalised:
+        clean_id = avatar_id.replace("-", "").strip()
+        if len(clean_id) != 32:
             return False
 
-        if len(normalised) == 32 and "-" not in normalised:
+        try:
+            int(clean_id, 16)
             return True
-
-        if len(normalised) == 36 and "-" in normalised:
-            return True
-
-        return False
+        except ValueError:
+            return False
 
     def _determine_avatar_type(self, avatar_id: Optional[str]) -> str:
         return "photo" if self._is_photo_avatar_id(avatar_id) else "standard"
