@@ -7,16 +7,21 @@ This is the entry point for the Railway deployment.
 """
 
 import os
-import sys
 from flask import Flask, jsonify, request
 from datetime import datetime
 import pytz
+
+from dotenv import load_dotenv
 
 # Import configuration
 from config import config
 
 # Import utilities
 from utils.logger import log_info, log_error, log_warning
+from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
+
+
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -28,6 +33,14 @@ app.config.from_object(config[env])
 # Global variables
 scheduler = None
 supabase_client = None
+
+heygen_avatar_status = {
+    "checked": False,
+    "available": None,
+    "details": [],
+}
+
+HEYGEN_API_KEY_ENV = "HEYGEN_API_KEY"
 
 # South African timezone
 SA_TZ = pytz.timezone('Africa/Johannesburg')
@@ -88,6 +101,89 @@ def init_scheduler():
         return False
 
 
+def validate_heygen_configuration():
+    """Validate HeyGen avatar environment and API availability."""
+
+    global heygen_avatar_status
+
+    log_info("Validating HeyGen avatar configuration...")
+
+    heygen_avatar_status = {
+        "checked": True,
+        "available": None,
+        "details": [],
+    }
+
+    avatars, missing = collect_avatar_env_values()
+    if missing:
+        log_warning(
+            "Missing HeyGen avatar environment variables: " + ", ".join(sorted(missing))
+        )
+        heygen_avatar_status["details"].append(
+            {
+                "type": "missing_env",
+                "variables": sorted(missing),
+            }
+        )
+    else:
+        log_info("All HeyGen avatar environment variables are set.")
+
+    api_key = os.getenv(HEYGEN_API_KEY_ENV)
+    if not api_key:
+        log_warning("HEYGEN_API_KEY is not configured; skipping avatar availability check.")
+        heygen_avatar_status["details"].append(
+            {
+                "type": "missing_api_key",
+                "message": "HEYGEN_API_KEY is not configured; availability not checked.",
+            }
+        )
+        return
+
+    if not avatars:
+        log_warning("No HeyGen avatar IDs configured; skipping availability check.")
+        heygen_avatar_status["details"].append(
+            {
+                "type": "missing_ids",
+                "message": "No HeyGen avatar IDs available for validation.",
+            }
+        )
+        return
+
+    try:
+        results = check_avatar_availability(api_key, avatars)
+    except Exception as exc:  # pragma: no cover - network errors
+        log_warning(f"HeyGen availability check encountered an error: {exc}")
+        heygen_avatar_status["details"].append(
+            {
+                "type": "error",
+                "message": str(exc),
+            }
+        )
+        return
+
+    failures = {key: status for key, status in results.items() if not status.get("ok")}
+    if failures:
+        for env_key, status in failures.items():
+            detail = status.get("detail", "Unknown error")
+            avatar_id = status.get("avatar_id", "unknown")
+            log_warning(
+                f"HeyGen avatar unavailable: {env_key} ({avatar_id}) -> {detail}"
+            )
+            heygen_avatar_status["details"].append(
+                {
+                    "type": "unavailable",
+                    "env": env_key,
+                    "avatar_id": avatar_id,
+                    "detail": detail,
+                }
+            )
+        heygen_avatar_status["available"] = False
+        log_warning("Some HeyGen avatars are unavailable. Video generation may fail until resolved.")
+    else:
+        log_info("HeyGen avatar availability verified.")
+        heygen_avatar_status["available"] = True
+
+
 # Health check endpoint
 @app.route('/')
 @app.route('/health')
@@ -100,7 +196,8 @@ def health_check():
         'components': {
             'supabase': supabase_client is not None,
             'scheduler': scheduler is not None,
-            'social_media_enabled': app.config.get('ENABLE_SOCIAL_MEDIA', False)
+            'social_media_enabled': app.config.get('ENABLE_SOCIAL_MEDIA', False),
+            'heygen': heygen_avatar_status,
         }
     }), 200
 
@@ -117,7 +214,8 @@ def status():
             'flask': 'running',
             'supabase': 'connected' if supabase_client else 'disconnected',
             'scheduler': 'running' if scheduler and scheduler.scheduler.running else 'stopped',
-            'social_media': 'enabled' if app.config.get('ENABLE_SOCIAL_MEDIA') else 'disabled'
+            'social_media': 'enabled' if app.config.get('ENABLE_SOCIAL_MEDIA') else 'disabled',
+            'heygen': heygen_avatar_status,
         },
         'configuration': {
             'timezone': 'Africa/Johannesburg',
@@ -215,6 +313,9 @@ def initialize_app():
         log_error(f"❌ Configuration validation failed: {str(e)}")
         return False
     
+    # Validate HeyGen avatars
+    validate_heygen_configuration()
+
     # Initialize Supabase
     log_info("Initializing Supabase connection...")
     if not init_supabase():
