@@ -1,0 +1,19 @@
+{% extends "approval/layout.html" %}
+
+{% block title %}Approval Error{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+      <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+          <h1 class="h5 mb-0">Something went wrong</h1>
+        </div>
+        <div class="card-body">
+          <p class="mb-4">{{ message or 'An unexpected error occurred while loading the approval interface.' }}</p>
+          <a href="{{ url_for('approval.pending_posts') }}" class="btn btn-outline-danger">Back to pending approvals</a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

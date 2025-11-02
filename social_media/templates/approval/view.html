@@ -1,0 +1,162 @@
+{% extends "approval/layout.html" %}
+
+{% block title %}Review Post{% endblock %}
+
+{% block content %}
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <a href="{{ url_for('approval.pending_posts') }}" class="btn btn-link px-0 text-decoration-none">
+        &larr; Back to pending list
+      </a>
+      <h1 class="h3 fw-semibold mb-1">{{ post.title or 'Generated Post' }}</h1>
+      <p class="text-muted mb-0">
+        Platform: <strong>{{ post.platform or 'N/A' }}</strong>
+        &nbsp;&bull;&nbsp;
+        Status: <span class="badge bg-warning text-dark">{{ post.status }}</span>
+      </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <form action="{{ url_for('approval.approve_post', post_id=post.id) }}" method="post" class="d-inline">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-circle me-1"></i> Approve &amp; Schedule
+        </button>
+      </form>
+
+      <button
+        class="btn btn-outline-danger"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#rejectCollapse"
+        aria-expanded="false"
+        aria-controls="rejectCollapse"
+      >
+        <i class="bi bi-x-circle me-1"></i> Reject
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <div class="card card-shadow mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold mb-3">Post Content</h2>
+          <p class="text-muted small mb-2">
+            Scheduled for: <strong>{{ post.scheduled_time or 'Not scheduled' }}</strong>
+          </p>
+          <p class="lead">{{ post.content or 'No content available.' }}</p>
+        </div>
+      </div>
+
+      <div class="card card-shadow mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold mb-3">Metadata</h2>
+          <pre class="mb-0"><code>{{ post.metadata | default({}) | tojson(indent=2) }}</code></pre>
+        </div>
+      </div>
+
+      <div class="card card-shadow">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold mb-3">Edit Before Approval</h2>
+          <form action="{{ url_for('approval.edit_post', post_id=post.id) }}" method="post" class="vstack gap-3">
+            <div>
+              <label for="content" class="form-label">Content</label>
+              <textarea class="form-control" id="content" name="content" rows="5">{{ post.content }}</textarea>
+            </div>
+
+            <div>
+              <label for="scheduled_time" class="form-label">Scheduled Time</label>
+              <input
+                type="text"
+                class="form-control"
+                id="scheduled_time"
+                name="scheduled_time"
+                placeholder="ISO timestamp"
+                value="{{ post.scheduled_time or '' }}"
+              />
+            </div>
+
+            <div>
+              <label for="metadata" class="form-label">Metadata (JSON)</label>
+              <textarea class="form-control" id="metadata" name="metadata" rows="6">{{ post.metadata | default({}) | tojson(indent=2) }}</textarea>
+              <div class="form-text">Provide valid JSON to overwrite metadata; leave blank to keep current metadata.</div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+              <button type="submit" class="btn btn-primary">Save Changes</button>
+              <a href="{{ url_for('approval.view_post', post_id=post.id) }}" class="btn btn-outline-secondary">Reset</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card card-shadow mb-4">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold mb-3">Generated Video</h2>
+          {% if video and video.video_url %}
+            <div class="ratio ratio-16x9 mb-3">
+              <video
+                class="w-100 h-100 rounded"
+                controls
+                poster="{{ video.thumbnail_url or '' }}"
+              >
+                <source src="{{ video.video_url }}" type="video/mp4" />
+                Your browser does not support HTML5 video playback.
+              </video>
+            </div>
+            <ul class="list-unstyled small text-muted mb-0">
+              <li><strong>Status:</strong> {{ video.status or 'Unknown' }}</li>
+              <li><strong>Duration:</strong> {{ video.duration_seconds or 'N/A' }} seconds</li>
+              <li><strong>Avatar:</strong> {{ video.avatar_id or 'N/A' }}</li>
+            </ul>
+          {% else %}
+            <p class="text-muted mb-0">No generated video is linked to this post yet.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card card-shadow">
+        <div class="card-body">
+          <h2 class="h5 fw-semibold mb-3">Generated Images</h2>
+          {% if images %}
+            <div class="row g-3">
+              {% for image in images %}
+                <div class="col-6">
+                  <div class="ratio ratio-1x1 rounded overflow-hidden border">
+                    <img
+                      src="{{ image.image_url }}"
+                      alt="Generated image for {{ post.platform or 'post' }}"
+                      class="w-100 h-100 object-fit-cover"
+                    />
+                  </div>
+                  <small class="d-block text-muted mt-1">{{ image.image_type or 'Image' }}</small>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">No images are attached to this post.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="collapse mt-4" id="rejectCollapse">
+        <div class="card border-danger">
+          <div class="card-header bg-danger text-white">Reject Post</div>
+          <div class="card-body">
+            <p class="mb-3">
+              Provide an optional reason for rejecting this post. The reason will be stored for reference and shared with the content team.
+            </p>
+            <form action="{{ url_for('approval.reject_post', post_id=post.id) }}" method="post" class="vstack gap-3">
+              <div>
+                <label for="reason" class="form-label">Rejection Reason</label>
+                <textarea class="form-control" id="reason" name="reason" rows="4"></textarea>
+              </div>
+              <button type="submit" class="btn btn-danger">Reject Post</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
