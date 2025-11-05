@@ -259,6 +259,43 @@ def scheduler_jobs():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/test-database')
+def test_database():
+    """Test database connectivity and insertion"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    from social_media.database import SocialMediaDatabase
+    db = SocialMediaDatabase(supabase_client)
+
+    # Test connection
+    if not db.test_database_connection():
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    # Test insertion
+    test_post = {
+        'post_type': 'test',
+        'platform': 'facebook',
+        'content_text': f'Test post created at {datetime.now(SA_TZ).isoformat()}',
+        'status': 'pending_approval',
+        'scheduled_time': (datetime.now(SA_TZ) + timedelta(hours=1)).isoformat()
+    }
+
+    post_id = db.save_post(test_post)
+
+    if post_id:
+        return jsonify({
+            'success': True,
+            'post_id': post_id,
+            'message': 'Database working correctly!'
+        }), 200
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'Failed to save test post'
+        }), 500
+
+
 @app.route('/api/debug/posts')
 def debug_posts():
     """Debug endpoint to see all posts in database"""
