@@ -7,6 +7,7 @@ This is the entry point for the Railway deployment.
 """
 
 import os
+import uuid
 from flask import Flask, jsonify, request
 from datetime import datetime, timedelta
 import pytz
@@ -321,6 +322,55 @@ def debug_posts():
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/debug/schema')
+def debug_schema():
+    """Check the actual columns in the social_posts table"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+    
+    try:
+        # Get table schema information
+        result = supabase_client.rpc('get_table_columns', {
+            'table_name': 'social_posts'
+        }).execute()
+        
+        if result.data:
+            return jsonify({
+                'columns': result.data,
+                'message': 'Table schema retrieved'
+            }), 200
+    except Exception:
+        pass
+    
+    # Fallback: Try to get a single row to see its structure
+    try:
+        result = supabase_client.table('social_posts').select('*').limit(1).execute()
+        if result.data and len(result.data) > 0:
+            columns = list(result.data[0].keys())
+        else:
+            # Insert a test row to see what columns exist
+            test_data = {
+                'id': str(uuid.uuid4()),
+                'platform': 'test',
+                'status': 'test'
+            }
+            result = supabase_client.table('social_posts').insert(test_data).execute()
+            if result.data:
+                columns = list(result.data[0].keys())
+            else:
+                columns = []
+        
+        return jsonify({
+            'columns': columns,
+            'message': 'Columns detected from table'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'message': 'Could not determine table structure'
+        }), 500
 
 
 @app.route('/api/test/content')
