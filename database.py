@@ -19,17 +19,10 @@ class SocialMediaDatabase:
         self.sa_tz = pytz.timezone('Africa/Johannesburg')
     
     def save_post(self, post_data: Dict) -> str:
-        """Save generated post to database
+        """Save a new post to the database
         
         Args:
             post_data: Dictionary containing post information
-                - content: str - Post content
-                - platform: str - Social media platform
-                - scheduled_time: str - ISO datetime string
-                - status: str - Post status (draft, scheduled, published)
-                - trainer_id: str - ID of the trainer
-                - template_id: str (optional) - Content template used
-                - metadata: dict (optional) - Additional post metadata
         
         Returns:
             str: Post UUID if successful, empty string if failed
@@ -38,10 +31,13 @@ class SocialMediaDatabase:
             # Generate UUID for the post
             post_id = str(uuid.uuid4())
             
-            # Prepare data for insertion using fallback defaults and aligned schema fields
+            log_info(f"Attempting to save post with ID: {post_id}")
+            
+            # Prepare data for insertion
             db_data = {
                 'id': post_id,
-                'post_type': post_data.get('post_type', post_data.get('format', 'text')),
+                'trainer_id': post_data.get('trainer_id'),
+                'post_type': post_data.get('post_type', post_data.get('format', 'single_image')),
                 'platform': post_data.get('platform', 'facebook'),
                 'content_text': post_data.get('content_text', post_data.get('content', '')),
                 'content_theme': post_data.get('content_theme', post_data.get('theme', '')),
@@ -65,19 +61,47 @@ class SocialMediaDatabase:
             # Remove None values to avoid inserting nulls where not allowed
             db_data = {k: v for k, v in db_data.items() if v is not None}
             
+            log_info(f"Inserting data: {db_data}")
+            
             # Insert into database
             result = self.db.table('social_posts').insert(db_data).execute()
             
-            if result.data:
-                log_info(f"Post saved successfully with ID: {post_id}")
-                return post_id
-            else:
-                log_error("Failed to save post - no data returned")
-                return ""
-                
+            log_info(f"Insert result: {result}")
+            
+            # Check if insertion was successful
+            if result and hasattr(result, 'data') and result.data:
+                if isinstance(result.data, list) and len(result.data) > 0:
+                    # Successfully inserted
+                    log_info(f"Post saved successfully with ID: {post_id}")
+                    return post_id
+                elif isinstance(result.data, dict):
+                    # Single record inserted
+                    log_info(f"Post saved successfully with ID: {post_id}")
+                    return post_id
+            
+            # If we get here, something went wrong
+            log_error(f"Failed to save post - unexpected result structure: {result}")
+            return ""
+            
         except Exception as e:
             log_error(f"Error saving post: {str(e)}")
+            log_error(f"Post data that failed: {post_data}")
             return ""
+
+    def test_database_connection(self) -> bool:
+        """Test if database connection is working
+        
+        Returns:
+            bool: True if connection works, False otherwise
+        """
+        try:
+            # Try a simple select query
+            self.db.table('social_posts').select('id').limit(1).execute()
+            log_info("Database connection test successful")
+            return True
+        except Exception as e:
+            log_error(f"Database connection test failed: {str(e)}")
+            return False
     
     def get_scheduled_posts(self, date: datetime) -> List[Dict]:
         """Get all posts scheduled for a specific date
