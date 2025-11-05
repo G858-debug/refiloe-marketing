@@ -33,27 +33,30 @@ class SocialMediaDatabase:
             
             log_info(f"Attempting to save post with ID: {post_id}")
             
-            # Prepare data for insertion - REMOVED script_id
+            # Prepare data for insertion - ONLY include columns that exist in the table
             db_data = {
                 'id': post_id,
-                'trainer_id': post_data.get('trainer_id'),
-                'post_type': post_data.get('post_type', post_data.get('format', 'single_image')),
+                # 'trainer_id': REMOVED - doesn't exist in table
+                'post_type': post_data.get('post_type', 'single_image'),
                 'platform': post_data.get('platform', 'facebook'),
-                'content_text': post_data.get('content_text', post_data.get('content', '')),
-                'content_theme': post_data.get('content_theme', post_data.get('theme', '')),
+                'content_text': post_data.get('content_text', ''),
+                'content_theme': post_data.get('content_theme', ''),
                 'image_ids': post_data.get('image_ids', []),
                 'scheduled_time': post_data.get('scheduled_time'),
+                'published_time': post_data.get('published_time'),
                 'status': post_data.get('status', 'draft'),
+                'facebook_post_id': post_data.get('facebook_post_id'),
+                'generation_prompt': post_data.get('generation_prompt'),
+                'week_number': post_data.get('week_number'),
                 'video_url': post_data.get('video_url'),
                 'video_duration': post_data.get('video_duration'),
                 'video_type': post_data.get('video_type'),
                 'thumbnail_url': post_data.get('thumbnail_url'),
-                'video_style': post_data.get('video_style'),
-                'has_captions': post_data.get('has_captions', False),
                 'completion_rate': post_data.get('completion_rate', 0),
                 'avg_watch_time': post_data.get('avg_watch_time', 0),
-                'generation_prompt': post_data.get('generation_prompt'),
-                'week_number': post_data.get('week_number'),
+                'has_captions': post_data.get('has_captions', False),
+                'audio_track_id': post_data.get('audio_track_id'),
+                'video_style': post_data.get('video_style'),
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
@@ -70,14 +73,8 @@ class SocialMediaDatabase:
             
             # Check if insertion was successful
             if result and hasattr(result, 'data') and result.data:
-                if isinstance(result.data, list) and len(result.data) > 0:
-                    # Successfully inserted
-                    log_info(f"Post saved successfully with ID: {post_id}")
-                    return post_id
-                elif isinstance(result.data, dict):
-                    # Single record inserted
-                    log_info(f"Post saved successfully with ID: {post_id}")
-                    return post_id
+                log_info(f"Post saved successfully with ID: {post_id}")
+                return post_id
             
             # If we get here, something went wrong
             log_error(f"Failed to save post - unexpected result structure: {result}")
