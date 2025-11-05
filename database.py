@@ -44,6 +44,7 @@ class SocialMediaDatabase:
                 'image_ids': post_data.get('image_ids', []),
                 'scheduled_time': post_data.get('scheduled_time'),
                 'status': post_data.get('status', 'draft'),
+                'script_id': post_data.get('script_id', ''),
                 'video_url': post_data.get('video_url'),
                 'video_duration': post_data.get('video_duration'),
                 'video_type': post_data.get('video_type'),
