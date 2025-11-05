@@ -324,6 +324,33 @@ def debug_posts():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/debug/pending-posts')
+def debug_pending_posts():
+    """Debug endpoint to check pending posts structure"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        result = (
+            supabase_client
+            .table('social_posts')
+            .select('*')
+            .eq('status', 'pending_approval')
+            .execute()
+        )
+
+        posts = result.data if hasattr(result, 'data') else []
+
+        return jsonify({
+            'total': len(posts),
+            'posts': posts,
+            'sample_id': posts[0]['id'] if posts else None,
+            'sample_url': f"/approval/view/{posts[0]['id']}" if posts else None
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/debug/schema')
 def debug_schema():
     """Check the actual columns in the social_posts table"""
