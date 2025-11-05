@@ -66,8 +66,8 @@ class SocialMediaDatabase:
             
             log_info(f"Inserting data: {db_data}")
             
-            # Insert into database
-            result = self.db.table('social_posts').insert(db_data).execute()
+            # Insert into database - insert already returns ExecuteResult
+            result = self.db.table('social_posts').insert(db_data)
             
             log_info(f"Insert result: {result}")
             
