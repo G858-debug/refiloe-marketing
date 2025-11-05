@@ -279,7 +279,7 @@ def debug_posts():
         return jsonify({
             'total_posts': len(posts),
             'status_counts': status_counts,
-            'recent_posts': posts[:5],
+            'recent_posts': posts[:5],  # Show first 5 posts
             'looking_for_status': 'pending_approval'
         }), 200
     except Exception as e:
