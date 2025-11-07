@@ -7,6 +7,7 @@ This is the entry point for the Railway deployment.
 """
 
 import os
+import atexit
 import uuid
 from flask import Flask, jsonify, request
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ from utils.logger import log_info, log_error, log_warning
 from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
 
 from social_media.approval_routes import approval_bp
+from social_media.scheduler import SocialMediaScheduler, create_social_media_scheduler
 
 
 load_dotenv()
@@ -77,32 +79,56 @@ def init_supabase():
 def init_scheduler():
     """Initialize social media scheduler"""
     global scheduler
-    
+
+    if scheduler and scheduler.is_running():
+        log_info("Scheduler already running; skipping initialization.")
+        return True
+
+    if not app.config.get('ENABLE_SOCIAL_MEDIA', True):
+        log_warning("Social media automation is disabled via configuration.")
+        return False
+
+    if supabase_client is None:
+        log_warning("Supabase client not initialized; scheduler setup deferred.")
+        return False
+
     try:
-        # Check if social media is enabled
-        if not app.config.get('ENABLE_SOCIAL_MEDIA', True):
-            log_warning("Social media automation is disabled")
-            return False
-        
-        # Import scheduler
-        from social_media.scheduler import create_social_media_scheduler
-        
-        # Create scheduler instance
-        scheduler = create_social_media_scheduler(app, supabase_client)
-        
-        if scheduler:
-            # Start scheduler
-            scheduler.start()
+        if scheduler is None:
+            scheduler_instance = create_social_media_scheduler(app, supabase_client)
+            if not scheduler_instance:
+                log_error("Failed to create scheduler instance.")
+                return False
+            scheduler = scheduler_instance
+
+        if scheduler.start():
             log_info("✅ Social media scheduler started successfully")
             return True
-        else:
-            log_error("Failed to create scheduler instance")
-            return False
-            
+
+        log_error("Scheduler start returned False; scheduler may not be running.")
+        return False
+
     except Exception as e:
         log_error(f"Failed to initialize scheduler: {str(e)}")
-        log_error(f"Error details: {type(e).__name__}")
+        import traceback
+        log_error(traceback.format_exc())
         return False
+
+
+def start_scheduler():
+    """Start the scheduler if enabled and initialized."""
+    if not app.config.get('ENABLE_SOCIAL_MEDIA', True):
+        return False
+    return init_scheduler()
+
+
+def stop_scheduler():
+    """Stop the scheduler if it is running."""
+    global scheduler
+    if scheduler:
+        try:
+            scheduler.stop()
+        except Exception as e:
+            log_error(f"Error stopping scheduler: {str(e)}")
 
 
 def validate_heygen_configuration():
@@ -199,7 +225,7 @@ def health_check():
         'timestamp': datetime.now(SA_TZ).isoformat(),
         'components': {
             'supabase': supabase_client is not None,
-            'scheduler': scheduler is not None,
+            'scheduler': scheduler.is_running() if scheduler else False,
             'social_media_enabled': app.config.get('ENABLE_SOCIAL_MEDIA', False),
             'heygen': heygen_avatar_status,
         },
@@ -220,7 +246,7 @@ def status():
         'components': {
             'flask': 'running',
             'supabase': 'connected' if supabase_client else 'disconnected',
-            'scheduler': 'running' if scheduler and scheduler.scheduler.running else 'stopped',
+            'scheduler': 'running' if scheduler and scheduler.is_running() else 'stopped',
             'social_media': 'enabled' if app.config.get('ENABLE_SOCIAL_MEDIA') else 'disabled',
             'heygen': heygen_avatar_status,
         },
@@ -233,6 +259,29 @@ def status():
     return jsonify(status_info), 200
 
 
+@app.route('/scheduler/status')
+def scheduler_status():
+    """Expose scheduler runtime status and job metadata."""
+    if not scheduler:
+        return jsonify({
+            'running': False,
+            'job_count': 0,
+            'jobs': [],
+            'message': 'Scheduler not initialized'
+        }), 503
+
+    try:
+        status_payload = scheduler.get_status()
+        http_status = 200 if status_payload.get('running') else 503
+        return jsonify(status_payload), http_status
+    except Exception as e:
+        log_error(f"Error retrieving scheduler status: {str(e)}")
+        return jsonify({
+            'running': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/scheduler/jobs')
 def scheduler_jobs():
     """Get list of scheduled jobs"""
@@ -240,21 +289,16 @@ def scheduler_jobs():
         return jsonify({'error': 'Scheduler not initialized'}), 503
     
     try:
-        jobs = []
-        for job in scheduler.scheduler.get_jobs():
-            jobs.append({
-                'id': job.id,
-                'name': job.name,
-                'next_run': job.next_run_time.isoformat() if job.next_run_time else None,
-                'trigger': str(job.trigger)
-            })
-        
-        return jsonify({
+        status_payload = scheduler.get_status()
+        jobs = status_payload.get('jobs', [])
+        response_body = {
             'jobs': jobs,
-            'total': len(jobs),
-            'scheduler_running': scheduler.scheduler.running
-        }), 200
-        
+            'total': status_payload.get('job_count', len(jobs)),
+            'scheduler_running': status_payload.get('running', False)
+        }
+        http_status = 200 if status_payload.get('running') else 503
+        return jsonify(response_body), http_status
+
     except Exception as e:
         log_error(f"Error getting scheduler jobs: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -799,6 +843,21 @@ def generate_video_form():
 
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
+
+
+# ------------------------------------------------------------------------------
+# Scheduler lifecycle hooks
+# ------------------------------------------------------------------------------
+if hasattr(app, "before_serving"):
+    @app.before_serving
+    def _ensure_scheduler_before_serving():
+        start_scheduler()
+else:
+    @app.before_first_request
+    def _ensure_scheduler_before_first_request():
+        start_scheduler()
+
+atexit.register(stop_scheduler)
 
 
 @app.route('/test-video-form')
