@@ -432,6 +432,372 @@ def test_content_generation():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/generate-real-video', methods=['POST'])
+def generate_real_video():
+    """Generate a real marketing video with actual content"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.video_generator import VideoGenerator
+        from social_media.database import SocialMediaDatabase
+        import random
+
+        db = SocialMediaDatabase(supabase_client)
+        video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
+
+        data = request.get_json() or {}
+
+        content_options = [
+            {
+                'theme': 'admin_tips',
+                'script': (
+                    "Hey trainers! Tired of drowning in admin work? "
+                    "Here's a game-changer: Automate your client bookings with Refiloe. "
+                    "No more back-and-forth WhatsApp messages. "
+                    "Your clients book directly, you get notifications, and payments are handled automatically. "
+                    "That's 5 hours of admin saved every week. "
+                    "Imagine what you could do with that extra time! "
+                    "Ready to level up? Check out Refiloe today!"
+                ),
+                'content_text': (
+                    "🚀 Save 5+ hours weekly on admin tasks! Refiloe automates your bookings, payments, and client "
+                    "management. Let AI handle the paperwork while you focus on training. "
+                    "#PersonalTrainer #FitnessAutomation #RefiloeSA"
+                )
+            },
+            {
+                'theme': 'motivation',
+                'script': (
+                    "Personal trainers, this one's for you! "
+                    "Remember why you started this journey? To transform lives, not shuffle paperwork. "
+                    "But here's the reality: You're spending more time on admin than actual training. "
+                    "What if I told you there's a way to get those hours back? "
+                    "Refiloe handles your scheduling, sends workout plans, and tracks client progress automatically. "
+                    "It's time to focus on what you do best - changing lives!"
+                ),
+                'content_text': (
+                    "💪 Stop letting admin tasks steal your passion! Refiloe gives you back time to do what you love - "
+                    "training clients and changing lives. #TrainerLife #FitnessMotivation #WorkSmarter"
+                )
+            },
+            {
+                'theme': 'client_success',
+                'script': (
+                    "Want to know the secret of successful trainers? "
+                    "They don't work harder, they work smarter. "
+                    "While others juggle WhatsApp messages at midnight, they're sleeping soundly. "
+                    "Their secret weapon? Automated systems that run their business 24/7. "
+                    "Refiloe manages bookings, sends reminders, and processes payments even while you sleep. "
+                    "Join hundreds of South African trainers who've already made the switch!"
+                ),
+                'content_text': (
+                    "📱 Join 100+ SA trainers who've automated their business with Refiloe. "
+                    "Handle bookings, payments & client management on autopilot! 🇿🇦 "
+                    "#PersonalTrainerSA #BusinessAutomation"
+                )
+            }
+        ]
+
+        content_lookup = {option['theme']: option for option in content_options}
+
+        def resolve_content(value):
+            if not value:
+                return None
+            if isinstance(value, str):
+                if value.lower() == 'random':
+                    return None
+                return content_lookup.get(value)
+            if isinstance(value, dict):
+                theme_value = value.get('theme')
+                script_value = value.get('script')
+                content_text_value = value.get('content_text')
+
+                if script_value:
+                    return {
+                        'theme': theme_value or 'custom',
+                        'script': script_value,
+                        'content_text': content_text_value or script_value
+                    }
+
+                if theme_value:
+                    return content_lookup.get(theme_value)
+
+            return None
+
+        selected_content = resolve_content(data.get('content'))
+
+        if not selected_content and data.get('theme'):
+            selected_content = resolve_content(data.get('theme'))
+
+        if not selected_content:
+            selected_content = random.choice(content_options)
+        else:
+            selected_content = dict(selected_content)
+
+        custom_theme = data.get('content_theme')
+        custom_script = data.get('script')
+        custom_content_text = data.get('content_text')
+
+        if custom_theme:
+            selected_content['theme'] = custom_theme
+        if custom_script:
+            selected_content['script'] = custom_script
+        if custom_content_text:
+            selected_content['content_text'] = custom_content_text
+
+        script_text = (selected_content.get('script') or '').strip()
+        content_text = (selected_content.get('content_text') or '').strip()
+        theme = selected_content.get('theme', 'custom')
+
+        if not script_text:
+            return jsonify({'success': False, 'error': 'Script content is required'}), 400
+
+        if not content_text:
+            content_text = script_text
+
+        voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+        avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
+
+        result = video_gen.generate_avatar_video(
+            script_text=script_text,
+            avatar_id=avatar_id,
+            voice_id=voice_id,
+            style=data.get('style', 'educational'),
+            background_music=data.get('background_music', True),
+            metadata={
+                'purpose': 'marketing_video',
+                'theme': theme,
+                'source': 'api.generate_real_video',
+            },
+            content_text=content_text,
+            content_type=theme
+        )
+
+        if not result or not result.get('video_url'):
+            return jsonify({
+                'success': False,
+                'error': 'Video generation failed'
+            }), 500
+
+        scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
+
+        post_data = {
+            'post_type': 'video',
+            'platform': 'facebook',
+            'status': 'pending_approval',
+            'scheduled_time': scheduled_time.isoformat(),
+            'video_url': result.get('video_url'),
+            'thumbnail_url': result.get('thumbnail_url'),
+            'video_duration': int(result.get('duration') or 0),
+            'video_type': 'marketing_video',
+            'video_style': data.get('style', 'educational'),
+            'content_text': content_text,
+            'content_theme': theme,
+            'has_captions': True,
+            'completion_rate': 0,
+            'avg_watch_time': 0
+        }
+
+        post_id = db.save_post(post_data)
+
+        if not post_id:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save post to database',
+                'video_url': result.get('video_url')
+            }), 500
+
+        log_info(f"Marketing video created successfully: {post_id}")
+
+        return jsonify({
+            'success': True,
+            'post_id': post_id,
+            'video_url': result.get('video_url'),
+            'thumbnail_url': result.get('thumbnail_url'),
+            'theme': theme,
+            'message': f'Video created! Review at /approval/view/{post_id}',
+            'approval_url': f'/approval/view/{post_id}'
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error generating marketing video: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/generate-video-form')
+def generate_video_form():
+    """HTML form for generating marketing videos"""
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Generate Marketing Video</title>
+        <style>
+            body { 
+                font-family: Arial; 
+                max-width: 800px; 
+                margin: 50px auto; 
+                padding: 20px;
+                background: #f5f5f5;
+            }
+            .container {
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            h1 { color: #333; }
+            .theme-buttons {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }
+            button {
+                background: #4CAF50;
+                color: white;
+                padding: 15px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                transition: all 0.3s;
+            }
+            button:hover {
+                background: #45a049;
+                transform: translateY(-2px);
+            }
+            button:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+            #result {
+                margin-top: 20px;
+                padding: 20px;
+                background: #f0f0f0;
+                border-radius: 5px;
+                min-height: 100px;
+            }
+            .success {
+                background: #d4edda;
+                border: 1px solid #c3e6cb;
+                color: #155724;
+            }
+            .error {
+                background: #f8d7da;
+                border: 1px solid #f5c6cb;
+                color: #721c24;
+            }
+            .video-preview {
+                margin-top: 20px;
+            }
+            video {
+                width: 100%;
+                max-width: 600px;
+                border-radius: 5px;
+            }
+            a {
+                color: #4CAF50;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎥 Generate Refiloe Marketing Video</h1>
+            <p>Choose a content theme to generate a professional marketing video with Refiloe avatar:</p>
+            
+            <div class="theme-buttons">
+                <button onclick="generateVideo('admin_tips')">
+                    💼 Admin Tips<br>
+                    <small>Save time on paperwork</small>
+                </button>
+                <button onclick="generateVideo('motivation')">
+                    💪 Trainer Motivation<br>
+                    <small>Focus on what matters</small>
+                </button>
+                <button onclick="generateVideo('client_success')">
+                    ⭐ Success Stories<br>
+                    <small>Work smarter, not harder</small>
+                </button>
+                <button onclick="generateVideo('random')">
+                    🎲 Random Theme<br>
+                    <small>Surprise me!</small>
+                </button>
+            </div>
+            
+            <div id="result"></div>
+        </div>
+        
+        <script>
+        async function generateVideo(theme) {
+            const resultDiv = document.getElementById("result");
+            resultDiv.className = "";
+            resultDiv.innerHTML = "⏳ Generating video... This may take 30-60 seconds...";
+            
+            document.querySelectorAll("button").forEach(btn => btn.disabled = true);
+            
+            try {
+                const response = await fetch("/api/generate-real-video", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(
+                        theme === "random" 
+                            ? {} 
+                            : { content: { theme } }
+                    )
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = "success";
+                    resultDiv.innerHTML = `
+                        <h3>✅ Video Generated Successfully!</h3>
+                        <p><strong>Theme:</strong> ${data.theme}</p>
+                        <p><strong>Post ID:</strong> ${data.post_id}</p>
+                        <div class="video-preview">
+                            <video controls>
+                                <source src="${data.video_url}" type="video/mp4">
+                                Your browser does not support video playback.
+                            </video>
+                        </div>
+                        <p>
+                            <a href="/approval/view/${data.post_id}" target="_blank">
+                                📝 Review and Approve This Video
+                            </a>
+                        </p>
+                        <p>
+                            <a href="/approval/pending" target="_blank">
+                                📋 View All Pending Posts
+                            </a>
+                        </p>
+                    `;
+                } else {
+                    throw new Error(data.error || "Video generation failed");
+                }
+            } catch (error) {
+                resultDiv.className = "error";
+                resultDiv.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p>${error.message}</p>
+                `;
+            } finally {
+                document.querySelectorAll("button").forEach(btn => btn.disabled = false);
+            }
+        }
+        </script>
+    </body>
+    </html>
+    '''
+    return html
+
+
 app.register_blueprint(approval_bp, url_prefix='/approval')
 
 
