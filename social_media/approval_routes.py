@@ -95,16 +95,45 @@ def _fetch_post(db: SocialMediaDatabase, post_id: str) -> Optional[Dict[str, Any
         if hasattr(result, "data") and result.data:
             if isinstance(result.data, list) and len(result.data) > 0:
                 log_info(f"Post found: {result.data[0]}")
-                return result.data[0]
+                return _normalize_post_data(result.data[0])
             if isinstance(result.data, dict):
                 log_info(f"Post found: {result.data}")
-                return result.data
+                return _normalize_post_data(result.data)
 
         log_error(f"Post not found with ID: {post_id}")
         return None
     except Exception as exc:
         log_error(f"Error fetching post {post_id}: {exc}")
         return None
+
+
+def _normalize_post_data(post: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize post data to ensure all template fields are present."""
+    if not post:
+        return post
+
+    # Map content_text to content for template compatibility
+    if 'content_text' in post and 'content' not in post:
+        post['content'] = post['content_text']
+
+    # Ensure title exists
+    if 'title' not in post:
+        # Generate title from content or use default
+        content = post.get('content') or post.get('content_text', '')
+        if content:
+            post['title'] = content[:50] + '...' if len(content) > 50 else content
+        else:
+            post['title'] = f"Post {post.get('id', 'Unknown')[:8]}"
+
+    # Ensure created_at is present
+    if 'created_at' not in post:
+        post['created_at'] = datetime.utcnow().isoformat()
+
+    # Ensure metadata is a dict
+    if 'metadata' not in post or post['metadata'] is None:
+        post['metadata'] = {}
+
+    return post
 
 
 def _fetch_post_images(db: SocialMediaDatabase, post_id: str) -> list[Dict[str, Any]]:
@@ -358,8 +387,17 @@ def view_post(post_id: str):
             404,
         )
 
+    # Debug logging to see what we're getting
+    log_info(f"Fetched post data: {json.dumps(post, indent=2, default=str)}")
+
     images = _fetch_post_images(db, post_id)
     video = _fetch_post_video(db, post_id)
+
+    # Debug logging for video data
+    if video:
+        log_info(f"Fetched video data: {json.dumps(video, indent=2, default=str)}")
+    else:
+        log_warning(f"No video found for post {post_id}")
 
     return render_template(
         "approval/view.html",
