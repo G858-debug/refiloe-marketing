@@ -233,9 +233,7 @@ def health_check():
         },
         'links': {
             'approval_pending': '/approval/pending',
-            'analytics_dashboard': '/analytics/dashboard',
-            'analytics_posts': '/analytics/posts',
-            'analytics_performance': '/analytics/performance'
+            'content_pipeline_health': '/health/content-pipeline'
         }
     }), 200
 
@@ -262,6 +260,66 @@ def status():
     }
     
     return jsonify(status_info), 200
+
+
+@app.route('/health/content-pipeline')
+def content_pipeline_health():
+    """Content pipeline health monitoring endpoint"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.content_monitor import ContentPipelineMonitor
+
+        monitor = ContentPipelineMonitor(supabase_client)
+
+        # Get comprehensive health report
+        health_report = monitor.check_pipeline_health()
+
+        # Get content counts by status
+        content_counts = monitor.get_content_counts_by_status()
+
+        # Get 7-day coverage details
+        coverage = monitor.get_next_7_days_coverage()
+
+        # Get recommended actions
+        recommended_actions = monitor.get_recommended_actions(health_report)
+
+        # Build response
+        response = {
+            'pipeline_status': health_report['status'],
+            'checked_at': health_report['checked_at'],
+            'metrics': {
+                'pending_approval': health_report['pending_approval_count'],
+                'scheduled_next_7_days': health_report['scheduled_count'],
+                'days_with_content': health_report['scheduled_days_coverage'],
+                'content_gaps_count': len(health_report['content_gaps']),
+                'video_failure_rate': health_report['video_failure_rate']
+            },
+            'content_counts_by_status': content_counts,
+            'next_7_days_coverage': coverage,
+            'alerts': health_report['alerts'],
+            'recommended_actions': recommended_actions,
+            'content_gaps': health_report['content_gaps']
+        }
+
+        # Set HTTP status based on pipeline status
+        http_status = 200
+        if health_report['status'] == 'warning':
+            http_status = 200  # Still 200, but with warnings
+        elif health_report['status'] == 'critical':
+            http_status = 200  # Still 200, client should check 'pipeline_status' field
+
+        return jsonify(response), http_status
+
+    except Exception as e:
+        log_error(f"Error checking content pipeline health: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({
+            'error': str(e),
+            'pipeline_status': 'unknown'
+        }), 500
 
 
 @app.route('/scheduler/status')
@@ -872,39 +930,179 @@ atexit.register(stop_scheduler)
 
 @app.route('/test-video-form')
 def test_video_form():
-    """Simple HTML form for testing video generation"""
+    """Enhanced HTML form for testing video generation with avatar selection"""
     html = '''
     <!DOCTYPE html>
     <html>
     <head>
         <title>Test Video Generation</title>
         <style>
-            body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; }
-            button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; }
-            #result { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 700px;
+                margin: 50px auto;
+                padding: 20px;
+                background: #f5f5f5;
+            }
+            .container {
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #333;
+                margin-bottom: 30px;
+            }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #555;
+            }
+            input, select, textarea {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                box-sizing: border-box;
+                font-size: 14px;
+            }
+            textarea {
+                resize: vertical;
+                min-height: 80px;
+            }
+            button {
+                background: #4CAF50;
+                color: white;
+                padding: 12px 30px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                width: 100%;
+                margin-top: 10px;
+            }
+            button:hover {
+                background: #45a049;
+            }
+            button:disabled {
+                background: #cccccc;
+                cursor: not-allowed;
+            }
+            #result {
+                margin-top: 20px;
+                padding: 15px;
+                background: #f0f0f0;
+                border-radius: 4px;
+                display: none;
+            }
+            #result.show {
+                display: block;
+            }
+            .help-text {
+                font-size: 12px;
+                color: #777;
+                margin-top: 5px;
+            }
         </style>
     </head>
     <body>
-        <h1>Test Video Generation</h1>
-        <button onclick="generateVideo()">Generate Test Video</button>
-        <div id="result"></div>
-        
+        <div class="container">
+            <h1>🎥 Test Video Generation</h1>
+
+            <div class="form-group">
+                <label for="script">Script Text:</label>
+                <textarea id="script" placeholder="Enter your video script...">Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly.</textarea>
+                <div class="help-text">The text that will be spoken in the video</div>
+            </div>
+
+            <div class="form-group">
+                <label for="content_theme">Content Theme:</label>
+                <select id="content_theme">
+                    <option value="">-- Auto-detect from script --</option>
+                    <option value="professional">Professional</option>
+                    <option value="casual">Casual/Friendly</option>
+                    <option value="fitness">Fitness/Workout</option>
+                    <option value="success">Success Story</option>
+                    <option value="educational">Educational</option>
+                    <option value="motivational">Motivational</option>
+                    <option value="community">Community</option>
+                    <option value="announcement">Announcement</option>
+                </select>
+                <div class="help-text">Select a theme to automatically choose the appropriate avatar</div>
+            </div>
+
+            <div class="form-group">
+                <label for="avatar_id">Avatar Override (Optional):</label>
+                <input type="text" id="avatar_id" placeholder="e.g., 110f75a397604454ba6f822c68f29949">
+                <div class="help-text">Leave empty to use theme-based selection, or enter a specific HeyGen avatar ID</div>
+            </div>
+
+            <div class="form-group">
+                <label for="voice_id">Voice ID (Optional):</label>
+                <input type="text" id="voice_id" placeholder="Leave empty for default voice">
+                <div class="help-text">Optional: Specify a custom HeyGen voice ID</div>
+            </div>
+
+            <button onclick="generateVideo()" id="generateBtn">Generate Video</button>
+            <div id="result"></div>
+        </div>
+
         <script>
         async function generateVideo() {
-            document.getElementById('result').innerHTML = 'Generating video...';
+            const resultDiv = document.getElementById('result');
+            const generateBtn = document.getElementById('generateBtn');
+
+            resultDiv.className = 'show';
+            resultDiv.innerHTML = '⏳ Generating video... This may take a few minutes.';
+            generateBtn.disabled = true;
+
             try {
+                const script = document.getElementById('script').value;
+                const contentTheme = document.getElementById('content_theme').value;
+                const avatarId = document.getElementById('avatar_id').value;
+                const voiceId = document.getElementById('voice_id').value;
+
+                const payload = {
+                    script: script
+                };
+
+                if (contentTheme) {
+                    payload.content_theme = contentTheme;
+                }
+
+                if (avatarId) {
+                    payload.avatar_id = avatarId;
+                }
+
+                if (voiceId) {
+                    payload.voice_id = voiceId;
+                }
+
                 const response = await fetch('/api/test-video', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({script: 'Test video generated at ' + new Date().toISOString()})
+                    body: JSON.stringify(payload)
                 });
+
                 const data = await response.json();
-                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                if (data.post_id) {
-                    document.getElementById('result').innerHTML += '<p><a href="/approval/pending">View Pending Approvals</a></p>';
+
+                if (response.ok) {
+                    resultDiv.innerHTML = '<h3>✅ Success!</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    if (data.post_id) {
+                        resultDiv.innerHTML += '<p><a href="/approval/pending" style="color: #4CAF50; font-weight: bold;">View Pending Approvals</a></p>';
+                    }
+                } else {
+                    resultDiv.innerHTML = '<h3>❌ Error</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
                 }
             } catch (error) {
-                document.getElementById('result').innerHTML = 'Error: ' + error.message;
+                resultDiv.innerHTML = '<h3>❌ Error</h3><p>' + error.message + '</p>';
+            } finally {
+                generateBtn.disabled = false;
             }
         }
         </script>
@@ -938,14 +1136,15 @@ def test_generate_video():
         # Get request data
         data = request.get_json() or {}
         script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
-        
+
         # Get voice and avatar from request or environment
         voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
         avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
-        
-        log_info(f"Using avatar: {avatar_id}, voice: {voice_id}")
+        content_theme = data.get('content_theme')  # Optional theme for avatar selection
+
+        log_info(f"Using avatar: {avatar_id}, voice: {voice_id}, theme: {content_theme}")
         log_info(f"Script: {script[:100]}...")
-        
+
         # Generate video
         log_info("Calling generate_avatar_video...")
         result = video_gen.generate_avatar_video(
@@ -957,8 +1156,11 @@ def test_generate_video():
             metadata={
                 'test': True,
                 'purpose': 'production_test',
-                'triggered_by': 'api'
-            }
+                'triggered_by': 'api',
+                'content_theme': content_theme
+            },
+            content_text=script,
+            content_type=content_theme
         )
         
         log_info(f"Video generation result: {result}")
