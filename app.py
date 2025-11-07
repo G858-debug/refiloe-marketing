@@ -23,6 +23,7 @@ from utils.logger import log_info, log_error, log_warning
 from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
 
 from social_media.approval_routes import approval_bp
+from social_media.analytics_routes import analytics_bp
 from social_media.scheduler import SocialMediaScheduler, create_social_media_scheduler
 
 
@@ -231,7 +232,10 @@ def health_check():
             'heygen': heygen_avatar_status,
         },
         'links': {
-            'approval_pending': '/approval/pending'
+            'approval_pending': '/approval/pending',
+            'analytics_dashboard': '/analytics/dashboard',
+            'analytics_posts': '/analytics/posts',
+            'analytics_performance': '/analytics/performance'
         }
     }), 200
 
@@ -844,6 +848,7 @@ def generate_video_form():
 
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
+app.register_blueprint(analytics_bp, url_prefix='/analytics')
 
 
 # ------------------------------------------------------------------------------
