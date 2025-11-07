@@ -38,6 +38,7 @@ app.config.from_object(config[env])
 # Global variables
 scheduler = None
 supabase_client = None
+_scheduler_initialized = False
 
 heygen_avatar_status = {
     "checked": False,
@@ -853,9 +854,13 @@ if hasattr(app, "before_serving"):
     def _ensure_scheduler_before_serving():
         start_scheduler()
 else:
-    @app.before_first_request
+    @app.before_request
     def _ensure_scheduler_before_first_request():
-        start_scheduler()
+        """Start scheduler on first request (Flask 2.3+ compatible)"""
+        global _scheduler_initialized
+        if not _scheduler_initialized:
+            _scheduler_initialized = True
+            start_scheduler()
 
 atexit.register(stop_scheduler)
 
