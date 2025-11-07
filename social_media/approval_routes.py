@@ -165,6 +165,49 @@ def _update_post_fields(
         return False
 
 
+def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
+    """
+    Delete a post and all its associated data (video, images).
+
+    Args:
+        db: Database instance
+        post_id: ID of the post to delete
+
+    Returns:
+        True if deletion was successful, False otherwise
+    """
+    try:
+        # Delete associated video(s)
+        try:
+            video_delete = db.db.table(_video_table).delete().eq("post_id", post_id).execute()
+            if video_delete.data:
+                log_info(f"Deleted {len(video_delete.data)} video(s) for post {post_id}")
+        except Exception as video_exc:
+            log_warning(f"Error deleting videos for post {post_id}: {video_exc}")
+
+        # Delete associated images
+        try:
+            images_delete = db.db.table("social_images").delete().eq("post_id", post_id).execute()
+            if images_delete.data:
+                log_info(f"Deleted {len(images_delete.data)} image(s) for post {post_id}")
+        except Exception as img_exc:
+            log_warning(f"Error deleting images for post {post_id}: {img_exc}")
+
+        # Delete the post itself
+        post_delete = db.db.table("social_posts").delete().eq("id", post_id).execute()
+
+        if post_delete.data or post_delete.count == 0:  # count == 0 means successful delete in some Supabase versions
+            log_info(f"Successfully deleted post {post_id} and all associated data")
+            return True
+        else:
+            log_error(f"Failed to delete post {post_id} - no data returned from delete operation")
+            return False
+
+    except Exception as exc:
+        log_error(f"Error in cascade delete for post {post_id}: {exc}")
+        return False
+
+
 def _resolve_actor() -> str:
     """Infer the actor performing the action from request context."""
 
@@ -429,7 +472,17 @@ def approve_post(post_id: str):
 
 @approval_bp.route("/reject/<string:post_id>", methods=["POST"])
 def reject_post(post_id: str):
-    """Reject a post and optionally record a rejection reason."""
+    """
+    Reject and DELETE a post permanently.
+
+    This action will:
+    - Delete the post from the database
+    - Delete associated video(s)
+    - Delete associated images
+    - Remove the post from the pending approval list
+
+    Optionally logs a rejection reason before deletion.
+    """
 
     db = _ensure_database()
     if not db:
@@ -439,44 +492,45 @@ def reject_post(post_id: str):
     if not post:
         return jsonify({"error": "Post not found."}), 404
 
+    # Get rejection reason from form or JSON payload
     payload = request.get_json(silent=True) or {}
     reason = request.form.get("reason") or payload.get("reason", "")
 
-    metadata = post.get("metadata") or {}
-    history = metadata.setdefault("approval_history", [])
-    history.append(
-        {
-            "action": "rejected",
-            "timestamp": _current_iso_timestamp(db),
-            "reason": reason or None,
-            "actor": _resolve_actor(),
+    # Log the rejection (optional - you can remove this if you don't need logs)
+    log_info(f"Post {post_id} rejected with reason: '{reason}'. Deleting from database...")
+
+    # Optional: If you want to keep a record of rejections, insert into a separate audit table first
+    # This is optional - uncomment if you want to track rejections
+    """
+    try:
+        rejection_record = {
+            'post_id': post_id,
+            'content': post.get('content') or post.get('content_text', ''),
+            'rejection_reason': reason or 'No reason provided',
+            'rejected_at': _current_iso_timestamp(db),
+            'rejected_by': _resolve_actor(),
+            'post_data': post  # Store full post data for reference
         }
-    )
+        db.db.table('rejection_audit_log').insert(rejection_record).execute()
+        log_info(f"Rejection logged to audit table for post {post_id}")
+    except Exception as audit_exc:
+        log_warning(f"Failed to log rejection to audit table: {audit_exc}")
+    """
 
-    if reason:
-        metadata["rejection_reason"] = reason
-        metadata["rejected_at"] = _current_iso_timestamp(db)
-    elif metadata.get("rejection_reason"):
-        metadata.pop("rejection_reason", None)
-        metadata.pop("rejected_at", None)
-
-    update_fields = {
-        "status": "rejected",
-        "metadata": metadata,
-        "updated_at": _current_iso_timestamp(db),
-    }
-
-    if not _update_post_fields(db, post_id, update_fields):
+    # Delete the post and all associated data
+    if not _delete_post_cascade(db, post_id):
         return (
             render_template(
                 "approval/error.html",
-                message="Failed to reject post. Please try again.",
+                message="Failed to delete rejected post. Please try again.",
             ),
             500,
         )
 
-    log_info(f"Post {post_id} rejected with reason: {reason}")
-    return redirect(url_for("approval.view_post", post_id=post_id))
+    log_info(f"Post {post_id} successfully deleted after rejection")
+
+    # Redirect to pending list (post will no longer appear)
+    return redirect(url_for("approval.pending_posts"))
 
 
 @approval_bp.route("/edit/<string:post_id>", methods=["POST"])
