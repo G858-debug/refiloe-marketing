@@ -12,6 +12,7 @@ shut down the scheduler without leaving background threads behind.
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
@@ -231,11 +232,30 @@ class SocialMediaScheduler:
             log_warning("Supabase client unavailable; skipping content posting job.")
             return
 
+        # Delegate to the enhanced post_scheduled_content method
+        self.post_scheduled_content()
+
+    def post_scheduled_content(self) -> None:
+        """
+        Enhanced method to post scheduled content with retry logic and notifications.
+
+        Features:
+        - Queries database for posts with status='scheduled' and scheduled_time <= now
+        - Posts to Facebook using FacebookPoster
+        - Updates post status and stores facebook_post_id
+        - Implements retry logic with exponential backoff (max 3 retries)
+        - Sends notifications for successes, failures, and low content pipeline
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping content posting.")
+            return
+
         try:
+            # Query posts ready to publish
             now_sa = datetime.now(SA_TIMEZONE)
             response = (
                 self.supabase_client.table("social_posts")
-                .select("id, platform, scheduled_time, status")
+                .select("*")  # Get all fields including content_text, metadata, etc.
                 .eq("status", "scheduled")
                 .lte("scheduled_time", now_sa.isoformat())
                 .limit(int(self.app.config.get("CONTENT_POSTING_BATCH_LIMIT", 5)))
@@ -245,18 +265,330 @@ class SocialMediaScheduler:
             posts = getattr(response, "data", None) or []
             if not posts:
                 log_info("No scheduled posts ready for publishing at this interval.")
+
+                # Check content pipeline health
+                self._check_content_pipeline()
                 return
 
             log_info(f"Found {len(posts)} scheduled posts ready for publishing.")
+
+            # Process each post
             for post in posts:
-                log_info(
-                    "Post ready | id=%s platform=%s scheduled_time=%s",
-                    post.get("id"),
-                    post.get("platform"),
-                    post.get("scheduled_time"),
-                )
+                self._process_post(post)
+
+            # Check content pipeline health after processing
+            self._check_content_pipeline()
+
         except Exception as exc:  # pragma: no cover - Supabase/network errors
-            log_error(f"Error while preparing posts for publishing: {exc}\n{traceback.format_exc()}")
+            log_error(f"Error while posting scheduled content: {exc}\n{traceback.format_exc()}")
+            self._send_notification(
+                "error",
+                f"Content posting job failed: {str(exc)}",
+                {"error": str(exc)}
+            )
+
+    def _process_post(self, post: Dict[str, Any]) -> None:
+        """
+        Process a single post: attempt to publish with retry logic.
+
+        Args:
+            post: Post dictionary from database
+        """
+        post_id = post.get("id")
+        platform = post.get("platform", "facebook")
+
+        log_info(f"Processing post {post_id} for platform {platform}")
+
+        # Currently only support Facebook
+        if platform.lower() != "facebook":
+            log_warning(f"Platform {platform} not yet supported, skipping post {post_id}")
+            return
+
+        # Check if Facebook credentials are available
+        page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
+        page_id = os.getenv("PAGE_ID")
+
+        if not page_access_token or not page_id:
+            log_warning("Facebook credentials missing; cannot post content.")
+            self._send_notification(
+                "warning",
+                "Facebook credentials missing",
+                {"post_id": post_id}
+            )
+            return
+
+        # Get retry metadata
+        metadata = post.get("metadata") or {}
+        retry_count = metadata.get("retry_count", 0)
+        max_retries = 3
+
+        # Check if max retries exceeded
+        if retry_count >= max_retries:
+            log_error(f"Post {post_id} has exceeded max retries ({max_retries}), marking as failed")
+            self._mark_post_failed(post_id, "Maximum retry attempts exceeded")
+            self._send_notification(
+                "failure",
+                f"Post {post_id} failed after {max_retries} retry attempts",
+                {"post_id": post_id, "content_preview": post.get("content_text", "")[:100]}
+            )
+            return
+
+        # Attempt to post
+        try:
+            from facebook_poster import FacebookPoster
+
+            poster = FacebookPoster(page_access_token, page_id, self.supabase_client)
+
+            # Prepare post data
+            post_data = {
+                "content_text": post.get("content_text", ""),
+                "image_ids": post.get("image_ids") or [],
+            }
+
+            # Call Facebook API
+            result = poster.post_to_page(post_data)
+
+            if result.get("success"):
+                # Post succeeded - update database
+                facebook_post_id = result.get("post_id")
+                self._mark_post_published(post_id, facebook_post_id)
+
+                log_info(f"Successfully published post {post_id} as Facebook post {facebook_post_id}")
+                self._send_notification(
+                    "success",
+                    f"Post published successfully",
+                    {
+                        "post_id": post_id,
+                        "facebook_post_id": facebook_post_id,
+                        "content_preview": post.get("content_text", "")[:100]
+                    }
+                )
+            else:
+                # Post failed - implement retry logic
+                error_message = result.get("error", "Unknown error")
+                log_error(f"Failed to post {post_id}: {error_message}")
+
+                # Increment retry count and schedule retry with exponential backoff
+                self._handle_post_failure(post_id, retry_count, error_message)
+
+        except ImportError:
+            log_error("FacebookPoster module not available")
+            self._send_notification(
+                "error",
+                "FacebookPoster module not available",
+                {"post_id": post_id}
+            )
+        except Exception as exc:
+            log_error(f"Unexpected error posting {post_id}: {exc}\n{traceback.format_exc()}")
+            self._handle_post_failure(post_id, retry_count, str(exc))
+
+    def _handle_post_failure(self, post_id: str, retry_count: int, error_message: str) -> None:
+        """
+        Handle post failure with retry logic and exponential backoff.
+
+        Args:
+            post_id: Post UUID
+            retry_count: Current retry count
+            error_message: Error message from failed attempt
+        """
+        max_retries = 3
+        new_retry_count = retry_count + 1
+
+        if new_retry_count >= max_retries:
+            # Max retries reached - mark as failed
+            self._mark_post_failed(post_id, error_message)
+            self._send_notification(
+                "failure",
+                f"Post {post_id} failed after {max_retries} attempts",
+                {"post_id": post_id, "final_error": error_message}
+            )
+        else:
+            # Schedule retry with exponential backoff
+            backoff_minutes = 2 ** new_retry_count  # 2, 4, 8 minutes
+            next_attempt = datetime.now(SA_TIMEZONE) + timedelta(minutes=backoff_minutes)
+
+            log_info(f"Scheduling retry {new_retry_count}/{max_retries} for post {post_id} at {next_attempt}")
+
+            # Update metadata with retry info
+            try:
+                # Get current post data to preserve existing metadata
+                post_response = (
+                    self.supabase_client.table("social_posts")
+                    .select("metadata")
+                    .eq("id", post_id)
+                    .single()
+                    .execute()
+                )
+
+                current_metadata = {}
+                if post_response.data:
+                    current_metadata = post_response.data.get("metadata") or {}
+
+                # Update retry metadata
+                current_metadata["retry_count"] = new_retry_count
+                current_metadata["last_error"] = error_message
+                current_metadata["last_attempt"] = datetime.now(SA_TIMEZONE).isoformat()
+                current_metadata["next_attempt"] = next_attempt.isoformat()
+
+                # Update post with new metadata and scheduled time
+                update_data = {
+                    "metadata": current_metadata,
+                    "scheduled_time": next_attempt.isoformat(),
+                    "updated_at": datetime.now(SA_TIMEZONE).isoformat()
+                }
+
+                self.supabase_client.table("social_posts").update(update_data).eq(
+                    "id", post_id
+                ).execute()
+
+                log_info(f"Updated post {post_id} for retry {new_retry_count} in {backoff_minutes} minutes")
+
+            except Exception as exc:
+                log_error(f"Failed to update retry metadata for post {post_id}: {exc}")
+
+    def _mark_post_published(self, post_id: str, facebook_post_id: str) -> None:
+        """
+        Mark post as published and store Facebook post ID.
+
+        Args:
+            post_id: Post UUID
+            facebook_post_id: Facebook's post ID
+        """
+        try:
+            update_data = {
+                "status": "published",
+                "facebook_post_id": facebook_post_id,
+                "published_time": datetime.now(SA_TIMEZONE).isoformat(),
+                "updated_at": datetime.now(SA_TIMEZONE).isoformat()
+            }
+
+            result = self.supabase_client.table("social_posts").update(update_data).eq(
+                "id", post_id
+            ).execute()
+
+            if result.data:
+                log_info(f"Post {post_id} marked as published with Facebook ID: {facebook_post_id}")
+            else:
+                log_error(f"Failed to update post {post_id} status to published")
+
+        except Exception as exc:
+            log_error(f"Error marking post {post_id} as published: {exc}")
+
+    def _mark_post_failed(self, post_id: str, error_message: str) -> None:
+        """
+        Mark post as failed after max retries.
+
+        Args:
+            post_id: Post UUID
+            error_message: Final error message
+        """
+        try:
+            # Get current metadata to preserve it
+            post_response = (
+                self.supabase_client.table("social_posts")
+                .select("metadata")
+                .eq("id", post_id)
+                .single()
+                .execute()
+            )
+
+            metadata = {}
+            if post_response.data:
+                metadata = post_response.data.get("metadata") or {}
+
+            # Add failure info to metadata
+            metadata["failed_at"] = datetime.now(SA_TIMEZONE).isoformat()
+            metadata["failure_reason"] = error_message
+
+            update_data = {
+                "status": "failed",
+                "metadata": metadata,
+                "updated_at": datetime.now(SA_TIMEZONE).isoformat()
+            }
+
+            result = self.supabase_client.table("social_posts").update(update_data).eq(
+                "id", post_id
+            ).execute()
+
+            if result.data:
+                log_info(f"Post {post_id} marked as failed: {error_message}")
+            else:
+                log_error(f"Failed to update post {post_id} status to failed")
+
+        except Exception as exc:
+            log_error(f"Error marking post {post_id} as failed: {exc}")
+
+    def _check_content_pipeline(self) -> None:
+        """
+        Check if content pipeline is healthy (at least 3 days of scheduled content).
+        Send notification if running low on content.
+        """
+        try:
+            now_sa = datetime.now(SA_TIMEZONE)
+            three_days_from_now = now_sa + timedelta(days=3)
+
+            # Count scheduled posts in next 3 days
+            response = (
+                self.supabase_client.table("social_posts")
+                .select("id", count="exact")
+                .eq("status", "scheduled")
+                .gte("scheduled_time", now_sa.isoformat())
+                .lte("scheduled_time", three_days_from_now.isoformat())
+                .execute()
+            )
+
+            count = response.count if hasattr(response, "count") else len(response.data or [])
+
+            if count < 3:
+                log_warning(f"Low content pipeline: only {count} posts scheduled in next 3 days")
+                self._send_notification(
+                    "warning",
+                    f"Low content pipeline detected",
+                    {
+                        "scheduled_posts_count": count,
+                        "threshold": 3,
+                        "period_days": 3,
+                        "message": f"Only {count} posts scheduled for the next 3 days. Consider generating more content."
+                    }
+                )
+            else:
+                log_info(f"Content pipeline healthy: {count} posts scheduled in next 3 days")
+
+        except Exception as exc:
+            log_error(f"Error checking content pipeline: {exc}")
+
+    def _send_notification(self, notification_type: str, message: str, details: Dict[str, Any]) -> None:
+        """
+        Send notification for post events.
+
+        Future implementation: Email/Slack notifications
+        Current implementation: Structured logging
+
+        Args:
+            notification_type: Type of notification (success, failure, warning, error)
+            message: Notification message
+            details: Additional details dictionary
+        """
+        notification_data = {
+            "type": notification_type,
+            "message": message,
+            "timestamp": datetime.now(SA_TIMEZONE).isoformat(),
+            "details": details
+        }
+
+        if notification_type == "success":
+            log_info(f"✅ NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
+        elif notification_type == "failure":
+            log_error(f"❌ NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
+        elif notification_type == "warning":
+            log_warning(f"⚠️  NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
+        elif notification_type == "error":
+            log_error(f"🚨 NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
+        else:
+            log_info(f"📢 NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
+
+        # TODO: Implement email notifications
+        # TODO: Implement Slack notifications
 
     def run_analytics_collection(self) -> None:
         """Daily job at 11:00 PM SAST to collect analytics for published posts."""
