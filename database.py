@@ -39,7 +39,8 @@ class SocialMediaDatabase:
                 # 'trainer_id': REMOVED - doesn't exist in table
                 'post_type': post_data.get('post_type', 'single_image'),
                 'platform': post_data.get('platform', 'facebook'),
-                'content_text': post_data.get('content_text', ''),
+                'content': post_data.get('content') or post_data.get('content_text'),
+                'title': post_data.get('title') or post_data.get('content', '')[:100],
                 'content_theme': post_data.get('content_theme', ''),
                 'image_ids': post_data.get('image_ids', []),
                 'scheduled_time': post_data.get('scheduled_time'),
