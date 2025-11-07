@@ -75,14 +75,26 @@ def _fetch_post(db: SocialMediaDatabase, post_id: str) -> Optional[Dict[str, Any
     """Retrieve a single post by ID."""
 
     try:
+        log_info(f"Fetching post with ID: {post_id}")
+
         result = (
             db.db.table("social_posts")
             .select("*")
             .eq("id", post_id)
             .single()
-            .execute()
         )
-        return result.data if result.data else None
+        log_info(f"Fetch result: {result}")
+
+        if hasattr(result, "execute"):
+            result = result.execute()
+            log_info(f"Executed fetch result: {result}")
+
+        if result and hasattr(result, "data") and result.data:
+            log_info(f"Post found: {result.data}")
+            return result.data
+
+        log_error(f"Post not found with ID: {post_id}")
+        return None
     except Exception as exc:
         log_error(f"Error fetching post {post_id}: {exc}")
         return None
@@ -168,14 +180,26 @@ def pending_posts():
         )
 
     try:
+        log_info("Fetching pending posts...")
+
         result = (
             db.db.table("social_posts")
             .select("*")
             .eq("status", "pending_approval")
             .order("created_at", desc=True)
-            .execute()
         )
-        posts = result.data or []
+        log_info(f"Query result type: {type(result)}")
+
+        if hasattr(result, "execute"):
+            result = result.execute()
+            log_info(f"Executed pending posts result: {result}")
+
+        if hasattr(result, "data"):
+            posts = result.data or []
+        else:
+            posts = []
+
+        log_info(f"Found {len(posts)} pending posts")
     except Exception as exc:
         log_error(f"Error fetching pending posts: {exc}")
         return (
