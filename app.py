@@ -231,7 +231,8 @@ def health_check():
             'heygen': heygen_avatar_status,
         },
         'links': {
-            'approval_pending': '/approval/pending'
+            'approval_pending': '/approval/pending',
+            'content_pipeline_health': '/health/content-pipeline'
         }
     }), 200
 
@@ -258,6 +259,66 @@ def status():
     }
     
     return jsonify(status_info), 200
+
+
+@app.route('/health/content-pipeline')
+def content_pipeline_health():
+    """Content pipeline health monitoring endpoint"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.content_monitor import ContentPipelineMonitor
+
+        monitor = ContentPipelineMonitor(supabase_client)
+
+        # Get comprehensive health report
+        health_report = monitor.check_pipeline_health()
+
+        # Get content counts by status
+        content_counts = monitor.get_content_counts_by_status()
+
+        # Get 7-day coverage details
+        coverage = monitor.get_next_7_days_coverage()
+
+        # Get recommended actions
+        recommended_actions = monitor.get_recommended_actions(health_report)
+
+        # Build response
+        response = {
+            'pipeline_status': health_report['status'],
+            'checked_at': health_report['checked_at'],
+            'metrics': {
+                'pending_approval': health_report['pending_approval_count'],
+                'scheduled_next_7_days': health_report['scheduled_count'],
+                'days_with_content': health_report['scheduled_days_coverage'],
+                'content_gaps_count': len(health_report['content_gaps']),
+                'video_failure_rate': health_report['video_failure_rate']
+            },
+            'content_counts_by_status': content_counts,
+            'next_7_days_coverage': coverage,
+            'alerts': health_report['alerts'],
+            'recommended_actions': recommended_actions,
+            'content_gaps': health_report['content_gaps']
+        }
+
+        # Set HTTP status based on pipeline status
+        http_status = 200
+        if health_report['status'] == 'warning':
+            http_status = 200  # Still 200, but with warnings
+        elif health_report['status'] == 'critical':
+            http_status = 200  # Still 200, client should check 'pipeline_status' field
+
+        return jsonify(response), http_status
+
+    except Exception as e:
+        log_error(f"Error checking content pipeline health: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({
+            'error': str(e),
+            'pipeline_status': 'unknown'
+        }), 500
 
 
 @app.route('/scheduler/status')
