@@ -117,7 +117,10 @@
                   <td data-label="Format" class="text-uppercase">{{ post.format | default('N/A') }}</td>
                   <td data-label="Action" class="text-end">
                     <a
-                      class="btn btn-primary btn-sm"
+                      class="btn btn-sm"
+                      style="background-color: #D4A574; border-color: #D4A574; color: white;"
+                      onmouseover="this.style.backgroundColor='#8B7355'; this.style.borderColor='#8B7355';"
+                      onmouseout="this.style.backgroundColor='#D4A574'; this.style.borderColor='#D4A574';"
                       href="{{ url_for('approval.view_post', post_id=post.id) }}"
                     >
                       View &amp; Approve
@@ -129,7 +132,7 @@
           </table>
         </div>
       {% else %}
-        <div class="alert alert-info" role="alert">
+        <div class="alert" role="alert" style="background-color: #F5E6D3; border-color: #D4A574; color: #8B7355;">
           There are no posts awaiting approval right now.
         </div>
       {% endif %}

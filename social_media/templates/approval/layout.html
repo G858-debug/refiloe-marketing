@@ -17,8 +17,16 @@
       crossorigin="anonymous"
     />
     <style>
+      /* Beige color scheme */
+      :root {
+        --beige-primary: #D4A574;
+        --beige-light: #F5E6D3;
+        --beige-dark: #8B7355;
+        --beige-accent: #E8D4B8;
+      }
+
       body {
-        background-color: #f7f9fc;
+        background-color: #FBF8F3;
       }
 
       .navbar-brand {
@@ -37,10 +45,38 @@
         padding: 1rem;
         border-radius: 0.5rem;
       }
+
+      .btn-beige {
+        background-color: var(--beige-primary);
+        border-color: var(--beige-primary);
+        color: white;
+      }
+
+      .btn-beige:hover {
+        background-color: var(--beige-dark);
+        border-color: var(--beige-dark);
+        color: white;
+      }
+
+      .badge-beige {
+        background-color: var(--beige-primary);
+        color: white;
+      }
+
+      .alert-beige {
+        background-color: var(--beige-light);
+        border-color: var(--beige-primary);
+        color: var(--beige-dark);
+      }
+
+      .card-header-beige {
+        background-color: var(--beige-dark);
+        color: white;
+      }
     </style>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #8B7355;">
       <div class="container">
         <a class="navbar-brand" href="{{ url_for('approval.pending_posts') }}">
           Content Approval

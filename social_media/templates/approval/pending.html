@@ -10,7 +10,7 @@
         Review generated posts awaiting scheduling. Click a card to view full details and approve or reject.
       </p>
     </div>
-    <span class="badge bg-primary fs-6">{{ posts|length }} pending</span>
+    <span class="badge fs-6" style="background-color: #D4A574; color: white;">{{ posts|length }} pending</span>
   </div>
 
   {% if posts %}
@@ -38,7 +38,10 @@
 
               <a
                 href="{{ url_for('approval.view_post', post_id=post.id) }}"
-                class="btn btn-primary w-100"
+                class="btn w-100"
+                style="background-color: #D4A574; border-color: #D4A574; color: white;"
+                onmouseover="this.style.backgroundColor='#8B7355'; this.style.borderColor='#8B7355';"
+                onmouseout="this.style.backgroundColor='#D4A574'; this.style.borderColor='#D4A574';"
               >
                 Review Post
               </a>
