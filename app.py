@@ -508,6 +508,42 @@ def debug_schema():
         }), 500
 
 
+@app.route('/api/debug/post/<post_id>')
+def debug_single_post(post_id):
+    """Debug endpoint to see full post details including video"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get the post
+        post_result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+        post = post_result.data[0] if post_result.data else None
+
+        # Get the video
+        video_result = supabase_client.table('generated_videos').select('*').eq('post_id', post_id).execute()
+        video = video_result.data[0] if video_result.data else None
+
+        # Get images
+        images_result = supabase_client.table('social_images').select('*').eq('post_id', post_id).execute()
+        images = images_result.data if images_result.data else []
+
+        return jsonify({
+            'post': post,
+            'video': video,
+            'images': images,
+            'field_check': {
+                'has_content': 'content' in post if post else False,
+                'has_content_text': 'content_text' in post if post else False,
+                'has_created_at': 'created_at' in post if post else False,
+                'has_scheduled_time': 'scheduled_time' in post if post else False,
+                'video_linked': video is not None,
+                'video_has_url': video.get('video_url') is not None if video else False
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/test/content')
 def test_content_generation():
     """Test content generation (for debugging)"""
