@@ -846,17 +846,32 @@ app.register_blueprint(approval_bp, url_prefix='/approval')
 
 
 # ------------------------------------------------------------------------------
-# Scheduler lifecycle hooks
+# Scheduler lifecycle hooks - Flask 2.3+ compatible
 # ------------------------------------------------------------------------------
-if hasattr(app, "before_serving"):
-    @app.before_serving
-    def _ensure_scheduler_before_serving():
-        start_scheduler()
-else:
-    @app.before_first_request
-    def _ensure_scheduler_before_first_request():
-        start_scheduler()
+def init_app_scheduler():
+    """Initialize scheduler once when app starts serving requests"""
+    with app.app_context():
+        if not hasattr(app, '_scheduler_started'):
+            try:
+                start_scheduler()
+                app._scheduler_started = True
+                log_info("Scheduler initialized via before_request hook")
+            except Exception as e:
+                log_error(f"Failed to start scheduler: {e}")
+                app._scheduler_started = False
 
+
+@app.before_request
+def ensure_scheduler():
+    """Ensure scheduler is running before handling requests"""
+    if not hasattr(app, '_scheduler_started'):
+        init_app_scheduler()
+    # Remove this hook after first call to avoid overhead
+    if hasattr(app, '_scheduler_started') and app._scheduler_started:
+        app.before_request_funcs[None].remove(ensure_scheduler)
+
+
+# Clean shutdown
 atexit.register(stop_scheduler)
 
 
