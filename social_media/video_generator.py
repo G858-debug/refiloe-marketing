@@ -24,6 +24,15 @@ except ImportError:  # pragma: no cover - fallback when running from project roo
     except ImportError:  # pragma: no cover - avatar mapping optional at runtime
         _avatar_mapping_module = None
 
+# Import the new avatar selector
+try:
+    from .avatar_selector import AvatarSelector as _AvatarSelector  # type: ignore
+except ImportError:  # pragma: no cover - fallback when running from project root
+    try:
+        from avatar_selector import AvatarSelector as _AvatarSelector  # type: ignore
+    except ImportError:  # pragma: no cover - avatar selector optional at runtime
+        _AvatarSelector = None
+
 if _avatar_mapping_module is not None:
     get_avatar_for_content = getattr(_avatar_mapping_module, "get_avatar_for_content", None)
     get_fallback_avatar_id = getattr(_avatar_mapping_module, "get_fallback_avatar_id", None)
@@ -84,6 +93,15 @@ class VideoGenerator:
         self.group_avatar_id = os.getenv("HEYGEN_GROUP_AVATAR_ID")
         self.closeup_avatar_id = os.getenv("HEYGEN_THREEQUARTERS_CLOSEUP_AVATAR_ID")
         self.analytics_table = os.getenv("HEYGEN_VIDEO_ANALYTICS_TABLE", "video_analytics")
+
+        # Initialize avatar selector if available
+        self.avatar_selector = None
+        if _AvatarSelector is not None:
+            try:
+                self.avatar_selector = _AvatarSelector(default_avatar_env="HEYGEN_AVATAR_DEFAULT")
+                log_info("AvatarSelector initialized successfully")
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Failed to initialize AvatarSelector: {exc}")
 
         log_info("VideoGenerator initialized with HeyGen integration")
 
@@ -379,6 +397,29 @@ class VideoGenerator:
                 }
             )
 
+        # Try new avatar selector first (if available)
+        if self.avatar_selector is not None:
+            try:
+                selector_result = self.avatar_selector.select_avatar(
+                    content_theme=content_type,
+                    content_text=content_text,
+                )
+                if selector_result and selector_result.get("avatar_id"):
+                    # Only add if not already requested by caller
+                    if selector_result.get("source") != "override":
+                        candidates.append(
+                            {
+                                "avatar_id": selector_result["avatar_id"],
+                                "reason": selector_result.get("reason", "avatar_selector"),
+                                "source": f"avatar_selector_{selector_result.get('source', 'unknown')}",
+                                "context": selector_result,
+                            }
+                        )
+                        selection_context = selector_result
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Avatar selector failed: {exc}")
+
+        # Fall back to legacy avatar mapping (if available)
         if callable(get_avatar_for_content):  # pragma: no branch - runtime guarded
             selection_kwargs: Dict[str, Any] = {}
             if content_text:
@@ -388,7 +429,7 @@ class VideoGenerator:
 
             try:
                 selection_result = get_avatar_for_content(**selection_kwargs)
-                selection_context = selection_result if isinstance(selection_result, dict) else None
+                mapping_context = selection_result if isinstance(selection_result, dict) else None
 
                 derived_avatar_id: Optional[str] = None
                 derived_reason: Optional[str] = None
@@ -401,7 +442,7 @@ class VideoGenerator:
                     if isinstance(primary, dict):
                         derived_avatar_id = primary.get("avatar_id") or primary.get("id")
                         derived_reason = primary.get("reason") or primary.get("strategy")
-                        selection_context = primary
+                        mapping_context = primary
                     elif isinstance(primary, str):
                         derived_avatar_id = primary
                 elif isinstance(selection_result, str):
@@ -413,9 +454,11 @@ class VideoGenerator:
                             "avatar_id": derived_avatar_id,
                             "reason": derived_reason or "avatar_mapping_selection",
                             "source": "avatar_mapping",
-                            "context": selection_context,
+                            "context": mapping_context,
                         }
                     )
+                    if not selection_context:
+                        selection_context = mapping_context
             except AvatarSelectionError as exc:
                 log_warning(f"Dynamic avatar selection failed: {exc}")
             except Exception as exc:  # pylint: disable=broad-except
