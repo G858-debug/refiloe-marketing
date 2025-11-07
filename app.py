@@ -9,6 +9,7 @@ This is the entry point for the Railway deployment.
 import os
 import atexit
 import uuid
+import json
 from flask import Flask, jsonify, request
 from datetime import datetime, timedelta
 import pytz
@@ -1193,13 +1194,15 @@ def test_generate_video():
             'video_duration': int(result.get('duration', 0)),
             'video_type': 'test_video',
             'video_style': result.get('style', 'educational'),
-            'content_text': f'Test video - {script[:100]}...',  # Changed from caption
+            'content': script,  # Changed from content_text
+            'title': f'Test video - {script[:100]}...',  # Add explicit title
             'content_theme': 'test',
             'has_captions': True,
             'completion_rate': 0,
             'avg_watch_time': 0
         }
-        
+
+        log_info(f"Post data being saved: {json.dumps(post_data, indent=2, default=str)}")
         log_info(f"Saving post to database: {post_data}")
         
         # Save to database
