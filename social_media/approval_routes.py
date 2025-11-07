@@ -81,17 +81,22 @@ def _fetch_post(db: SocialMediaDatabase, post_id: str) -> Optional[Dict[str, Any
             db.db.table("social_posts")
             .select("*")
             .eq("id", post_id)
-            .single()
+            .limit(1)
         )
-        log_info(f"Fetch result: {result}")
+
+        log_info(f"Fetch result type: {type(result)}")
 
         if hasattr(result, "execute"):
             result = result.execute()
-            log_info(f"Executed fetch result: {result}")
+            log_info(f"Executed fetch result type: {type(result)}")
 
-        if result and hasattr(result, "data") and result.data:
-            log_info(f"Post found: {result.data}")
-            return result.data
+        if hasattr(result, "data") and result.data:
+            if isinstance(result.data, list) and len(result.data) > 0:
+                log_info(f"Post found: {result.data[0]}")
+                return result.data[0]
+            if isinstance(result.data, dict):
+                log_info(f"Post found: {result.data}")
+                return result.data
 
         log_error(f"Post not found with ID: {post_id}")
         return None
@@ -127,10 +132,16 @@ def _fetch_post_video(db: SocialMediaDatabase, post_id: str) -> Optional[Dict[st
             .eq("post_id", post_id)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
         )
-        if result.data:
-            return result.data[0]
+
+        if hasattr(result, "execute"):
+            result = result.execute()
+
+        if hasattr(result, "data") and result.data:
+            if isinstance(result.data, list) and len(result.data) > 0:
+                return result.data[0]
+            if isinstance(result.data, dict):
+                return result.data
     except Exception as exc:
         log_error(f"Error fetching video for post {post_id}: {exc}")
     return None
