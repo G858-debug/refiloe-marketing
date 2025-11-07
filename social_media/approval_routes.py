@@ -206,30 +206,56 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
         True if deletion was successful, False otherwise
     """
     try:
-        # Delete associated video(s)
+        # Delete associated video(s) - note: some posts may not have videos
         try:
-            video_delete = db.db.table(_video_table).delete().eq("post_id", post_id).execute()
-            if video_delete.data:
-                log_info(f"Deleted {len(video_delete.data)} video(s) for post {post_id}")
+            video_result = db.db.table(_video_table).eq("post_id", post_id).delete().execute()
+            deleted_count = len(video_result.data) if video_result.data else 0
+            if deleted_count > 0:
+                log_info(f"Deleted {deleted_count} video(s) for post {post_id}")
+            else:
+                log_info(f"No videos found to delete for post {post_id}")
+        except ValueError as ve:
+            # This is expected if the filter is missing
+            log_warning(f"Could not delete videos for post {post_id}: {ve}")
         except Exception as video_exc:
+            # Log but don't fail - video table might not exist or video might not exist
             log_warning(f"Error deleting videos for post {post_id}: {video_exc}")
 
-        # Delete associated images
+        # Delete associated images - note: some posts may not have images
         try:
-            images_delete = db.db.table("social_images").delete().eq("post_id", post_id).execute()
-            if images_delete.data:
-                log_info(f"Deleted {len(images_delete.data)} image(s) for post {post_id}")
+            images_result = db.db.table("social_images").eq("post_id", post_id).delete().execute()
+            deleted_count = len(images_result.data) if images_result.data else 0
+            if deleted_count > 0:
+                log_info(f"Deleted {deleted_count} image(s) for post {post_id}")
+            else:
+                log_info(f"No images found to delete for post {post_id}")
+        except ValueError as ve:
+            log_warning(f"Could not delete images for post {post_id}: {ve}")
         except Exception as img_exc:
+            # Log but don't fail - images table might not exist or images might not exist
             log_warning(f"Error deleting images for post {post_id}: {img_exc}")
 
-        # Delete the post itself
-        post_delete = db.db.table("social_posts").delete().eq("id", post_id).execute()
+        # Delete the post itself - THIS is the critical operation
+        try:
+            post_result = db.db.table("social_posts").eq("id", post_id).delete().execute()
 
-        if post_delete.data or post_delete.count == 0:  # count == 0 means successful delete in some Supabase versions
-            log_info(f"Successfully deleted post {post_id} and all associated data")
-            return True
-        else:
-            log_error(f"Failed to delete post {post_id} - no data returned from delete operation")
+            # Check if deletion was successful
+            if post_result.data:
+                log_info(f"Successfully deleted post {post_id} (returned data: {len(post_result.data)} record(s))")
+                return True
+            else:
+                # Some Supabase configurations return empty data on successful delete
+                # Try to verify by checking if post still exists
+                verify_result = db.db.table("social_posts").select("id").eq("id", post_id).execute()
+                if not verify_result.data:
+                    log_info(f"Successfully deleted post {post_id} (verified by query)")
+                    return True
+                else:
+                    log_error(f"Failed to delete post {post_id} - post still exists after delete operation")
+                    return False
+
+        except Exception as post_exc:
+            log_error(f"Failed to delete post {post_id}: {post_exc}")
             return False
 
     except Exception as exc:
