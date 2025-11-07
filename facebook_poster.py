@@ -68,19 +68,20 @@ class FacebookPoster:
     def post_to_page(self, post_data: Dict) -> Dict:
         """
         Post content to Facebook Page.
-        
+
         Args:
             post_data: Dictionary containing:
                 - content_text: The text content to post
                 - image_ids: Optional list of Facebook image IDs
+                - video_url: Optional video URL from HeyGen
                 - scheduled_time: Optional scheduled posting time
-        
+
         Returns:
             Dictionary with success status, post_id, and error message
         """
         try:
             log_info(f"Posting to Facebook page {self.page_id}")
-            
+
             # Validate required data
             if not post_data.get('content_text'):
                 return {
@@ -88,28 +89,33 @@ class FacebookPoster:
                     'post_id': None,
                     'error': 'No content text provided'
                 }
-            
-            # Prepare post parameters
+
+            # Check if this is a video post
+            if post_data.get('video_url'):
+                log_info("Detected video URL, posting as video")
+                return self._post_video(post_data)
+
+            # Prepare post parameters for text/image post
             post_params = {
                 'message': post_data['content_text'],
                 'access_token': self.page_access_token
             }
-            
+
             # Add images if provided
             if post_data.get('image_ids'):
                 post_params['attached_media'] = post_data['image_ids']
-            
+
             # Add scheduled time if provided
             if post_data.get('scheduled_time'):
                 post_params['scheduled_publish_time'] = int(
                     post_data['scheduled_time'].timestamp()
                 )
                 post_params['published'] = False
-            
+
             # Make API request
             url = f"{self.base_url}/{self.page_id}/feed"
             response = self._make_api_request('POST', url, data=post_params)
-            
+
             if response.get('id'):
                 log_info(f"Successfully posted to Facebook: {response['id']}")
                 return {
@@ -125,7 +131,7 @@ class FacebookPoster:
                     'post_id': None,
                     'error': error_msg
                 }
-                
+
         except Exception as e:
             log_error(f"Exception in post_to_page: {e}")
             return {
@@ -184,6 +190,130 @@ class FacebookPoster:
         except Exception as e:
             log_error(f"Failed to download image from {url}: {e}")
             raise e
+
+    def _post_video(self, post_data: Dict) -> Dict:
+        """
+        Post video to Facebook Page using video URL.
+
+        Args:
+            post_data: Dictionary containing:
+                - content_text: The text content/description for the video
+                - video_url: URL of the video (from HeyGen or other source)
+                - scheduled_time: Optional scheduled posting time
+
+        Returns:
+            Dictionary with success status, post_id, and error message
+        """
+        try:
+            video_url = post_data.get('video_url')
+            log_info(f"Posting video to Facebook page from URL: {video_url}")
+
+            # Prepare video post parameters
+            video_params = {
+                'description': post_data.get('content_text', ''),
+                'file_url': video_url,
+                'access_token': self.page_access_token
+            }
+
+            # Add scheduled time if provided
+            if post_data.get('scheduled_time'):
+                video_params['scheduled_publish_time'] = int(
+                    post_data['scheduled_time'].timestamp()
+                )
+                video_params['published'] = False
+
+            # Make API request to videos endpoint
+            url = f"{self.base_url}/{self.page_id}/videos"
+            response = self._make_api_request('POST', url, data=video_params)
+
+            if response.get('id'):
+                log_info(f"Successfully posted video to Facebook: {response['id']}")
+                return {
+                    'success': True,
+                    'post_id': response['id'],
+                    'error': None
+                }
+            else:
+                error_msg = response.get('error', {}).get('message', 'Unknown error')
+                log_error(f"Failed to post video to Facebook: {error_msg}")
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': error_msg
+                }
+
+        except Exception as e:
+            log_error(f"Exception in _post_video: {e}")
+            return {
+                'success': False,
+                'post_id': None,
+                'error': str(e)
+            }
+
+    def post_approved_content(self, post_record: Dict) -> Dict:
+        """
+        Post approved content to Facebook, handling videos, images, or text.
+
+        This method is specifically designed for posting content that has been
+        approved through the approval workflow.
+
+        Args:
+            post_record: Database record of the approved post containing:
+                - id: Post UUID
+                - content_text: The text content
+                - video_url: Optional video URL from HeyGen
+                - image_ids: Optional list of image URLs
+
+        Returns:
+            Dictionary with success status, post_id, and error message
+        """
+        try:
+            post_id = post_record.get('id')
+            log_info(f"Posting approved content for post {post_id}")
+
+            # Prepare post data
+            post_data = {
+                'content_text': post_record.get('content_text', ''),
+            }
+
+            # Check for video URL first (videos take priority over images)
+            if post_record.get('video_url'):
+                log_info(f"Posting as video: {post_record['video_url']}")
+                post_data['video_url'] = post_record['video_url']
+            # Otherwise check for images
+            elif post_record.get('image_ids'):
+                log_info(f"Posting with images")
+                # If image_ids are URLs, we need to upload them first
+                image_urls = post_record.get('image_ids', [])
+                if image_urls and isinstance(image_urls, list):
+                    uploaded_ids = []
+                    for img_url in image_urls:
+                        try:
+                            fb_image_id = self.upload_image(img_url)
+                            uploaded_ids.append({'media_fbid': fb_image_id})
+                        except Exception as img_error:
+                            log_warning(f"Failed to upload image {img_url}: {img_error}")
+
+                    if uploaded_ids:
+                        post_data['image_ids'] = uploaded_ids
+
+            # Post to Facebook
+            result = self.post_to_page(post_data)
+
+            # Update database if successful
+            if result['success'] and self.database:
+                self.database.mark_post_published(post_id, result['post_id'])
+                log_info(f"Updated database with Facebook post ID: {result['post_id']}")
+
+            return result
+
+        except Exception as e:
+            log_error(f"Exception in post_approved_content: {e}")
+            return {
+                'success': False,
+                'post_id': None,
+                'error': str(e)
+            }
     
     def post_to_group(self, group_id: str, post_data: Dict) -> Dict:
         """
