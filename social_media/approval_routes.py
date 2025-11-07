@@ -17,7 +17,9 @@ from flask import (
 )
 from social_media.database import SocialMediaDatabase
 from utils.supabase_rest import SupabaseRestClient
-from utils.logger import log_error, log_info
+from utils.logger import log_error, log_info, log_warning
+from facebook_poster import FacebookPoster
+import pytz
 
 
 approval_bp = Blueprint(
@@ -176,6 +178,114 @@ def _resolve_actor() -> str:
     return request.remote_addr or "unknown"
 
 
+def _get_facebook_poster(db: SocialMediaDatabase) -> Optional[FacebookPoster]:
+    """Initialize and return a FacebookPoster instance."""
+    page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
+    page_id = os.getenv("PAGE_ID")
+
+    if not page_access_token or not page_id:
+        log_error("Facebook credentials not configured")
+        return None
+
+    try:
+        poster = FacebookPoster(page_access_token, page_id, db.db)
+        return poster
+    except Exception as exc:
+        log_error(f"Failed to initialize FacebookPoster: {exc}")
+        return None
+
+
+def _should_post_immediately(post: Dict[str, Any]) -> bool:
+    """Check if a post should be posted immediately based on its scheduled_time."""
+    scheduled_time = post.get("scheduled_time")
+
+    if not scheduled_time:
+        # No scheduled time means post immediately
+        return True
+
+    try:
+        # Parse the scheduled time
+        if isinstance(scheduled_time, str):
+            scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+        else:
+            scheduled_dt = scheduled_time
+
+        # Make timezone-aware if needed
+        if scheduled_dt.tzinfo is None:
+            sa_tz = pytz.timezone('Africa/Johannesburg')
+            scheduled_dt = sa_tz.localize(scheduled_dt)
+
+        # Get current time in SA timezone
+        now = datetime.now(pytz.timezone('Africa/Johannesburg'))
+
+        # If scheduled time is in the past or within 1 minute from now, post immediately
+        return scheduled_dt <= now
+    except Exception as exc:
+        log_error(f"Error parsing scheduled_time: {exc}")
+        # On error, don't post immediately to be safe
+        return False
+
+
+def _post_to_facebook(db: SocialMediaDatabase, post: Dict[str, Any]) -> Dict[str, Any]:
+    """Post content to Facebook and update the database.
+
+    Returns:
+        Dict with 'success' (bool), 'facebook_post_id' (str or None), and 'error' (str or None)
+    """
+    try:
+        poster = _get_facebook_poster(db)
+        if not poster:
+            return {
+                'success': False,
+                'facebook_post_id': None,
+                'error': 'Facebook poster not available'
+            }
+
+        # Post the content
+        result = poster.post_approved_content(post)
+
+        if result['success']:
+            log_info(f"Successfully posted to Facebook: {result['post_id']}")
+            return {
+                'success': True,
+                'facebook_post_id': result['post_id'],
+                'error': None
+            }
+        else:
+            log_error(f"Failed to post to Facebook: {result['error']}")
+            # Update post status to failed
+            _update_post_fields(db, post['id'], {
+                'status': 'failed',
+                'metadata': {
+                    **(post.get('metadata') or {}),
+                    'posting_error': result['error'],
+                    'failed_at': _current_iso_timestamp(db)
+                }
+            })
+            return {
+                'success': False,
+                'facebook_post_id': None,
+                'error': result['error']
+            }
+
+    except Exception as exc:
+        log_error(f"Exception while posting to Facebook: {exc}")
+        # Update post status to failed
+        _update_post_fields(db, post['id'], {
+            'status': 'failed',
+            'metadata': {
+                **(post.get('metadata') or {}),
+                'posting_error': str(exc),
+                'failed_at': _current_iso_timestamp(db)
+            }
+        })
+        return {
+            'success': False,
+            'facebook_post_id': None,
+            'error': str(exc)
+        }
+
+
 @approval_bp.route("/pending", methods=["GET"])
 def pending_posts():
     """Display all posts awaiting approval."""
@@ -261,7 +371,7 @@ def view_post(post_id: str):
 
 @approval_bp.route("/approve/<string:post_id>", methods=["POST"])
 def approve_post(post_id: str):
-    """Approve a post, transitioning it to the scheduled state."""
+    """Approve a post, transitioning it to the scheduled state and posting immediately if scheduled time is in the past."""
 
     db = _ensure_database()
     if not db:
@@ -301,6 +411,19 @@ def approve_post(post_id: str):
         )
 
     log_info(f"Post {post_id} approved for scheduling")
+
+    # Check if we should post immediately
+    # Refresh post data to get the updated status
+    post = _fetch_post(db, post_id)
+    if _should_post_immediately(post):
+        log_info(f"Post {post_id} scheduled for immediate posting")
+        result = _post_to_facebook(db, post)
+
+        if result['success']:
+            log_info(f"Post {post_id} successfully posted to Facebook with ID: {result['facebook_post_id']}")
+        else:
+            log_warning(f"Failed to post {post_id} to Facebook: {result['error']}")
+
     return redirect(url_for("approval.view_post", post_id=post_id))
 
 
@@ -417,4 +540,73 @@ def edit_post(post_id: str):
 
     log_info(f"Post {post_id} edited prior to approval")
     return redirect(url_for("approval.view_post", post_id=post_id))
+
+
+@approval_bp.route("/post-now/<string:post_id>", methods=["POST"])
+def post_now(post_id: str):
+    """Immediately post an approved item to Facebook.
+
+    This endpoint can be used to manually trigger posting for approved content,
+    regardless of the scheduled time.
+    """
+
+    db = _ensure_database()
+    if not db:
+        return jsonify({"error": "Supabase connection is not configured."}), 503
+
+    post = _fetch_post(db, post_id)
+    if not post:
+        return jsonify({"error": "Post not found."}), 404
+
+    # Check if post is in a valid state for posting
+    valid_statuses = ["scheduled", "pending_approval", "failed"]
+    if post.get("status") not in valid_statuses:
+        log_warning(f"Post {post_id} cannot be posted; current status: {post.get('status')}")
+        return jsonify({
+            "error": f"Post cannot be posted in current status: {post.get('status')}. Must be one of: {', '.join(valid_statuses)}"
+        }), 400
+
+    # If not approved yet, approve it first
+    if post.get("status") == "pending_approval":
+        metadata = post.get("metadata") or {}
+        history = metadata.setdefault("approval_history", [])
+        history.append(
+            {
+                "action": "approved_and_posted",
+                "timestamp": _current_iso_timestamp(db),
+                "actor": _resolve_actor(),
+            }
+        )
+
+        update_fields = {
+            "status": "scheduled",
+            "metadata": metadata,
+            "updated_at": _current_iso_timestamp(db),
+        }
+
+        if not _update_post_fields(db, post_id, update_fields):
+            return jsonify({"error": "Failed to approve post before posting."}), 500
+
+        # Refresh post data
+        post = _fetch_post(db, post_id)
+
+    # Post to Facebook
+    log_info(f"Manual posting triggered for post {post_id}")
+    result = _post_to_facebook(db, post)
+
+    if result['success']:
+        log_info(f"Post {post_id} successfully posted to Facebook with ID: {result['facebook_post_id']}")
+        return jsonify({
+            "success": True,
+            "message": "Post successfully published to Facebook",
+            "facebook_post_id": result['facebook_post_id'],
+            "post_id": post_id
+        }), 200
+    else:
+        log_error(f"Failed to post {post_id} to Facebook: {result['error']}")
+        return jsonify({
+            "success": False,
+            "error": result['error'],
+            "post_id": post_id
+        }), 500
 
