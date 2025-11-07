@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import pytz
 from utils.logger import log_info, log_error, log_warning
-from .database import SocialMediaDatabase
+from social_media.database import SocialMediaDatabase
 
 
 class FacebookPoster:
