@@ -104,6 +104,17 @@ class SupabaseTable:
         result = self.client._request('PATCH', self.table_name, json=data, params=params)
         return ExecuteResult(result)
 
+    def delete(self):
+        """Delete data (requires filters for safety)."""
+        if not self._filters:
+            raise ValueError(
+                f"Delete operation on table '{self.table_name}' requires at least one filter for safety. "
+                "Use .eq(), .gte(), .lte() or other filters before calling .delete()"
+            )
+        params = self._build_params()
+        result = self.client._request('DELETE', self.table_name, params=params)
+        return ExecuteResult(result)
+
     def execute(self):
         """Execute query."""
         params = self._build_params()
