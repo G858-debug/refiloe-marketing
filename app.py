@@ -2220,6 +2220,231 @@ def delete_look(look_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/looks-compare')
+def looks_compare():
+    """Compare up to 4 different avatar looks side by side"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get all available looks for selection
+        result = supabase_client.table('avatar_looks').select('*').order('created_at', desc=True).execute()
+        looks = result.data if result and hasattr(result, 'data') else []
+
+        log_info(f"Looks compare page loaded with {len(looks)} available looks")
+
+        return render_template('looks_compare.html', looks=looks)
+
+    except Exception as e:
+        log_error(f"Error loading looks compare page: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/looks/compare-generate', methods=['POST'])
+def compare_generate_videos():
+    """Generate test videos for multiple looks with the same script"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.video_generator import VideoGenerator
+
+        data = request.get_json() or {}
+        look_ids = data.get('look_ids', [])
+        script = data.get('script', '')
+        content_type = data.get('content_type', 'test')
+
+        if not look_ids or len(look_ids) < 2:
+            return jsonify({'error': 'At least 2 looks required for comparison'}), 400
+
+        if len(look_ids) > 4:
+            return jsonify({'error': 'Maximum 4 looks allowed for comparison'}), 400
+
+        if not script:
+            return jsonify({'error': 'Script is required'}), 400
+
+        # Get look details
+        result = supabase_client.table('avatar_looks').select('*').in_('id', look_ids).execute()
+        looks = result.data if result and hasattr(result, 'data') else []
+
+        if len(looks) != len(look_ids):
+            return jsonify({'error': 'One or more looks not found'}), 404
+
+        # Initialize video generator
+        video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
+        voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+
+        # Generate videos for each look
+        results = []
+        for look in looks:
+            try:
+                log_info(f"Generating comparison video for look: {look['look_type']}")
+
+                result = video_gen.generate_avatar_video(
+                    script_text=script,
+                    avatar_id=look['photo_avatar_id'],
+                    voice_id=voice_id,
+                    style='educational',
+                    background_music=False,  # Disable for comparison consistency
+                    metadata={
+                        'comparison_test': True,
+                        'look_id': look['id'],
+                        'look_type': look['look_type'],
+                        'content_type': content_type
+                    },
+                    content_text=script,
+                    content_type=content_type
+                )
+
+                if result and result.get('video_url'):
+                    results.append({
+                        'look_id': look['id'],
+                        'look_type': look['look_type'],
+                        'video_url': result['video_url'],
+                        'thumbnail_url': result.get('thumbnail_url'),
+                        'duration': result.get('duration'),
+                        'success': True
+                    })
+                    log_info(f"Video generated successfully for {look['look_type']}")
+                else:
+                    results.append({
+                        'look_id': look['id'],
+                        'look_type': look['look_type'],
+                        'error': 'Video generation failed - no URL returned',
+                        'success': False
+                    })
+                    log_error(f"Video generation failed for {look['look_type']}")
+
+            except Exception as e:
+                log_error(f"Error generating video for look {look['id']}: {str(e)}")
+                results.append({
+                    'look_id': look['id'],
+                    'look_type': look['look_type'],
+                    'error': str(e),
+                    'success': False
+                })
+
+        # Check if at least some videos succeeded
+        successful_results = [r for r in results if r.get('success')]
+
+        if not successful_results:
+            return jsonify({
+                'success': False,
+                'error': 'All video generations failed',
+                'results': results
+            }), 500
+
+        log_info(f"Comparison videos generated: {len(successful_results)}/{len(results)} succeeded")
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'successful_count': len(successful_results),
+            'total_count': len(results)
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error in compare video generation: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/looks/save-rating', methods=['POST'])
+def save_look_rating():
+    """Save user rating/preference for a look in a specific content type"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        data = request.get_json() or {}
+        look_id = data.get('look_id')
+        content_type = data.get('content_type')
+        rating = data.get('rating')
+        notes = data.get('notes', '')
+
+        if not look_id or not content_type:
+            return jsonify({'error': 'look_id and content_type are required'}), 400
+
+        if rating is not None and (not isinstance(rating, (int, float)) or rating < 1 or rating > 5):
+            return jsonify({'error': 'rating must be between 1 and 5'}), 400
+
+        # Create or update rating
+        record_id = str(uuid.uuid4())
+        db_record = {
+            'id': record_id,
+            'look_id': look_id,
+            'content_type': content_type,
+            'rating': rating,
+            'notes': notes,
+            'created_at': datetime.now(SA_TZ).isoformat(),
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Check if rating already exists for this look + content_type combo
+        existing = supabase_client.table('look_ratings').select('*').eq('look_id', look_id).eq('content_type', content_type).execute()
+
+        if existing.data:
+            # Update existing rating
+            result = supabase_client.table('look_ratings').update({
+                'rating': rating,
+                'notes': notes,
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('look_id', look_id).eq('content_type', content_type).execute()
+
+            log_info(f"Updated rating for look {look_id}, content_type {content_type}")
+        else:
+            # Insert new rating
+            result = supabase_client.table('look_ratings').insert(db_record).execute()
+            log_info(f"Created new rating for look {look_id}, content_type {content_type}")
+
+        if result and hasattr(result, 'data'):
+            return jsonify({
+                'success': True,
+                'message': 'Rating saved successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save rating'
+            }), 500
+
+    except Exception as e:
+        log_error(f"Error saving look rating: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/looks/get-ratings', methods=['GET'])
+def get_look_ratings():
+    """Get ratings for looks, optionally filtered by content_type"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        content_type = request.args.get('content_type')
+
+        query = supabase_client.table('look_ratings').select('*')
+
+        if content_type:
+            query = query.eq('content_type', content_type)
+
+        result = query.execute()
+        ratings = result.data if result and hasattr(result, 'data') else []
+
+        return jsonify({
+            'success': True,
+            'ratings': ratings
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error fetching look ratings: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
