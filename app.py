@@ -26,6 +26,7 @@ from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availab
 from social_media.approval_routes import approval_bp
 from social_media.analytics_routes import analytics_bp
 from social_media.scheduler import SocialMediaScheduler, create_social_media_scheduler
+from social_media.looks_generator import LooksGenerator, REFILOE_LOOKS
 
 
 load_dotenv()
@@ -1147,6 +1148,100 @@ def test_video_form():
     </html>
     '''
     return html
+
+
+@app.route('/api/generate-look', methods=['POST'])
+def generate_look():
+    """Generate a new avatar look with custom outfit/environment"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        log_info("=== Starting avatar look generation ===")
+
+        # Get request data
+        data = request.get_json() or {}
+
+        look_type = data.get('look_type')
+        custom_prompt = data.get('custom_prompt')
+        outfit = data.get('outfit')
+        environment = data.get('environment')
+        pose = data.get('pose')
+        mood = data.get('mood')
+        save_to_db = data.get('save_to_db', True)
+
+        # Build custom prompt from components if provided
+        prompt_to_use = None
+
+        if custom_prompt:
+            prompt_to_use = custom_prompt
+            log_info(f"Using custom prompt: {prompt_to_use[:100]}...")
+        elif outfit or environment or pose or mood:
+            # Build prompt from individual components
+            # Format: "Person wearing [outfit], [pose], in [environment], [mood] expression"
+            parts = []
+            if outfit:
+                parts.append(f"Person wearing {outfit}")
+            if pose:
+                parts.append(pose)
+            if environment:
+                parts.append(f"in {environment}")
+            if mood:
+                parts.append(f"{mood} expression")
+
+            prompt_to_use = ", ".join(parts)
+            log_info(f"Built custom prompt from components: {prompt_to_use}")
+        elif look_type:
+            # Validate look_type
+            if look_type not in REFILOE_LOOKS:
+                return jsonify({
+                    'success': False,
+                    'error': f"Invalid look_type '{look_type}'. Available types: {list(REFILOE_LOOKS.keys())}"
+                }), 400
+            log_info(f"Using predefined look type: {look_type}")
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Either look_type, custom_prompt, or component fields (outfit, environment, pose, mood) required'
+            }), 400
+
+        # Initialize LooksGenerator
+        looks_gen = LooksGenerator(supabase_client=supabase_client)
+
+        # Generate the look
+        log_info(f"Generating look with type={look_type}, has_custom_prompt={prompt_to_use is not None}")
+
+        result = looks_gen.generate_avatar_look(
+            look_type=look_type or 'studio_portrait',
+            custom_prompt=prompt_to_use,
+        )
+
+        # Save to database if requested
+        if save_to_db and result:
+            record_id = looks_gen.save_look_to_database(result)
+            result['database_record_id'] = record_id
+            log_info(f"Look saved to database with ID: {record_id}")
+
+        log_info(f"Avatar look generation completed: look_id={result.get('look_id')}, photo_avatar_id={result.get('photo_avatar_id')}")
+
+        return jsonify({
+            'success': True,
+            'look_id': result.get('look_id'),
+            'photo_avatar_id': result.get('photo_avatar_id'),
+            'preview_url': result.get('preview_url'),
+            'prompt_used': result.get('prompt'),
+            'look_type': result.get('look_type'),
+            'database_record_id': result.get('database_record_id'),
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error generating avatar look: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/test/generate-video', methods=['POST'])
