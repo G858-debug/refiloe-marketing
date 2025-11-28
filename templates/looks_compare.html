@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compare Avatar Looks - Refiloe Marketing</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    >
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+
+      .btn-refiloe {
+        background-color: #D4A574;
+        border-color: #D4A574;
+        color: white;
+      }
+
+      .btn-refiloe:hover {
+        background-color: #8B7355;
+        border-color: #8B7355;
+        color: white;
+      }
+
+      .btn-refiloe:disabled {
+        background-color: #D4A574;
+        opacity: 0.6;
+      }
+
+      .look-selection-card {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: white;
+        transition: all 0.2s;
+      }
+
+      .look-selection-card.selected {
+        border-color: #D4A574;
+        background-color: #F5E6D3;
+      }
+
+      .look-preview-img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 6px;
+        background-color: #e9ecef;
+      }
+
+      .no-preview {
+        width: 100%;
+        height: 150px;
+        background: linear-gradient(135deg, #D4A574 0%, #8B7355 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+        border-radius: 6px;
+      }
+
+      .comparison-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+
+      .comparison-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.05);
+      }
+
+      .comparison-card .video-container {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* 16:9 aspect ratio */
+        background: #000;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+      }
+
+      .comparison-card .video-container video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .rating-stars {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        margin: 1rem 0;
+      }
+
+      .rating-stars .star {
+        font-size: 2rem;
+        cursor: pointer;
+        color: #ddd;
+        transition: color 0.2s;
+      }
+
+      .rating-stars .star:hover,
+      .rating-stars .star.active {
+        color: #ffc107;
+      }
+
+      .look-type-badge {
+        background-color: #D4A574;
+        color: white;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+      }
+
+      .detail-table {
+        font-size: 0.875rem;
+      }
+
+      .detail-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .detail-table td:first-child {
+        font-weight: bold;
+        color: #6c757d;
+        width: 40%;
+      }
+
+      .progress-container {
+        display: none;
+        margin-top: 1rem;
+        padding: 1.5rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.05);
+      }
+
+      .progress-container.show {
+        display: block;
+      }
+
+      .video-placeholder {
+        width: 100%;
+        padding-bottom: 56.25%;
+        background: #f0f0f0;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+
+      .video-placeholder .spinner-border {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .alert-refiloe {
+        background-color: #F5E6D3;
+        border-color: #D4A574;
+        color: #8B7355;
+      }
+
+      .best-performer {
+        border: 3px solid #28a745 !important;
+        box-shadow: 0 0 20px rgba(40, 167, 69, 0.3);
+      }
+
+      .best-performer-badge {
+        background-color: #28a745;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-weight: bold;
+        display: inline-block;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/">Refiloe Marketing</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="/approval/pending">Pending Posts</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/looks-gallery">Avatar Looks</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="/looks-compare">Compare Looks</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/test-video-form">Generate Video</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container my-5">
+      <div class="mb-4">
+        <h1 class="h3 mb-1">Compare Avatar Looks</h1>
+        <p class="text-muted mb-0">Test different avatar looks side-by-side to find what works best for each content type.</p>
+      </div>
+
+      <!-- Step 1: Select Looks -->
+      <div class="card mb-4">
+        <div class="card-header bg-white">
+          <h5 class="mb-0">Step 1: Select 2-4 Looks to Compare</h5>
+        </div>
+        <div class="card-body">
+          <div id="lookSelectionContainer" class="row">
+            {% if looks %}
+              {% for look in looks %}
+                <div class="col-md-6 col-lg-3 mb-3">
+                  <div class="look-selection-card" data-look-id="{{ look.id }}" onclick="toggleLookSelection(this)">
+                    {% if look.preview_url %}
+                      <img src="{{ look.preview_url }}" class="look-preview-img" alt="{{ look.look_type }}">
+                    {% else %}
+                      <div class="no-preview">
+                        <span>🎨</span>
+                      </div>
+                    {% endif %}
+                    <div class="mt-2">
+                      <span class="look-type-badge d-inline-block mb-2">{{ look.look_type.replace('_', ' ') if look.look_type else 'Unknown' }}</span>
+                      <p class="mb-1 small text-muted">
+                        {{ look.prompt[:80] if look.prompt else 'No description' }}{{ '...' if look.prompt and look.prompt|length > 80 else '' }}
+                      </p>
+                      <small class="text-muted">Created: {{ look.created_at[:10] if look.created_at else 'Unknown' }}</small>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="col-12">
+                <div class="alert alert-refiloe" role="alert">
+                  <h5 class="alert-heading">No looks available</h5>
+                  <p class="mb-0">You need to generate some avatar looks before you can compare them. <a href="/test-video-form" class="alert-link">Create your first look</a> to get started!</p>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+          <div id="selectionFeedback" class="mt-3 alert alert-refiloe d-none">
+            <span id="selectionCount">0</span> looks selected. Select between 2 and 4 looks.
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Test Script & Content Type -->
+      <div class="card mb-4">
+        <div class="card-header bg-white">
+          <h5 class="mb-0">Step 2: Enter Test Script</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="contentType" class="form-label">Content Type</label>
+            <select class="form-select" id="contentType">
+              <option value="admin_tips">Admin Tips</option>
+              <option value="motivation">Motivation</option>
+              <option value="fitness">Fitness</option>
+              <option value="nutrition">Nutrition</option>
+              <option value="client_success">Client Success</option>
+              <option value="educational">Educational</option>
+              <option value="announcement">Announcement</option>
+              <option value="test">General Test</option>
+            </select>
+            <div class="form-text">Select the type of content to help track which looks perform best for each category.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="testScript" class="form-label">Test Script</label>
+            <textarea class="form-control" id="testScript" rows="4" placeholder="Enter the script that will be used for all test videos...">Hey trainers! Want to save 5 hours every week on admin tasks? Let me show you how Refiloe can automate your bookings and client management, so you can focus on what you love - training!</textarea>
+            <div class="form-text">This script will be used for all comparison videos to ensure fair comparison.</div>
+          </div>
+
+          <button class="btn btn-refiloe btn-lg w-100" id="generateBtn" onclick="generateComparisonVideos()" disabled>
+            🎬 Generate Comparison Videos
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress Indicator -->
+      <div id="progressContainer" class="progress-container">
+        <h5 class="mb-3">Generating Videos...</h5>
+        <div class="progress mb-3">
+          <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+        </div>
+        <div id="progressText" class="text-muted">Starting...</div>
+      </div>
+
+      <!-- Step 3: Compare Results -->
+      <div id="resultsContainer" style="display: none;">
+        <div class="card">
+          <div class="card-header bg-white">
+            <h5 class="mb-0">Step 3: Compare & Rate</h5>
+          </div>
+          <div class="card-body">
+            <div id="comparisonGrid" class="comparison-grid"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      let selectedLooks = [];
+      let comparisonResults = [];
+      let lookRatings = {};
+
+      // Toggle look selection
+      function toggleLookSelection(card) {
+        const lookId = card.getAttribute('data-look-id');
+        const index = selectedLooks.indexOf(lookId);
+
+        if (index > -1) {
+          // Deselect
+          selectedLooks.splice(index, 1);
+          card.classList.remove('selected');
+        } else {
+          // Select (max 4)
+          if (selectedLooks.length >= 4) {
+            alert('You can select a maximum of 4 looks for comparison.');
+            return;
+          }
+          selectedLooks.push(lookId);
+          card.classList.add('selected');
+        }
+
+        updateSelectionFeedback();
+      }
+
+      // Update selection feedback
+      function updateSelectionFeedback() {
+        const feedback = document.getElementById('selectionFeedback');
+        const countSpan = document.getElementById('selectionCount');
+        const generateBtn = document.getElementById('generateBtn');
+
+        countSpan.textContent = selectedLooks.length;
+
+        if (selectedLooks.length === 0) {
+          feedback.classList.add('d-none');
+          generateBtn.disabled = true;
+        } else {
+          feedback.classList.remove('d-none');
+          if (selectedLooks.length >= 2 && selectedLooks.length <= 4) {
+            feedback.classList.remove('alert-refiloe');
+            feedback.classList.add('alert-success');
+            generateBtn.disabled = false;
+          } else {
+            feedback.classList.remove('alert-success');
+            feedback.classList.add('alert-refiloe');
+            generateBtn.disabled = true;
+          }
+        }
+      }
+
+      // Generate comparison videos
+      async function generateComparisonVideos() {
+        const script = document.getElementById('testScript').value.trim();
+        const contentType = document.getElementById('contentType').value;
+
+        if (!script) {
+          alert('Please enter a test script.');
+          return;
+        }
+
+        if (selectedLooks.length < 2 || selectedLooks.length > 4) {
+          alert('Please select between 2 and 4 looks.');
+          return;
+        }
+
+        // Show progress
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const generateBtn = document.getElementById('generateBtn');
+
+        progressContainer.classList.add('show');
+        generateBtn.disabled = true;
+
+        progressText.textContent = `Generating ${selectedLooks.length} videos... This may take 3-5 minutes per video.`;
+        progressBar.style.width = '10%';
+
+        try {
+          const response = await fetch('/api/looks/compare-generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              look_ids: selectedLooks,
+              script: script,
+              content_type: contentType
+            })
+          });
+
+          const data = await response.json();
+
+          progressBar.style.width = '100%';
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Video generation failed');
+          }
+
+          progressText.textContent = `Successfully generated ${data.successful_count} out of ${data.total_count} videos!`;
+
+          // Store results
+          comparisonResults = data.results;
+
+          // Display results
+          setTimeout(() => {
+            displayComparisonResults(contentType);
+            progressContainer.classList.remove('show');
+            generateBtn.disabled = false;
+          }, 1500);
+
+        } catch (error) {
+          console.error('Error:', error);
+          progressText.textContent = 'Error: ' + error.message;
+          progressBar.classList.add('bg-danger');
+          generateBtn.disabled = false;
+
+          setTimeout(() => {
+            progressContainer.classList.remove('show');
+            progressBar.classList.remove('bg-danger');
+          }, 3000);
+        }
+      }
+
+      // Display comparison results
+      function displayComparisonResults(contentType) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        const comparisonGrid = document.getElementById('comparisonGrid');
+
+        // Clear previous results
+        comparisonGrid.innerHTML = '';
+
+        // Get look details from selected cards
+        const lookDetails = {};
+        selectedLooks.forEach(lookId => {
+          const card = document.querySelector(`[data-look-id="${lookId}"]`);
+          if (card) {
+            const lookType = card.querySelector('.look-type-badge').textContent;
+            const lookDescription = card.querySelector('.small.text-muted').textContent;
+            const lookImage = card.querySelector('img')?.src || null;
+            lookDetails[lookId] = {
+              type: lookType,
+              description: lookDescription,
+              image: lookImage
+            };
+          }
+        });
+
+        // Create comparison cards
+        comparisonResults.forEach((result, index) => {
+          const card = document.createElement('div');
+          card.className = 'comparison-card';
+          card.setAttribute('data-look-id', result.look_id);
+
+          const details = lookDetails[result.look_id] || {};
+
+          let cardContent = `
+            <div class="text-center mb-3">
+              <span class="look-type-badge">${result.look_type || details.type}</span>
+            </div>
+          `;
+
+          if (result.success) {
+            cardContent += `
+              <div class="video-container">
+                <video controls>
+                  <source src="${result.video_url}" type="video/mp4">
+                  Your browser does not support video playback.
+                </video>
+              </div>
+
+              <div class="rating-section">
+                <h6 class="text-center mb-2">Rate This Look</h6>
+                <div class="rating-stars" data-look-id="${result.look_id}">
+                  ${[1, 2, 3, 4, 5].map(star =>
+                    `<span class="star" data-rating="${star}" onclick="rateLook('${result.look_id}', ${star}, '${contentType}')">★</span>`
+                  ).join('')}
+                </div>
+                <div class="text-center">
+                  <small class="text-muted" id="rating-feedback-${result.look_id}">Click to rate</small>
+                </div>
+              </div>
+
+              <div class="mt-3">
+                <textarea class="form-control form-control-sm" id="notes-${result.look_id}" placeholder="Add notes about this look's performance..." rows="2"></textarea>
+                <button class="btn btn-sm btn-refiloe mt-2 w-100" onclick="saveNotes('${result.look_id}', '${contentType}')">Save Notes</button>
+              </div>
+
+              <table class="detail-table w-100 mt-3">
+                <tr>
+                  <td>Duration:</td>
+                  <td>${result.duration ? Math.round(result.duration) + 's' : 'N/A'}</td>
+                </tr>
+                <tr>
+                  <td>Video URL:</td>
+                  <td><a href="${result.video_url}" target="_blank" class="text-truncate d-inline-block" style="max-width: 150px;">View</a></td>
+                </tr>
+              </table>
+            `;
+          } else {
+            cardContent += `
+              <div class="alert alert-danger">
+                <strong>Generation Failed</strong><br>
+                ${result.error || 'Unknown error'}
+              </div>
+            `;
+          }
+
+          card.innerHTML = cardContent;
+          comparisonGrid.appendChild(card);
+        });
+
+        // Load existing ratings
+        loadExistingRatings(contentType);
+
+        // Show results
+        resultsContainer.style.display = 'block';
+        resultsContainer.scrollIntoView({ behavior: 'smooth' });
+      }
+
+      // Rate a look
+      async function rateLook(lookId, rating, contentType) {
+        // Update UI
+        const starsContainer = document.querySelector(`.rating-stars[data-look-id="${lookId}"]`);
+        const stars = starsContainer.querySelectorAll('.star');
+
+        stars.forEach((star, index) => {
+          if (index < rating) {
+            star.classList.add('active');
+          } else {
+            star.classList.remove('active');
+          }
+        });
+
+        // Store rating
+        lookRatings[lookId] = rating;
+
+        // Save to backend
+        try {
+          const response = await fetch('/api/looks/save-rating', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              look_id: lookId,
+              content_type: contentType,
+              rating: rating,
+              notes: document.getElementById(`notes-${lookId}`)?.value || ''
+            })
+          });
+
+          const data = await response.json();
+
+          const feedback = document.getElementById(`rating-feedback-${lookId}`);
+          if (data.success) {
+            feedback.textContent = `Rated ${rating}/5 ⭐`;
+            feedback.className = 'text-success';
+
+            // Check if this is the highest rated look
+            updateBestPerformer();
+          } else {
+            feedback.textContent = 'Failed to save rating';
+            feedback.className = 'text-danger';
+          }
+
+        } catch (error) {
+          console.error('Error saving rating:', error);
+          const feedback = document.getElementById(`rating-feedback-${lookId}`);
+          feedback.textContent = 'Error saving rating';
+          feedback.className = 'text-danger';
+        }
+      }
+
+      // Save notes for a look
+      async function saveNotes(lookId, contentType) {
+        const notes = document.getElementById(`notes-${lookId}`).value;
+        const rating = lookRatings[lookId] || 0;
+
+        try {
+          const response = await fetch('/api/looks/save-rating', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              look_id: lookId,
+              content_type: contentType,
+              rating: rating,
+              notes: notes
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert('Notes saved successfully!');
+          } else {
+            alert('Failed to save notes: ' + (data.error || 'Unknown error'));
+          }
+
+        } catch (error) {
+          console.error('Error saving notes:', error);
+          alert('Error saving notes: ' + error.message);
+        }
+      }
+
+      // Load existing ratings for this content type
+      async function loadExistingRatings(contentType) {
+        try {
+          const response = await fetch(`/api/looks/get-ratings?content_type=${contentType}`);
+          const data = await response.json();
+
+          if (data.success && data.ratings) {
+            data.ratings.forEach(rating => {
+              if (selectedLooks.includes(rating.look_id)) {
+                // Update UI with existing rating
+                const starsContainer = document.querySelector(`.rating-stars[data-look-id="${rating.look_id}"]`);
+                if (starsContainer) {
+                  const stars = starsContainer.querySelectorAll('.star');
+                  stars.forEach((star, index) => {
+                    if (index < rating.rating) {
+                      star.classList.add('active');
+                    }
+                  });
+
+                  const feedback = document.getElementById(`rating-feedback-${rating.look_id}`);
+                  if (feedback) {
+                    feedback.textContent = `Rated ${rating.rating}/5 ⭐`;
+                    feedback.className = 'text-success';
+                  }
+
+                  lookRatings[rating.look_id] = rating.rating;
+                }
+
+                // Load notes
+                const notesField = document.getElementById(`notes-${rating.look_id}`);
+                if (notesField && rating.notes) {
+                  notesField.value = rating.notes;
+                }
+              }
+            });
+
+            updateBestPerformer();
+          }
+
+        } catch (error) {
+          console.error('Error loading ratings:', error);
+        }
+      }
+
+      // Highlight the best performing look
+      function updateBestPerformer() {
+        if (Object.keys(lookRatings).length === 0) return;
+
+        // Find highest rated look
+        let bestLookId = null;
+        let highestRating = 0;
+
+        for (const [lookId, rating] of Object.entries(lookRatings)) {
+          if (rating > highestRating) {
+            highestRating = rating;
+            bestLookId = lookId;
+          }
+        }
+
+        // Remove previous best performer highlighting
+        document.querySelectorAll('.comparison-card').forEach(card => {
+          card.classList.remove('best-performer');
+          const badge = card.querySelector('.best-performer-badge');
+          if (badge) badge.remove();
+        });
+
+        // Highlight best performer
+        if (bestLookId && highestRating > 0) {
+          const bestCard = document.querySelector(`.comparison-card[data-look-id="${bestLookId}"]`);
+          if (bestCard) {
+            bestCard.classList.add('best-performer');
+
+            const badge = document.createElement('div');
+            badge.className = 'best-performer-badge';
+            badge.textContent = '🏆 Best Performer';
+            bestCard.insertBefore(badge, bestCard.firstChild);
+          }
+        }
+      }
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', function() {
+        updateSelectionFeedback();
+      });
+    </script>
+  </body>
+</html>
