@@ -1849,124 +1849,280 @@ def preview_look():
 @app.route('/api/test/generate-video', methods=['POST'])
 @app.route('/api/test-video', methods=['POST'])
 def test_generate_video():
-    """Manually trigger a test video generation"""
+    """Manually trigger a test video generation with optional inline look generation"""
     if not supabase_client:
         return jsonify({'error': 'Supabase not initialized'}), 503
-    
+
     try:
         log_info("=== Starting test video generation ===")
-        
+
         from social_media.video_generator import VideoGenerator
         import os
-        
-        # Initialize video generator
-        log_info("Initializing VideoGenerator...")
-        video_gen = VideoGenerator(
-            config_path='social_media/config.yaml',
-            supabase_client=supabase_client
-        )
-        log_info("VideoGenerator initialized successfully")
-        
+
         # Get request data
         data = request.get_json() or {}
         script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
 
-        # Get voice and avatar from request or environment
-        voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
-        avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
-        content_theme = data.get('content_theme')  # Optional theme for avatar selection
+        # Look generation parameters
+        generate_look = data.get('generate_look', False)
+        look_params = data.get('look_params', {})
 
-        log_info(f"Using avatar: {avatar_id}, voice: {voice_id}, theme: {content_theme}")
-        log_info(f"Script: {script[:100]}...")
-
-        # Generate video
-        log_info("Calling generate_avatar_video...")
-        result = video_gen.generate_avatar_video(
-            script_text=script,
-            avatar_id=avatar_id,
-            voice_id=voice_id,
-            style='educational',
-            background_music=True,
-            metadata={
-                'test': True,
-                'purpose': 'production_test',
-                'triggered_by': 'api',
-                'content_theme': content_theme
-            },
-            content_text=script,
-            content_type=content_theme
-        )
-        
-        log_info(f"Video generation result: {result}")
-        
-        # Check if we got a video URL
-        video_url = result.get('video_url')
-        video_id = result.get('video_id')
-        
-        if not video_url:
-            log_error(f"No video URL in result: {result}")
-            return jsonify({
-                'success': False,
-                'error': 'Video generated but no URL returned',
-                'result': result
-            }), 500
-        
-        log_info(f"Video URL obtained: {video_url}")
-        
-        # Create post with pending_approval status
-        from datetime import datetime, timedelta
-        scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
-        
-        post_data = {
-            'post_type': 'video',  # Changed from 'format' to 'post_type'
-            'platform': 'facebook',
-            'status': 'pending_approval',
-            'scheduled_time': scheduled_time.isoformat(),
-            'video_url': video_url,
-            'thumbnail_url': result.get('thumbnail_url'),
-            'video_duration': int(result.get('duration', 0)),
-            'video_type': 'test_video',
-            'video_style': result.get('style', 'educational'),
-            'content': script,  # Changed from content_text
-            'title': f'Test video - {script[:100]}...',  # Add explicit title
-            'content_theme': 'test',
-            'has_captions': True,
-            'completion_rate': 0,
-            'avg_watch_time': 0
+        # Response structure
+        response_data = {
+            'success': True,
+            'look_generation': None,
+            'video_generation': None
         }
 
-        log_info(f"Post data being saved: {json.dumps(post_data, indent=2, default=str)}")
-        log_info(f"Saving post to database: {post_data}")
-        
-        # Save to database
-        from social_media.database import SocialMediaDatabase
-        db = SocialMediaDatabase(supabase_client)
-        post_id = db.save_post(post_data)
-        
-        log_info(f"Post saved with ID: {post_id}")
-        
-        if not post_id:
-            log_error("Failed to save post - no ID returned")
-            return jsonify({
-                'success': False,
-                'error': 'Failed to save post to database',
+        # Variable to hold the avatar_id to use for video generation
+        avatar_id_for_video = None
+
+        # STEP 1: Generate look if requested
+        if generate_look:
+            try:
+                log_info("=== Starting inline avatar look generation ===")
+                log_info(f"Look generation parameters: {look_params}")
+
+                # Initialize LooksGenerator
+                looks_gen = LooksGenerator(supabase_client=supabase_client)
+
+                # Extract look parameters
+                look_type = look_params.get('look_type', 'studio_portrait')
+                custom_prompt = look_params.get('custom_prompt')
+                outfit = look_params.get('outfit')
+                environment = look_params.get('environment')
+                pose = look_params.get('pose')
+                mood = look_params.get('mood')
+
+                # Build custom prompt from components if provided
+                prompt_to_use = None
+                if custom_prompt:
+                    prompt_to_use = custom_prompt
+                elif outfit or environment or pose or mood:
+                    # Build prompt from individual components
+                    parts = []
+                    if outfit:
+                        parts.append(f"Person wearing {outfit}")
+                    if pose:
+                        parts.append(pose)
+                    if environment:
+                        parts.append(f"in {environment}")
+                    if mood:
+                        parts.append(f"{mood} expression")
+                    prompt_to_use = ", ".join(parts)
+
+                log_info(f"Generating look with type='{look_type}', has_custom_prompt={prompt_to_use is not None}")
+
+                # Generate the look
+                look_result = looks_gen.generate_avatar_look(
+                    look_type=look_type,
+                    custom_prompt=prompt_to_use,
+                    metadata={
+                        'purpose': 'inline_video_generation',
+                        'triggered_by': 'api.test_video',
+                    }
+                )
+
+                # Save to database
+                record_id = looks_gen.save_look_to_database(look_result)
+                look_result['database_record_id'] = record_id
+
+                log_info(f"Look generation completed: look_id={look_result.get('look_id')}, photo_avatar_id={look_result.get('photo_avatar_id')}")
+
+                # Store look generation result
+                response_data['look_generation'] = {
+                    'success': True,
+                    'look_id': look_result.get('look_id'),
+                    'photo_avatar_id': look_result.get('photo_avatar_id'),
+                    'preview_url': look_result.get('preview_url'),
+                    'prompt_used': look_result.get('prompt'),
+                    'look_type': look_result.get('look_type'),
+                    'database_record_id': record_id
+                }
+
+                # Use the generated photo_avatar_id for video generation
+                avatar_id_for_video = look_result.get('photo_avatar_id')
+
+                if not avatar_id_for_video:
+                    raise ValueError("Look generation did not return a photo_avatar_id")
+
+                log_info(f"Will use generated avatar_id for video: {avatar_id_for_video}")
+
+            except Exception as look_error:
+                log_error(f"Look generation failed: {str(look_error)}")
+                import traceback
+                log_error(f"Look generation traceback:\n{traceback.format_exc()}")
+
+                # Store look generation error
+                response_data['look_generation'] = {
+                    'success': False,
+                    'error': str(look_error)
+                }
+
+                # Return early if look generation fails
+                response_data['success'] = False
+                response_data['error'] = f"Look generation failed: {str(look_error)}"
+                return jsonify(response_data), 500
+
+        # STEP 2: Generate video
+        try:
+            log_info("=== Starting video generation ===")
+
+            # Initialize video generator
+            log_info("Initializing VideoGenerator...")
+            video_gen = VideoGenerator(
+                config_path='social_media/config.yaml',
+                supabase_client=supabase_client
+            )
+            log_info("VideoGenerator initialized successfully")
+
+            # Determine avatar_id to use
+            if avatar_id_for_video:
+                # Use the generated look's avatar_id
+                avatar_id = avatar_id_for_video
+                log_info(f"Using generated look avatar_id: {avatar_id}")
+            else:
+                # Use provided avatar_id or fall back to environment variable
+                avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
+                log_info(f"Using provided/default avatar_id: {avatar_id}")
+
+            # Get voice and content theme
+            voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+            content_theme = data.get('content_theme')
+
+            log_info(f"Video generation parameters - avatar: {avatar_id}, voice: {voice_id}, theme: {content_theme}")
+            log_info(f"Script: {script[:100]}...")
+
+            # Generate video
+            log_info("Calling generate_avatar_video...")
+            result = video_gen.generate_avatar_video(
+                script_text=script,
+                avatar_id=avatar_id,
+                voice_id=voice_id,
+                style='educational',
+                background_music=True,
+                metadata={
+                    'test': True,
+                    'purpose': 'production_test',
+                    'triggered_by': 'api',
+                    'content_theme': content_theme,
+                    'generated_look': generate_look,
+                    'look_id': response_data['look_generation']['look_id'] if response_data['look_generation'] else None
+                },
+                content_text=script,
+                content_type=content_theme
+            )
+
+            log_info(f"Video generation result: {result}")
+
+            # Check if we got a video URL
+            video_url = result.get('video_url')
+            video_id = result.get('video_id')
+
+            if not video_url:
+                log_error(f"No video URL in result: {result}")
+                raise ValueError('Video generated but no URL returned')
+
+            log_info(f"Video URL obtained: {video_url}")
+
+            # Create post with pending_approval status
+            from datetime import datetime, timedelta
+            scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
+
+            post_data = {
+                'post_type': 'video',
+                'platform': 'facebook',
+                'status': 'pending_approval',
+                'scheduled_time': scheduled_time.isoformat(),
                 'video_url': video_url,
-                'video_id': video_id
-            }), 500
-        
-        log_info("=== Test video generation completed successfully ===")
-        
-        return jsonify({
+                'thumbnail_url': result.get('thumbnail_url'),
+                'video_duration': int(result.get('duration', 0)),
+                'video_type': 'test_video',
+                'video_style': result.get('style', 'educational'),
+                'content': script,
+                'title': f'Test video - {script[:100]}...',
+                'content_theme': content_theme or 'test',
+                'has_captions': True,
+                'completion_rate': 0,
+                'avg_watch_time': 0
+            }
+
+            log_info(f"Post data being saved: {json.dumps(post_data, indent=2, default=str)}")
+
+            # Save to database
+            from social_media.database import SocialMediaDatabase
+            db = SocialMediaDatabase(supabase_client)
+            post_id = db.save_post(post_data)
+
+            log_info(f"Post saved with ID: {post_id}")
+
+            if not post_id:
+                log_error("Failed to save post - no ID returned")
+                raise ValueError('Failed to save post to database')
+
+            # Store video generation result
+            response_data['video_generation'] = {
+                'success': True,
+                'video_id': video_id,
+                'video_url': video_url,
+                'thumbnail_url': result.get('thumbnail_url'),
+                'duration': result.get('duration'),
+                'post_id': post_id,
+                'approval_url': f'/approval/view/{post_id}',
+                'avatar_id_used': avatar_id
+            }
+
+            log_info("=== Video generation completed successfully ===")
+
+        except Exception as video_error:
+            log_error(f"Video generation failed: {str(video_error)}")
+            import traceback
+            log_error(f"Video generation traceback:\n{traceback.format_exc()}")
+
+            # Store video generation error
+            response_data['video_generation'] = {
+                'success': False,
+                'error': str(video_error)
+            }
+
+            # Determine overall success based on what was requested
+            if generate_look:
+                # Look succeeded, video failed - partial success
+                response_data['success'] = False
+                response_data['error'] = f"Video generation failed (look generation succeeded): {str(video_error)}"
+                response_data['partial_success'] = True
+                return jsonify(response_data), 500
+            else:
+                # Only video was requested and it failed
+                response_data['success'] = False
+                response_data['error'] = f"Video generation failed: {str(video_error)}"
+                return jsonify(response_data), 500
+
+        # SUCCESS: Build final response
+        log_info("=== Test video generation workflow completed successfully ===")
+
+        final_response = {
             'success': True,
-            'video_id': video_id,
-            'video_url': video_url,
-            'post_id': post_id,
-            'message': 'Video generated successfully! Check /approval/pending to review.',
-            'approval_url': f'/approval/view/{post_id}'
-        }), 200
-        
+            'message': 'Video generated successfully! Check /approval/pending to review.'
+        }
+
+        # Include look generation data if it was performed
+        if response_data['look_generation']:
+            final_response['look_generation'] = response_data['look_generation']
+
+        # Include video generation data
+        if response_data['video_generation']:
+            final_response['video_generation'] = response_data['video_generation']
+            # Maintain backward compatibility with old response format
+            final_response['video_id'] = response_data['video_generation']['video_id']
+            final_response['video_url'] = response_data['video_generation']['video_url']
+            final_response['post_id'] = response_data['video_generation']['post_id']
+            final_response['approval_url'] = response_data['video_generation']['approval_url']
+
+        return jsonify(final_response), 200
+
     except Exception as e:
-        log_error(f"Error generating test video: {str(e)}")
+        log_error(f"Error in test video generation: {str(e)}")
         import traceback
         error_traceback = traceback.format_exc()
         log_error(f"Full traceback:\n{error_traceback}")
