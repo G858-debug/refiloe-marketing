@@ -968,7 +968,7 @@ atexit.register(stop_scheduler)
 
 @app.route('/test-video-form')
 def test_video_form():
-    """Enhanced HTML form for testing video generation with avatar selection"""
+    """Enhanced HTML form for testing video generation with avatar selection and look generation"""
     html = '''
     <!DOCTYPE html>
     <html>
@@ -977,7 +977,7 @@ def test_video_form():
         <style>
             body {
                 font-family: Arial, sans-serif;
-                max-width: 700px;
+                max-width: 800px;
                 margin: 50px auto;
                 padding: 20px;
                 background: #f5f5f5;
@@ -991,6 +991,20 @@ def test_video_form():
             h1 {
                 color: #333;
                 margin-bottom: 30px;
+            }
+            h2 {
+                color: #444;
+                font-size: 18px;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #4CAF50;
+            }
+            .form-section {
+                margin-bottom: 30px;
+                padding: 20px;
+                background: #fafafa;
+                border-radius: 6px;
+                border: 1px solid #eee;
             }
             .form-group {
                 margin-bottom: 20px;
@@ -1046,103 +1060,442 @@ def test_video_form():
                 color: #777;
                 margin-top: 5px;
             }
+            /* Collapsible section styles */
+            .collapsible-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                cursor: pointer;
+                padding: 10px 0;
+            }
+            .collapsible-header h2 {
+                margin: 0;
+                border: none;
+                padding: 0;
+            }
+            .collapsible-toggle {
+                font-size: 20px;
+                color: #4CAF50;
+                transition: transform 0.3s;
+            }
+            .collapsible-toggle.open {
+                transform: rotate(180deg);
+            }
+            .collapsible-content {
+                display: none;
+                padding-top: 15px;
+            }
+            .collapsible-content.open {
+                display: block;
+            }
+            /* Radio button styles */
+            .radio-group {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 20px;
+            }
+            .radio-option {
+                display: flex;
+                align-items: center;
+                padding: 12px 20px;
+                border: 2px solid #ddd;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s;
+                flex: 1;
+            }
+            .radio-option:hover {
+                border-color: #4CAF50;
+            }
+            .radio-option.selected {
+                border-color: #4CAF50;
+                background: #e8f5e9;
+            }
+            .radio-option input[type="radio"] {
+                width: auto;
+                margin-right: 10px;
+            }
+            .radio-option label {
+                margin: 0;
+                cursor: pointer;
+            }
+            /* Conditional fields */
+            .conditional-fields {
+                display: none;
+                margin-top: 15px;
+                padding: 15px;
+                background: #fff;
+                border-radius: 4px;
+                border: 1px solid #e0e0e0;
+            }
+            .conditional-fields.show {
+                display: block;
+            }
+            /* Custom look fields */
+            .custom-look-fields {
+                display: none;
+                margin-top: 15px;
+                padding: 15px;
+                background: #f9f9f9;
+                border-radius: 4px;
+                border: 1px dashed #ccc;
+            }
+            .custom-look-fields.show {
+                display: block;
+            }
+            /* Progress indicator styles */
+            .progress-step {
+                display: flex;
+                align-items: center;
+                padding: 8px 0;
+                color: #666;
+            }
+            .progress-step.active {
+                color: #1976D2;
+                font-weight: bold;
+            }
+            .progress-step.complete {
+                color: #4CAF50;
+            }
+            .progress-step .icon {
+                margin-right: 10px;
+                font-size: 16px;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🎥 Test Video Generation</h1>
 
-            <div class="form-group">
-                <label for="script">Script Text:</label>
-                <textarea id="script" placeholder="Enter your video script...">Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly.</textarea>
-                <div class="help-text">The text that will be spoken in the video</div>
+            <!-- SECTION 1: Avatar Look Generation -->
+            <div class="form-section">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <h2>🎨 Generate New Avatar Look (Optional)</h2>
+                    <span class="collapsible-toggle">▼</span>
+                </div>
+                <div class="collapsible-content">
+                    <div class="radio-group">
+                        <div class="radio-option selected" onclick="selectAvatarOption('existing')">
+                            <input type="radio" name="avatar_option" id="use_existing" value="existing" checked>
+                            <label for="use_existing">Use existing avatar</label>
+                        </div>
+                        <div class="radio-option" onclick="selectAvatarOption('generate')">
+                            <input type="radio" name="avatar_option" id="generate_new" value="generate">
+                            <label for="generate_new">Generate new look</label>
+                        </div>
+                    </div>
+
+                    <!-- Look Generation Fields (shown when "Generate new look" is selected) -->
+                    <div id="look_generation_fields" class="conditional-fields">
+                        <div class="form-group">
+                            <label for="look_type">Look Type:</label>
+                            <select id="look_type" onchange="toggleCustomLookFields()">
+                                <option value="gym_trainer">Gym Trainer</option>
+                                <option value="office_professional">Office Professional</option>
+                                <option value="outdoor_wellness">Outdoor Wellness</option>
+                                <option value="nutrition_expert">Nutrition Expert</option>
+                                <option value="yoga_instructor">Yoga Instructor</option>
+                                <option value="motivational_speaker">Motivational Speaker</option>
+                                <option value="home_workout">Home Workout</option>
+                                <option value="podcast_host">Podcast Host</option>
+                                <option value="retreat_leader">Retreat Leader</option>
+                                <option value="studio_portrait">Studio Portrait</option>
+                                <option value="custom">Custom (specify details below)</option>
+                            </select>
+                            <div class="help-text">Select a predefined look or choose 'custom' to specify details</div>
+                        </div>
+
+                        <!-- Custom Look Details (shown only when "custom" is selected) -->
+                        <div id="custom_look_fields" class="custom-look-fields">
+                            <div class="form-group">
+                                <label for="custom_outfit">Outfit:</label>
+                                <textarea id="custom_outfit" placeholder="e.g., Bold purple athleisure matching set with white sneakers"></textarea>
+                                <div class="help-text">Describe the clothing, colors, and accessories</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="custom_environment">Environment:</label>
+                                <textarea id="custom_environment" placeholder="e.g., Modern gym with large windows, city skyline visible, motivational quotes on walls"></textarea>
+                                <div class="help-text">Describe the setting and background</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="custom_pose">Pose:</label>
+                                <input type="text" id="custom_pose" placeholder="e.g., Standing confidently with shoulders back, arms crossed">
+                                <div class="help-text">Describe body language and positioning</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="custom_mood">Mood:</label>
+                                <select id="custom_mood">
+                                    <option value="confident">Confident</option>
+                                    <option value="warm">Warm</option>
+                                    <option value="energetic">Energetic</option>
+                                    <option value="peaceful">Peaceful</option>
+                                    <option value="professional">Professional</option>
+                                    <option value="inspiring">Inspiring</option>
+                                    <option value="conversational">Conversational</option>
+                                    <option value="focused">Focused</option>
+                                </select>
+                                <div class="help-text">Select the emotional tone/expression</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="content_theme">Content Theme:</label>
-                <select id="content_theme">
-                    <option value="">-- Auto-detect from script --</option>
-                    <option value="professional">Professional</option>
-                    <option value="casual">Casual/Friendly</option>
-                    <option value="fitness">Fitness/Workout</option>
-                    <option value="success">Success Story</option>
-                    <option value="educational">Educational</option>
-                    <option value="motivational">Motivational</option>
-                    <option value="community">Community</option>
-                    <option value="announcement">Announcement</option>
-                </select>
-                <div class="help-text">Select a theme to automatically choose the appropriate avatar</div>
+            <!-- SECTION 2: Video Script -->
+            <div class="form-section">
+                <h2>📝 Video Script</h2>
+
+                <div class="form-group">
+                    <label for="script">Script Text:</label>
+                    <textarea id="script" placeholder="Enter your video script...">Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly.</textarea>
+                    <div class="help-text">The text that will be spoken in the video</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="content_theme">Content Theme:</label>
+                    <select id="content_theme">
+                        <option value="">-- Auto-detect from script --</option>
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual/Friendly</option>
+                        <option value="fitness">Fitness/Workout</option>
+                        <option value="success">Success Story</option>
+                        <option value="educational">Educational</option>
+                        <option value="motivational">Motivational</option>
+                        <option value="community">Community</option>
+                        <option value="announcement">Announcement</option>
+                    </select>
+                    <div class="help-text">Select a theme to automatically choose the appropriate avatar</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="voice_id">Voice ID (Optional):</label>
+                    <input type="text" id="voice_id" placeholder="Leave empty for default voice">
+                    <div class="help-text">Optional: Specify a custom HeyGen voice ID</div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label for="avatar_id">Avatar Override (Optional):</label>
-                <input type="text" id="avatar_id" placeholder="e.g., 110f75a397604454ba6f822c68f29949">
-                <div class="help-text">Leave empty to use theme-based selection, or enter a specific HeyGen avatar ID</div>
-            </div>
+            <!-- SECTION 3: Avatar Selection (shown only when "Use existing avatar" is selected) -->
+            <div id="existing_avatar_section" class="form-section">
+                <h2>👤 Avatar Selection</h2>
 
-            <div class="form-group">
-                <label for="voice_id">Voice ID (Optional):</label>
-                <input type="text" id="voice_id" placeholder="Leave empty for default voice">
-                <div class="help-text">Optional: Specify a custom HeyGen voice ID</div>
+                <div class="form-group">
+                    <label for="avatar_id">Avatar ID (Optional):</label>
+                    <input type="text" id="avatar_id" placeholder="e.g., 110f75a397604454ba6f822c68f29949">
+                    <div class="help-text">Leave empty to use theme-based selection, or enter a specific HeyGen avatar ID</div>
+                </div>
             </div>
 
             <button onclick="generateVideo()" id="generateBtn">Generate Video</button>
+
             <div id="result"></div>
         </div>
 
         <script>
+        // Toggle collapsible sections
+        function toggleCollapsible(header) {
+            const content = header.nextElementSibling;
+            const toggle = header.querySelector('.collapsible-toggle');
+            content.classList.toggle('open');
+            toggle.classList.toggle('open');
+        }
+
+        // Select avatar option (existing vs generate new)
+        function selectAvatarOption(option) {
+            // Update radio buttons
+            document.querySelectorAll('.radio-option').forEach(el => el.classList.remove('selected'));
+
+            if (option === 'existing') {
+                document.getElementById('use_existing').checked = true;
+                document.querySelector('.radio-option:first-child').classList.add('selected');
+                document.getElementById('look_generation_fields').classList.remove('show');
+                document.getElementById('existing_avatar_section').style.display = 'block';
+            } else {
+                document.getElementById('generate_new').checked = true;
+                document.querySelector('.radio-option:last-child').classList.add('selected');
+                document.getElementById('look_generation_fields').classList.add('show');
+                document.getElementById('existing_avatar_section').style.display = 'none';
+            }
+        }
+
+        // Toggle custom look fields based on look_type selection
+        function toggleCustomLookFields() {
+            const lookType = document.getElementById('look_type').value;
+            const customFields = document.getElementById('custom_look_fields');
+
+            if (lookType === 'custom') {
+                customFields.classList.add('show');
+            } else {
+                customFields.classList.remove('show');
+            }
+        }
+
+        // Update progress display
+        function updateProgress(steps) {
+            let html = '<div class="progress-steps">';
+            steps.forEach(step => {
+                let iconClass = '';
+                let icon = '○';
+                if (step.status === 'active') {
+                    icon = '⏳';
+                    iconClass = 'active';
+                } else if (step.status === 'complete') {
+                    icon = '✓';
+                    iconClass = 'complete';
+                }
+                html += `<div class="progress-step ${iconClass}"><span class="icon">${icon}</span>${step.text}</div>`;
+            });
+            html += '</div>';
+            return html;
+        }
+
+        // Main video generation function
         async function generateVideo() {
             const resultDiv = document.getElementById('result');
             const generateBtn = document.getElementById('generateBtn');
 
             resultDiv.className = 'show';
-            resultDiv.innerHTML = '⏳ Generating video... This may take a few minutes.';
             generateBtn.disabled = true;
 
+            const useGenerateLook = document.getElementById('generate_new').checked;
+            let avatarIdToUse = null;
+
             try {
+                // Step 1: Generate look if selected
+                if (useGenerateLook) {
+                    resultDiv.innerHTML = updateProgress([
+                        { text: 'Generating custom avatar look... (this may take 2-3 minutes)', status: 'active' },
+                        { text: 'Creating video...', status: 'pending' }
+                    ]);
+
+                    const lookType = document.getElementById('look_type').value;
+                    const lookPayload = {};
+
+                    if (lookType === 'custom') {
+                        // Get custom look details
+                        const outfit = document.getElementById('custom_outfit').value.trim();
+                        const environment = document.getElementById('custom_environment').value.trim();
+                        const pose = document.getElementById('custom_pose').value.trim();
+                        const mood = document.getElementById('custom_mood').value;
+
+                        if (outfit) lookPayload.outfit = outfit;
+                        if (environment) lookPayload.environment = environment;
+                        if (pose) lookPayload.pose = pose;
+                        if (mood) lookPayload.mood = mood;
+                        lookPayload.look_type = 'custom';
+                    } else {
+                        lookPayload.look_type = lookType;
+                    }
+
+                    // Call the generate-look API
+                    const lookResponse = await fetch('/api/generate-look', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(lookPayload)
+                    });
+
+                    const lookData = await lookResponse.json();
+
+                    if (!lookResponse.ok || !lookData.success) {
+                        throw new Error(lookData.error || 'Failed to generate avatar look');
+                    }
+
+                    avatarIdToUse = lookData.photo_avatar_id;
+
+                    resultDiv.innerHTML = updateProgress([
+                        { text: 'Look generated successfully!', status: 'complete' },
+                        { text: 'Creating video... (this may take 3-5 minutes)', status: 'active' }
+                    ]);
+
+                    // Add look preview if available
+                    if (lookData.preview_url) {
+                        resultDiv.innerHTML += `
+                            <div style="margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 4px;">
+                                <strong>Generated Look Preview:</strong><br>
+                                <img src="${lookData.preview_url}" style="max-width: 200px; border-radius: 4px; margin-top: 10px;">
+                            </div>
+                        `;
+                    }
+                } else {
+                    // Using existing avatar
+                    avatarIdToUse = document.getElementById('avatar_id').value.trim() || null;
+
+                    resultDiv.innerHTML = updateProgress([
+                        { text: 'Generating video... (this may take 3-5 minutes)', status: 'active' }
+                    ]);
+                }
+
+                // Step 2: Generate the video
                 const script = document.getElementById('script').value;
                 const contentTheme = document.getElementById('content_theme').value;
-                const avatarId = document.getElementById('avatar_id').value;
                 const voiceId = document.getElementById('voice_id').value;
 
-                const payload = {
+                const videoPayload = {
                     script: script
                 };
 
                 if (contentTheme) {
-                    payload.content_theme = contentTheme;
+                    videoPayload.content_theme = contentTheme;
                 }
 
-                if (avatarId) {
-                    payload.avatar_id = avatarId;
+                if (avatarIdToUse) {
+                    videoPayload.avatar_id = avatarIdToUse;
                 }
 
                 if (voiceId) {
-                    payload.voice_id = voiceId;
+                    videoPayload.voice_id = voiceId;
                 }
 
-                const response = await fetch('/api/test-video', {
+                const videoResponse = await fetch('/api/test-video', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(videoPayload)
                 });
 
-                const data = await response.json();
+                const videoData = await videoResponse.json();
 
-                if (response.ok) {
-                    resultDiv.innerHTML = '<h3>✅ Success!</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                    if (data.post_id) {
-                        resultDiv.innerHTML += '<p><a href="/approval/pending" style="color: #4CAF50; font-weight: bold;">View Pending Approvals</a></p>';
+                if (videoResponse.ok) {
+                    let successHtml = updateProgress([
+                        ...(useGenerateLook ? [{ text: 'Look generated successfully!', status: 'complete' }] : []),
+                        { text: 'Video created successfully!', status: 'complete' }
+                    ]);
+
+                    successHtml += '<h3 style="color: #4CAF50; margin-top: 20px;">✅ Success!</h3>';
+                    successHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">' + JSON.stringify(videoData, null, 2) + '</pre>';
+
+                    if (videoData.post_id) {
+                        successHtml += `
+                            <div style="margin-top: 15px;">
+                                <a href="/approval/view/${videoData.post_id}" style="color: #4CAF50; font-weight: bold; margin-right: 20px;">
+                                    📝 Review This Video
+                                </a>
+                                <a href="/approval/pending" style="color: #4CAF50; font-weight: bold;">
+                                    📋 View All Pending Approvals
+                                </a>
+                            </div>
+                        `;
                     }
+
+                    resultDiv.innerHTML = successHtml;
                 } else {
-                    resultDiv.innerHTML = '<h3>❌ Error</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    throw new Error(videoData.error || 'Video generation failed');
                 }
             } catch (error) {
-                resultDiv.innerHTML = '<h3>❌ Error</h3><p>' + error.message + '</p>';
+                resultDiv.innerHTML = `
+                    <h3 style="color: #dc3545;">❌ Error</h3>
+                    <p>${error.message}</p>
+                `;
             } finally {
                 generateBtn.disabled = false;
             }
         }
+
+        // Initialize: Open the collapsible section by default for visibility
+        document.addEventListener('DOMContentLoaded', function() {
+            // Collapsible starts closed by default
+        });
         </script>
     </body>
     </html>
