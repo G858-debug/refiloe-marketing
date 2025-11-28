@@ -1288,9 +1288,21 @@ def test_video_form():
                 </div>
             </div>
 
+            <button onclick="previewPrompt()" id="previewBtn" style="background: #2196F3; display: none; margin-bottom: 10px;">👁️ Preview Prompt</button>
             <button onclick="generateVideo()" id="generateBtn">Generate Video</button>
 
             <div id="result"></div>
+        </div>
+
+        <!-- Modal for Preview -->
+        <div id="previewModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div style="background-color: white; margin: 10% auto; padding: 30px; border-radius: 8px; max-width: 700px; max-height: 70vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0; color: #333;">🎨 Avatar Look Preview</h2>
+                    <button onclick="closePreviewModal()" style="background: #f44336; padding: 8px 16px; cursor: pointer;">Close</button>
+                </div>
+                <div id="previewContent"></div>
+            </div>
         </div>
 
         <script>
@@ -1312,11 +1324,13 @@ def test_video_form():
                 document.querySelector('.radio-option:first-child').classList.add('selected');
                 document.getElementById('look_generation_fields').classList.remove('show');
                 document.getElementById('existing_avatar_section').style.display = 'block';
+                document.getElementById('previewBtn').style.display = 'none';
             } else {
                 document.getElementById('generate_new').checked = true;
                 document.querySelector('.radio-option:last-child').classList.add('selected');
                 document.getElementById('look_generation_fields').classList.add('show');
                 document.getElementById('existing_avatar_section').style.display = 'none';
+                document.getElementById('previewBtn').style.display = 'block';
             }
         }
 
@@ -1330,6 +1344,134 @@ def test_video_form():
             } else {
                 customFields.classList.remove('show');
             }
+        }
+
+        // Preview prompt function
+        async function previewPrompt() {
+            const previewBtn = document.getElementById('previewBtn');
+            const previewContent = document.getElementById('previewContent');
+
+            previewBtn.disabled = true;
+            previewContent.innerHTML = '<p>⏳ Loading preview...</p>';
+            document.getElementById('previewModal').style.display = 'block';
+
+            try {
+                const lookType = document.getElementById('look_type').value;
+                const lookPayload = {};
+
+                if (lookType === 'custom') {
+                    // Get custom look details
+                    const outfit = document.getElementById('custom_outfit').value.trim();
+                    const environment = document.getElementById('custom_environment').value.trim();
+                    const pose = document.getElementById('custom_pose').value.trim();
+                    const mood = document.getElementById('custom_mood').value;
+
+                    if (outfit) lookPayload.outfit = outfit;
+                    if (environment) lookPayload.environment = environment;
+                    if (pose) lookPayload.pose = pose;
+                    if (mood) lookPayload.mood = mood;
+                    lookPayload.look_type = 'custom';
+                } else {
+                    lookPayload.look_type = lookType;
+                }
+
+                // Call the preview-look API
+                const response = await fetch('/api/preview-look', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(lookPayload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    let errorHtml = '<h3 style="color: #dc3545;">❌ Validation Errors</h3>';
+                    if (data.errors && data.errors.length > 0) {
+                        errorHtml += '<ul style="color: #721c24; background: #f8d7da; padding: 15px; border-radius: 4px;">';
+                        data.errors.forEach(error => {
+                            errorHtml += `<li>${error}</li>`;
+                        });
+                        errorHtml += '</ul>';
+                    } else {
+                        errorHtml += `<p style="color: #721c24;">${data.error || 'Unknown error'}</p>`;
+                    }
+                    previewContent.innerHTML = errorHtml;
+                    return;
+                }
+
+                // Display the preview
+                let previewHtml = `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="color: #4CAF50; margin-bottom: 10px;">✅ Prompt Ready for Generation</h3>
+                        <p style="color: #666; margin-bottom: 15px;">This is what will be sent to HeyGen to create your avatar look:</p>
+                    </div>
+
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 6px; border-left: 4px solid #2196F3; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0; color: #333;">Full Prompt:</h4>
+                        <p style="font-family: monospace; white-space: pre-wrap; line-height: 1.6; color: #222;">${data.prompt_preview}</p>
+                    </div>
+
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1976D2;">⏱️ Estimated Generation Time:</h4>
+                        <p style="margin: 0; font-size: 16px; font-weight: bold; color: #1565C0;">${data.estimated_time}</p>
+                    </div>
+
+                    <div style="background: #fafafa; padding: 15px; border-radius: 6px;">
+                        <h4 style="margin: 0 0 15px 0; color: #333;">📋 Prompt Components:</h4>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Look Type:</td>
+                                <td style="padding: 8px;">${data.look_type}</td>
+                            </tr>
+                            ${data.components.outfit ? `
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Outfit:</td>
+                                <td style="padding: 8px;">${data.components.outfit}</td>
+                            </tr>` : ''}
+                            ${data.components.environment ? `
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Environment:</td>
+                                <td style="padding: 8px;">${data.components.environment}</td>
+                            </tr>` : ''}
+                            ${data.components.pose ? `
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Pose:</td>
+                                <td style="padding: 8px;">${data.components.pose}</td>
+                            </tr>` : ''}
+                            ${data.components.mood ? `
+                            <tr style="border-bottom: 1px solid #ddd;">
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Mood:</td>
+                                <td style="padding: 8px;">${data.components.mood}</td>
+                            </tr>` : ''}
+                            <tr>
+                                <td style="padding: 8px; font-weight: bold; color: #555;">Prompt Length:</td>
+                                <td style="padding: 8px;">${data.prompt_length} characters</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                        <p style="margin: 0; color: #856404;">
+                            <strong>💡 Tip:</strong> Review the prompt above. If you're happy with it, close this dialog and click "Generate Video" to create your avatar look!
+                        </p>
+                    </div>
+                `;
+
+                previewContent.innerHTML = previewHtml;
+
+            } catch (error) {
+                previewContent.innerHTML = `
+                    <h3 style="color: #dc3545;">❌ Error</h3>
+                    <p style="color: #721c24;">${error.message}</p>
+                `;
+            } finally {
+                previewBtn.disabled = false;
+            }
+        }
+
+        // Close preview modal
+        function closePreviewModal() {
+            document.getElementById('previewModal').style.display = 'none';
         }
 
         // Update progress display
@@ -1589,6 +1731,108 @@ def generate_look():
 
     except Exception as e:
         log_error(f"Error generating avatar look: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/preview-look', methods=['POST'])
+def preview_look():
+    """Preview what a look prompt will generate (dry run)"""
+    try:
+        log_info("=== Previewing avatar look prompt ===")
+
+        # Get request data
+        data = request.get_json() or {}
+
+        look_type = data.get('look_type')
+        custom_prompt = data.get('custom_prompt')
+        outfit = data.get('outfit')
+        environment = data.get('environment')
+        pose = data.get('pose')
+        mood = data.get('mood')
+
+        # Validation errors
+        errors = []
+
+        # Build custom prompt from components if provided
+        prompt_to_use = None
+        components = {
+            'outfit': outfit or '',
+            'environment': environment or '',
+            'pose': pose or '',
+            'mood': mood or ''
+        }
+
+        if custom_prompt:
+            prompt_to_use = custom_prompt
+            log_info(f"Using custom prompt: {prompt_to_use[:100]}...")
+        elif outfit or environment or pose or mood:
+            # Build prompt from individual components
+            # Format: "Person wearing [outfit], [pose], in [environment], [mood] expression"
+            parts = []
+            if outfit:
+                parts.append(f"Person wearing {outfit}")
+            if pose:
+                parts.append(pose)
+            if environment:
+                parts.append(f"in {environment}")
+            if mood:
+                parts.append(f"{mood} expression")
+
+            prompt_to_use = ", ".join(parts)
+            log_info(f"Built custom prompt from components: {prompt_to_use}")
+        elif look_type:
+            # Validate look_type
+            if look_type not in REFILOE_LOOKS:
+                errors.append(f"Invalid look_type '{look_type}'. Available types: {', '.join(REFILOE_LOOKS.keys())}")
+            else:
+                look_config = REFILOE_LOOKS[look_type]
+                prompt_to_use = look_config.get('prompt')
+                components = {
+                    'outfit': look_config.get('attire', ''),
+                    'environment': look_config.get('environment', ''),
+                    'pose': 'As described in prompt',
+                    'mood': look_config.get('mood', '')
+                }
+                log_info(f"Using predefined look type: {look_type}")
+        else:
+            errors.append('Either look_type, custom_prompt, or component fields (outfit, environment, pose, mood) required')
+
+        # Additional validation
+        if prompt_to_use and len(prompt_to_use) < 10:
+            errors.append('Prompt is too short (minimum 10 characters)')
+
+        if prompt_to_use and len(prompt_to_use) > 1000:
+            errors.append('Prompt is too long (maximum 1000 characters)')
+
+        # Return validation errors if any
+        if errors:
+            return jsonify({
+                'success': False,
+                'errors': errors
+            }), 400
+
+        # Estimate generation time based on complexity
+        # Look generation typically takes 2-3 minutes
+        estimated_time = "2-3 minutes"
+
+        log_info(f"Preview complete: {len(prompt_to_use)} characters")
+
+        return jsonify({
+            'success': True,
+            'prompt_preview': prompt_to_use,
+            'estimated_time': estimated_time,
+            'components': components,
+            'look_type': look_type or 'custom',
+            'prompt_length': len(prompt_to_use) if prompt_to_use else 0
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error previewing avatar look: {str(e)}")
         import traceback
         log_error(f"Full traceback:\n{traceback.format_exc()}")
         return jsonify({
