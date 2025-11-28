@@ -10,7 +10,7 @@ import os
 import atexit
 import uuid
 import json
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from datetime import datetime, timedelta
 import pytz
 
@@ -969,6 +969,9 @@ atexit.register(stop_scheduler)
 @app.route('/test-video-form')
 def test_video_form():
     """Enhanced HTML form for testing video generation with avatar selection and look generation"""
+    # Get avatar_id from query parameters if provided
+    avatar_id_param = request.args.get('avatar_id', '')
+
     html = '''
     <!DOCTYPE html>
     <html>
@@ -1283,7 +1286,7 @@ def test_video_form():
 
                 <div class="form-group">
                     <label for="avatar_id">Avatar ID (Optional):</label>
-                    <input type="text" id="avatar_id" placeholder="e.g., 110f75a397604454ba6f822c68f29949">
+                    <input type="text" id="avatar_id" placeholder="e.g., 110f75a397604454ba6f822c68f29949" value="AVATAR_ID_PLACEHOLDER">
                     <div class="help-text">Leave empty to use theme-based selection, or enter a specific HeyGen avatar ID</div>
                 </div>
             </div>
@@ -1642,6 +1645,8 @@ def test_video_form():
     </body>
     </html>
     '''
+    # Replace placeholder with actual avatar_id from URL parameter
+    html = html.replace('AVATAR_ID_PLACEHOLDER', avatar_id_param)
     return html
 
 
@@ -1970,6 +1975,93 @@ def test_generate_video():
             'error': str(e),
             'traceback': error_traceback
         }), 500
+
+
+@app.route('/looks-gallery')
+def looks_gallery():
+    """Display all generated avatar looks with preview images"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get filter parameters from query string
+        look_type_filter = request.args.get('look_type', '')
+        search_query = request.args.get('search', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+
+        # Start building query
+        query = supabase_client.table('avatar_looks').select('*')
+
+        # Apply look_type filter
+        if look_type_filter:
+            query = query.eq('look_type', look_type_filter)
+
+        # Apply search filter (search in prompt)
+        if search_query:
+            query = query.ilike('prompt', f'%{search_query}%')
+
+        # Apply date filters
+        if date_from:
+            query = query.gte('created_at', date_from)
+        if date_to:
+            # Add one day to include the entire end date
+            date_to_dt = datetime.fromisoformat(date_to) + timedelta(days=1)
+            query = query.lt('created_at', date_to_dt.isoformat())
+
+        # Order by created_at DESC
+        query = query.order('created_at', desc=True)
+
+        # Execute query
+        result = query.execute()
+        looks = result.data if result and hasattr(result, 'data') else []
+
+        # Get unique look types for filter dropdown
+        all_looks_result = supabase_client.table('avatar_looks').select('look_type').execute()
+        all_looks = all_looks_result.data if all_looks_result and hasattr(all_looks_result, 'data') else []
+        look_types = sorted(set([look['look_type'] for look in all_looks if look.get('look_type')]))
+
+        log_info(f"Found {len(looks)} avatar looks (filters: type={look_type_filter}, search={search_query})")
+
+        return render_template(
+            'looks_gallery.html',
+            looks=looks,
+            look_types=look_types,
+            current_filters={
+                'look_type': look_type_filter,
+                'search': search_query,
+                'date_from': date_from,
+                'date_to': date_to
+            }
+        )
+
+    except Exception as e:
+        log_error(f"Error fetching avatar looks: {str(e)}")
+        import traceback
+        log_error(f"Full traceback:\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/delete-look/<look_id>', methods=['POST', 'DELETE'])
+def delete_look(look_id):
+    """Delete an avatar look"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Delete the look from database
+        result = supabase_client.table('avatar_looks').delete().eq('id', look_id).execute()
+
+        if result.data:
+            log_info(f"Successfully deleted avatar look: {look_id}")
+            return jsonify({'success': True, 'message': 'Look deleted successfully'}), 200
+        else:
+            log_warning(f"No look found with ID: {look_id}")
+            return jsonify({'success': False, 'error': 'Look not found'}), 404
+
+    except Exception as e:
+        log_error(f"Error deleting avatar look {look_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.errorhandler(404)

@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Avatar Looks Gallery</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    >
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+
+      .gallery-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .gallery-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+      }
+
+      .gallery-card .card-body {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .preview-image {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        background-color: #e9ecef;
+      }
+
+      .no-preview {
+        width: 100%;
+        height: 200px;
+        background: linear-gradient(135deg, #D4A574 0%, #8B7355 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 3rem;
+      }
+
+      .look-type-badge {
+        background-color: #D4A574;
+        color: white;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .prompt-preview {
+        font-size: 0.875rem;
+        color: #6c757d;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        flex-grow: 1;
+      }
+
+      .avatar-id-box {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.75rem;
+        word-break: break-all;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .copy-btn {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
+
+      .copy-btn:hover {
+        background-color: #5a6268;
+      }
+
+      .copy-btn.copied {
+        background-color: #28a745;
+      }
+
+      .btn-refiloe {
+        background-color: #D4A574;
+        border-color: #D4A574;
+        color: white;
+      }
+
+      .btn-refiloe:hover {
+        background-color: #8B7355;
+        border-color: #8B7355;
+        color: white;
+      }
+
+      .filter-section {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.05);
+        margin-bottom: 2rem;
+      }
+
+      .stats-badge {
+        background-color: #e9ecef;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+      }
+
+      @media (max-width: 767.98px) {
+        .gallery-card {
+          margin-bottom: 1rem;
+        }
+      }
+
+      /* Delete confirmation modal overlay */
+      .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/">Refiloe Marketing</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="/approval/pending">Pending Posts</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="/looks-gallery">Avatar Looks</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/test-video-form">Generate Video</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container my-5">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+          <h1 class="h3 mb-1">Avatar Looks Gallery</h1>
+          <p class="text-muted mb-0">Browse and manage all generated avatar looks.</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="stats-badge">
+            <strong>{{ looks|length }}</strong> look{{ 's' if looks|length != 1 else '' }}
+          </div>
+          <a href="/test-video-form" class="btn btn-refiloe btn-sm">
+            + Generate New Look
+          </a>
+        </div>
+      </div>
+
+      <!-- Filters Section -->
+      <div class="filter-section">
+        <form method="get" action="/looks-gallery" id="filterForm">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label for="look_type" class="form-label">Look Type</label>
+              <select class="form-select" id="look_type" name="look_type" onchange="document.getElementById('filterForm').submit()">
+                <option value="">All Types</option>
+                {% for type in look_types %}
+                  <option value="{{ type }}" {% if current_filters.look_type == type %}selected{% endif %}>
+                    {{ type.replace('_', ' ').title() }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-3">
+              <label for="search" class="form-label">Search Prompt</label>
+              <input
+                type="text"
+                class="form-control"
+                id="search"
+                name="search"
+                placeholder="Search keywords..."
+                value="{{ current_filters.search }}"
+              >
+            </div>
+
+            <div class="col-md-2">
+              <label for="date_from" class="form-label">From Date</label>
+              <input
+                type="date"
+                class="form-control"
+                id="date_from"
+                name="date_from"
+                value="{{ current_filters.date_from }}"
+              >
+            </div>
+
+            <div class="col-md-2">
+              <label for="date_to" class="form-label">To Date</label>
+              <input
+                type="date"
+                class="form-control"
+                id="date_to"
+                name="date_to"
+                value="{{ current_filters.date_to }}"
+              >
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end gap-2">
+              <button type="submit" class="btn btn-refiloe flex-grow-1">Filter</button>
+              <a href="/looks-gallery" class="btn btn-outline-secondary">Clear</a>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Gallery Grid -->
+      {% if looks %}
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
+          {% for look in looks %}
+            <div class="col">
+              <div class="card gallery-card">
+                <!-- Preview Image -->
+                {% if look.preview_url %}
+                  <img src="{{ look.preview_url }}" class="card-img-top preview-image" alt="{{ look.look_type }}">
+                {% else %}
+                  <div class="no-preview">
+                    <span>🎨</span>
+                  </div>
+                {% endif %}
+
+                <div class="card-body">
+                  <!-- Look Type Badge -->
+                  <div class="mb-2">
+                    <span class="badge look-type-badge">{{ look.look_type.replace('_', ' ') if look.look_type else 'Unknown' }}</span>
+                  </div>
+
+                  <!-- Prompt Preview -->
+                  <p class="prompt-preview mb-3">
+                    {{ look.prompt[:100] if look.prompt else 'No prompt available' }}{{ '...' if look.prompt and look.prompt|length > 100 else '' }}
+                  </p>
+
+                  <!-- Avatar ID -->
+                  <div class="mb-3">
+                    <small class="text-muted d-block mb-1">Photo Avatar ID:</small>
+                    <div class="avatar-id-box">
+                      <span class="avatar-id-text" id="avatar-id-{{ loop.index }}">{{ look.photo_avatar_id or 'N/A' }}</span>
+                      {% if look.photo_avatar_id %}
+                        <button
+                          class="copy-btn"
+                          onclick="copyToClipboard('{{ look.photo_avatar_id }}', this)"
+                          title="Copy ID"
+                        >
+                          Copy
+                        </button>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <!-- Created Date -->
+                  <p class="text-muted small mb-3">
+                    <strong>Created:</strong> {{ look.created_at[:10] if look.created_at else 'Unknown' }}
+                  </p>
+
+                  <!-- Action Buttons -->
+                  <div class="d-grid gap-2">
+                    <a
+                      href="/test-video-form?avatar_id={{ look.photo_avatar_id }}"
+                      class="btn btn-sm btn-refiloe"
+                      {% if not look.photo_avatar_id %}disabled{% endif %}
+                    >
+                      Generate Video
+                    </a>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      onclick="confirmDelete('{{ look.id }}', '{{ look.look_type }}')"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert" role="alert" style="background-color: #F5E6D3; border-color: #D4A574; color: #8B7355;">
+          <h4 class="alert-heading">No looks found</h4>
+          <p class="mb-0">
+            {% if current_filters.look_type or current_filters.search or current_filters.date_from or current_filters.date_to %}
+              No avatar looks match your current filters. Try adjusting your search criteria.
+            {% else %}
+              You haven't generated any avatar looks yet.
+              <a href="/test-video-form" class="alert-link">Create your first look</a> to get started!
+            {% endif %}
+          </p>
+        </div>
+      {% endif %}
+    </main>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            Are you sure you want to delete the <strong id="deleteLookType"></strong> look? This action cannot be undone.
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      // Copy to clipboard function
+      function copyToClipboard(text, button) {
+        navigator.clipboard.writeText(text).then(() => {
+          const originalText = button.textContent;
+          button.textContent = 'Copied!';
+          button.classList.add('copied');
+
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('copied');
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          alert('Failed to copy to clipboard');
+        });
+      }
+
+      // Delete confirmation
+      let lookToDelete = null;
+      const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+      function confirmDelete(lookId, lookType) {
+        lookToDelete = lookId;
+        document.getElementById('deleteLookType').textContent = lookType.replace('_', ' ');
+        deleteModal.show();
+      }
+
+      document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+        if (!lookToDelete) return;
+
+        try {
+          const response = await fetch(`/api/delete-look/${lookToDelete}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            // Reload the page to refresh the gallery
+            window.location.reload();
+          } else {
+            alert('Failed to delete look: ' + (data.error || 'Unknown error'));
+          }
+        } catch (error) {
+          console.error('Delete error:', error);
+          alert('Failed to delete look: ' + error.message);
+        } finally {
+          deleteModal.hide();
+          lookToDelete = null;
+        }
+      });
+
+      // Pre-fill avatar ID in test-video-form if coming from "Generate Video" button
+      // This is handled by the URL parameter ?avatar_id=...
+    </script>
+  </body>
+</html>
