@@ -109,6 +109,12 @@ class SocialMediaScheduler:
                 "trigger": CronTrigger(hour=23, minute=0, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("analytics_collection_daily", self.run_analytics_collection),
             },
+            {
+                "id": "weekly_avatar_looks",
+                "name": "Weekly Avatar Looks Generation",
+                "trigger": CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("weekly_avatar_looks", self.run_weekly_avatar_looks),
+            },
         ]
 
         for job in job_definitions:
@@ -589,6 +595,163 @@ class SocialMediaScheduler:
 
         # TODO: Implement email notifications
         # TODO: Implement Slack notifications
+
+    def run_weekly_avatar_looks(self) -> None:
+        """Weekly job at 3:00 AM SAST every Sunday to generate fresh avatar looks.
+
+        Generates 2-3 new looks with different themes to keep content visually varied.
+        Each look is generated with motion and saved to the avatar_looks table.
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping weekly avatar looks job.")
+            return
+
+        if not os.getenv("HEYGEN_API_KEY"):
+            log_warning("HEYGEN_API_KEY missing; weekly avatar looks job skipped.")
+            return
+
+        if not os.getenv("HEYGEN_PHOTO_AVATAR_GROUP_ID"):
+            log_warning("HEYGEN_PHOTO_AVATAR_GROUP_ID missing; weekly avatar looks job skipped.")
+            return
+
+        try:
+            from social_media.looks_generator import (
+                LooksGenerator,
+                LookGenerationError,
+                MotionAdditionError,
+            )
+        except ImportError as exc:
+            log_error(f"LooksGenerator module unavailable: {exc}")
+            return
+
+        # Define theme categories with their associated look types
+        # We rotate through these themes to provide visual variety
+        theme_rotation = [
+            {"theme": "gym", "looks": ["gym_trainer", "home_workout"]},
+            {"theme": "office", "looks": ["office_professional"]},
+            {"theme": "outdoor", "looks": ["outdoor_wellness", "retreat_leader"]},
+            {"theme": "casual", "looks": ["podcast_host", "yoga_instructor"]},
+            {"theme": "professional", "looks": ["motivational_speaker", "nutrition_expert", "studio_portrait"]},
+        ]
+
+        # Determine which themes to use this week based on week number
+        week_number = datetime.now(SA_TIMEZONE).isocalendar()[1]
+        num_looks = 2 + (week_number % 2)  # Alternates between 2 and 3 looks
+
+        # Select themes based on week rotation (ensures different themes each week)
+        selected_themes = []
+        for i in range(num_looks):
+            theme_index = (week_number + i) % len(theme_rotation)
+            selected_themes.append(theme_rotation[theme_index])
+
+        log_info(
+            f"Weekly avatar looks job starting: generating {num_looks} looks "
+            f"for week {week_number} with themes: {[t['theme'] for t in selected_themes]}"
+        )
+
+        try:
+            generator = LooksGenerator(self.supabase_client)
+        except ValueError as exc:
+            log_warning(f"LooksGenerator initialization failed: {exc}")
+            return
+
+        # Track results for logging
+        successful_looks = []
+        failed_looks = []
+
+        for theme_info in selected_themes:
+            theme = theme_info["theme"]
+            look_options = theme_info["looks"]
+
+            # Select a specific look from the theme based on week number
+            look_index = week_number % len(look_options)
+            look_type = look_options[look_index]
+
+            log_info(f"Generating avatar look: {look_type} (theme: {theme})")
+
+            try:
+                # Generate look with motion and save to database
+                result = generator.generate_look_with_motion(
+                    look_type=look_type,
+                    motion_prompt="natural head movement and subtle expressions",
+                    motion_type="natural",
+                    save_to_database=True,
+                )
+
+                record_id = result.get("database_record_id")
+                look_id = result.get("look_id")
+                photo_avatar_id = result.get("photo_avatar_id")
+
+                if record_id:
+                    successful_looks.append({
+                        "look_type": look_type,
+                        "theme": theme,
+                        "record_id": record_id,
+                        "look_id": look_id,
+                        "photo_avatar_id": photo_avatar_id,
+                    })
+                    log_info(
+                        f"Avatar look '{look_type}' generated successfully "
+                        f"(record_id={record_id}, look_id={look_id}, "
+                        f"photo_avatar_id={photo_avatar_id})"
+                    )
+                else:
+                    # Look generated but database save failed
+                    successful_looks.append({
+                        "look_type": look_type,
+                        "theme": theme,
+                        "record_id": None,
+                        "look_id": look_id,
+                        "photo_avatar_id": photo_avatar_id,
+                        "warning": "Database save failed",
+                    })
+                    log_warning(
+                        f"Avatar look '{look_type}' generated but database save failed "
+                        f"(look_id={look_id})"
+                    )
+
+            except LookGenerationError as exc:
+                failed_looks.append({
+                    "look_type": look_type,
+                    "theme": theme,
+                    "error": f"Look generation failed: {exc}",
+                })
+                log_error(f"Failed to generate look '{look_type}': {exc}")
+                # Continue to next look - don't let one failure stop the job
+
+            except MotionAdditionError as exc:
+                failed_looks.append({
+                    "look_type": look_type,
+                    "theme": theme,
+                    "error": f"Motion addition failed: {exc}",
+                })
+                log_error(f"Failed to add motion to look '{look_type}': {exc}")
+                # Continue to next look
+
+            except Exception as exc:
+                failed_looks.append({
+                    "look_type": look_type,
+                    "theme": theme,
+                    "error": f"Unexpected error: {exc}",
+                })
+                log_error(
+                    f"Unexpected error generating look '{look_type}': {exc}\n"
+                    f"{traceback.format_exc()}"
+                )
+                # Continue to next look
+
+        # Log summary
+        log_info(
+            f"Weekly avatar looks job completed: "
+            f"{len(successful_looks)} successful, {len(failed_looks)} failed"
+        )
+
+        if successful_looks:
+            look_ids = [l.get("look_id", "unknown") for l in successful_looks]
+            log_info(f"Generated look IDs: {look_ids}")
+
+        if failed_looks:
+            log_warning(f"Failed looks: {[l['look_type'] for l in failed_looks]}")
 
     def run_analytics_collection(self) -> None:
         """Daily job at 11:00 PM SAST to collect analytics for published posts."""
