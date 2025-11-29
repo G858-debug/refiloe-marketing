@@ -453,9 +453,9 @@ class VideoGenerator:
             payload["custom_motion_prompt"] = custom_motion_prompt
             payload["enhance_custom_motion_prompt"] = enhance_motion
 
-        # Add optional title
+        # Add optional video title (Avatar IV uses 'video_title' not 'title')
         if title:
-            payload["title"] = title
+            payload["video_title"] = title
 
         # Add metadata if provided
         if metadata:
@@ -491,6 +491,8 @@ class VideoGenerator:
                 "aspect_ratio": aspect_ratio,
             }
 
+            if title:
+                result["video_title"] = title
             if image_key:
                 result["image_key"] = image_key
             if image_url:
