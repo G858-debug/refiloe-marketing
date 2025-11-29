@@ -463,7 +463,7 @@ class VideoGenerator:
         try:
             # Call Avatar IV endpoint
             response = self._post_with_retry(
-                "/v2/video/av4/generate",
+                "/video/av4/generate",
                 json=payload
             )
 
