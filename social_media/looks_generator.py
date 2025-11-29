@@ -258,23 +258,6 @@ class LooksGenerator:
 
         log_info(f"Starting avatar look generation for type '{look_type}'")
 
-        # Map look types to appropriate poses for better context-aware generation
-        LOOK_TYPE_TO_POSE = {
-            "gym_trainer": "standing confidently with arms crossed",
-            "office_professional": "sitting at desk or standing professionally",
-            "outdoor_wellness": "walking naturally",
-            "nutrition_expert": "standing in kitchen setting",
-            "yoga_instructor": "in yoga pose",
-            "motivational_speaker": "standing with open gestures",
-            "home_workout": "in workout stance",
-            "podcast_host": "sitting casually",
-            "retreat_leader": "standing peacefully",
-            "studio_portrait": "professional headshot pose",
-        }
-
-        # Select appropriate pose based on look type
-        pose_param = LOOK_TYPE_TO_POSE.get(look_type, "standing naturally")
-
         # Build complete payload with all required HeyGen API parameters
         # Reference: https://docs.heygen.com/reference/generate-photo-avatar-looks
         # Required: group_id, prompt, orientation, pose, style
@@ -282,7 +265,7 @@ class LooksGenerator:
             "group_id": resolved_group_id,
             "prompt": generation_prompt,
             "orientation": "vertical",  # vertical/horizontal/square
-            "pose": pose_param,  # Describes body position/posture
+            "pose": "half_body",  # half_body/close_up/full_body (controls image framing)
             "style": "Realistic",  # Options: Realistic, Pixar, Cinematic, Vintage, Noir, Cyberpunk, Unspecified
         }
 
@@ -298,7 +281,7 @@ class LooksGenerator:
         log_info(f"Group ID Type: {type(resolved_group_id)}")
         log_info(f"Group ID Length: {len(resolved_group_id) if resolved_group_id else 0}")
         log_info(f"Look Type: {look_type}")
-        log_info(f"Pose: {pose_param}")
+        log_info(f"Pose: half_body")
         log_info(f"Orientation: vertical")
         log_info(f"Style: Realistic")
         log_info(f"Custom Prompt Provided: {custom_prompt is not None}")
