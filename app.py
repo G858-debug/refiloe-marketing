@@ -2069,23 +2069,30 @@ def test_generate_video():
                 }
 
                 # Extract image data from look generation for Avatar IV
+                log_info("=== Extracting image data from look_result for Avatar IV ===")
+                log_info(f"look_result keys: {look_result.keys()}")
+
                 preview_url = look_result.get('preview_url')
                 image_urls = look_result.get('image_urls', [])
                 image_keys = look_result.get('image_keys', [])
 
-                # Prefer preview_url, fallback to first image_url
-                image_url = preview_url or (image_urls[0] if image_urls else None)
-                # Get first image_key if available
+                log_info(f"  preview_url: {preview_url}")
+                log_info(f"  image_urls: {image_urls}")
+                log_info(f"  image_keys: {image_keys}")
+
+                # Use preview_url directly (it's the most reliable)
+                image_url = preview_url
+
+                # Also get image_key if available (Avatar IV can use either)
                 image_key = image_keys[0] if image_keys else None
 
-                log_info(f"Extracted from look_result:")
-                log_info(f"  preview_url: {preview_url}")
-                log_info(f"  image_urls count: {len(image_urls)}")
-                log_info(f"  image_keys count: {len(image_keys)}")
-                log_info(f"  Using image_url: {image_url}")
-                log_info(f"  Using image_key: {image_key}")
+                log_info(f"Will use for Avatar IV:")
+                log_info(f"  image_url: {image_url}")
+                log_info(f"  image_key: {image_key}")
 
                 if not image_url and not image_key:
+                    log_error(f"FAILED: look_result does not contain image_url or image_key")
+                    log_error(f"Full look_result: {json.dumps(look_result, indent=2)}")
                     raise ValueError("Avatar IV requires either image_url or image_key")
 
                 look_type = look_result.get('look_type')
