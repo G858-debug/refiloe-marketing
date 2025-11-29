@@ -338,16 +338,31 @@ class LooksGenerator:
             # Poll for completion using correct parameter name
             result = self._poll_look_status(generation_id)
 
-            if result.get("status") not in ("completed", "done", "ready"):
+            # HeyGen returns "success" for completed generation
+            status = result.get("status")
+            if status not in ("completed", "done", "ready", "success"):
                 raise LookGenerationError(
-                    f"Look generation failed with status: {result.get('status')}"
+                    f"Look generation failed with status: {status}"
                 )
 
-            photo_avatar_id = (
-                result.get("photo_avatar_id")
-                or result.get("avatar_id")
-                or result.get("talking_photo_id")
-            )
+            log_info(f"Look generation completed successfully with status: {status}")
+
+            # For look generation, HeyGen returns image_key_list, not photo_avatar_id
+            # We need to use the first image_key as the avatar identifier
+            image_keys = result.get("image_key_list", [])
+            image_urls = result.get("image_url_list", [])
+
+            if not image_keys or not image_urls:
+                raise LookGenerationError(
+                    f"No images generated. Response: {json.dumps(result, indent=2)}"
+                )
+
+            # Use the first generated image
+            photo_avatar_id = image_keys[0]  # This is the image_key we can use
+            preview_url = image_urls[0]
+
+            log_info(f"Generated {len(image_keys)} images. Using first image_key as photo_avatar_id: {photo_avatar_id}")
+            log_info(f"Preview URL: {preview_url}")
 
             generation_result = {
                 "look_id": generation_id,
@@ -356,7 +371,9 @@ class LooksGenerator:
                 "look_type": look_type,
                 "prompt": generation_prompt,
                 "group_id": resolved_group_id,
-                "preview_url": result.get("preview_url") or result.get("image_url"),
+                "preview_url": preview_url,
+                "image_urls": image_urls,  # All generated image URLs
+                "image_keys": image_keys,  # All generated image keys
                 "created_at": datetime.now(self.sa_tz).isoformat(),
             }
 
@@ -896,9 +913,16 @@ class LooksGenerator:
 
                 log_debug(f"Generation {generation_id} status: {status}")
 
-                if status in ("completed", "done", "ready", "failed", "error"):
+                # HeyGen returns "success" for completed generation
+                if status in ("completed", "done", "ready", "success", "failed", "error"):
                     data.setdefault("generation_id", generation_id)
+                    log_info(f"Look generation finished with status: {status}")
                     return data
+
+                # Still processing - continue polling
+                if status in ("processing", "pending", "in_progress"):
+                    log_debug(f"Generation still in progress, continuing to poll...")
+                    # Continue polling loop
 
             except Exception as exc:
                 log_warning(
