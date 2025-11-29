@@ -2068,15 +2068,28 @@ def test_generate_video():
                     'database_record_id': record_id
                 }
 
-                # Extract image URL and key from look generation for Avatar IV
-                image_url = look_result.get('preview_url')
-                image_key = look_result.get('image_keys', [None])[0]  # First image key
-                look_type = look_result.get('look_type')
+                # Extract image data from look generation for Avatar IV
+                preview_url = look_result.get('preview_url')
+                image_urls = look_result.get('image_urls', [])
+                image_keys = look_result.get('image_keys', [])
+
+                # Prefer preview_url, fallback to first image_url
+                image_url = preview_url or (image_urls[0] if image_urls else None)
+                # Get first image_key if available
+                image_key = image_keys[0] if image_keys else None
+
+                log_info(f"Extracted from look_result:")
+                log_info(f"  preview_url: {preview_url}")
+                log_info(f"  image_urls count: {len(image_urls)}")
+                log_info(f"  image_keys count: {len(image_keys)}")
+                log_info(f"  Using image_url: {image_url}")
+                log_info(f"  Using image_key: {image_key}")
 
                 if not image_url and not image_key:
-                    raise ValueError("Look generation did not return usable image")
+                    raise ValueError("Avatar IV requires either image_url or image_key")
 
-                log_info(f"Will use generated image for Avatar IV - image_url: {image_url}, look_type: {look_type}")
+                look_type = look_result.get('look_type')
+                log_info(f"Will use generated image for Avatar IV - look_type: {look_type}")
 
             except Exception as look_error:
                 log_error(f"Look generation failed: {str(look_error)}")
