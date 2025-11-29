@@ -265,6 +265,7 @@ class LooksGenerator:
             "group_id": resolved_group_id,
             "prompt": generation_prompt,
             "style": "Realistic",  # Valid HeyGen style value
+            "orientation": "portrait",  # Best for social media (vertical format)
         }
 
         if metadata:
