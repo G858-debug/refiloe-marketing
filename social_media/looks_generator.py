@@ -313,30 +313,30 @@ class LooksGenerator:
             data = response.get("data", {})
             log_info(f"Data object: {json.dumps(data, indent=2) if data else 'No data object'}")
 
-            # Try multiple possible keys for the look identifier
-            look_id = (
+            # Extract generation_id from response (prioritize generation_id keys)
+            generation_id = (
+                response.get("generation_id") or
+                data.get("generation_id") or
                 data.get("look_id") or
                 data.get("id") or
-                data.get("generation_id") or  # NEW: Try generation_id
                 response.get("look_id") or
-                response.get("generation_id") or  # NEW: Try at root level
                 response.get("id")
             )
 
-            log_info(f"Extracted look_id: {look_id}")
+            log_info(f"Extracted generation_id: {generation_id}")
 
-            if not look_id:
-                log_error("Could not find look identifier in response!")
+            if not generation_id:
+                log_error("Could not find generation identifier in response!")
                 log_error(f"Available keys in response: {list(response.keys())}")
                 log_error(f"Available keys in data: {list(data.keys()) if data else 'No data'}")
                 raise LookGenerationError(
-                    f"HeyGen response did not include a look identifier. Response keys: {list(response.keys())}"
+                    f"HeyGen response did not include a generation identifier. Response keys: {list(response.keys())}"
                 )
 
-            log_info(f"Look generation initiated (look_id={look_id}, type={look_type})")
+            log_info(f"Look generation initiated (generation_id={generation_id}, type={look_type})")
 
-            # Poll for completion
-            result = self._poll_look_status(look_id)
+            # Poll for completion using correct parameter name
+            result = self._poll_look_status(generation_id)
 
             if result.get("status") not in ("completed", "done", "ready"):
                 raise LookGenerationError(
@@ -350,7 +350,7 @@ class LooksGenerator:
             )
 
             generation_result = {
-                "look_id": look_id,
+                "look_id": generation_id,
                 "photo_avatar_id": photo_avatar_id,
                 "status": result.get("status"),
                 "look_type": look_type,
@@ -369,7 +369,7 @@ class LooksGenerator:
                 }
 
             log_info(
-                f"Avatar look generation complete (look_id={look_id}, "
+                f"Avatar look generation complete (generation_id={generation_id}, "
                 f"photo_avatar_id={photo_avatar_id})"
             )
 
@@ -862,11 +862,11 @@ class LooksGenerator:
 
         raise LookGenerationError("Failed to communicate with HeyGen API")
 
-    def _poll_look_status(self, look_id: str) -> Dict[str, Any]:
-        """Poll for look generation status until completion or timeout.
+    def _poll_look_status(self, generation_id: str) -> Dict[str, Any]:
+        """Poll HeyGen for look generation completion status.
 
         Args:
-            look_id: The look generation task ID.
+            generation_id: The generation ID returned from look/generate endpoint
 
         Returns:
             Final status response data.
@@ -874,39 +874,42 @@ class LooksGenerator:
         Raises:
             LookGenerationError: If polling times out.
         """
-        deadline = time.time() + self.poll_timeout
+        log_info(f"Polling look generation status for generation_id: {generation_id}")
 
-        while time.time() < deadline:
-            for attempt in range(self.max_retries):
-                try:
-                    response = self._get_with_retry(
-                        f"/v2/photo_avatar/look/{look_id}/status",
-                    )
+        start_time = time.time()
+        poll_count = 0
 
-                    data = response.get("data", response)
-                    status = data.get("status")
+        while time.time() - start_time < self.poll_timeout:
+            try:
+                poll_count += 1
 
-                    log_debug(f"Look {look_id} status: {status}")
+                # Use correct HeyGen endpoint for checking generation status
+                response = self._get_with_retry(
+                    f"/v2/photo_avatar/generation/{generation_id}"
+                )
 
-                    if status in ("completed", "done", "ready", "failed", "error"):
-                        data.setdefault("look_id", look_id)
-                        return data
+                # Log the response for debugging
+                log_info(f"Poll attempt {poll_count}: Status response: {json.dumps(response, indent=2)}")
 
-                    break
+                data = response.get("data", response)
+                status = data.get("status")
 
-                except Exception as exc:
-                    if attempt < self.max_retries - 1:
-                        log_warning(
-                            f"Look status check failed (attempt {attempt + 1}/{self.max_retries}): {exc}"
-                        )
-                        time.sleep(self.retry_backoff)
-                        continue
-                    raise
+                log_debug(f"Generation {generation_id} status: {status}")
+
+                if status in ("completed", "done", "ready", "failed", "error"):
+                    data.setdefault("generation_id", generation_id)
+                    return data
+
+            except Exception as exc:
+                log_warning(
+                    f"Look status check failed (poll {poll_count}): {exc}"
+                )
+                # Continue polling even after errors, unless it's timeout
 
             time.sleep(self.poll_interval)
 
         raise LookGenerationError(
-            f"Timed out waiting for look {look_id} to complete"
+            f"Timed out waiting for generation {generation_id} to complete"
         )
 
     def _poll_motion_status(
