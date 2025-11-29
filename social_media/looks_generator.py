@@ -6,6 +6,7 @@ environments, poses) for the Refiloe character using HeyGen's Photo Avatar API.
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -264,6 +265,17 @@ class LooksGenerator:
 
         if metadata:
             payload["callback_data"] = metadata
+
+        # Enhanced logging for debugging API requests
+        log_info("="*70)
+        log_info("HeyGen Photo Avatar Look Generation Request")
+        log_info("="*70)
+        log_info(f"Endpoint: /v2/photo_avatar/look/generate")
+        log_info(f"Group ID: {resolved_group_id}")
+        log_info(f"Prompt length: {len(generation_prompt)} characters")
+        log_info(f"Prompt preview: {generation_prompt[:200]}...")
+        log_info(f"Full payload: {json.dumps(payload, indent=2)}")
+        log_info("="*70)
 
         try:
             response = self._post_with_retry(
@@ -691,6 +703,17 @@ class LooksGenerator:
                     time.sleep(wait_time)
                     continue
 
+                # Enhanced error logging for non-successful responses
+                if not response.ok:
+                    log_error(f"HeyGen API Error Response:")
+                    log_error(f"Status Code: {response.status_code}")
+                    log_error(f"Response Headers: {dict(response.headers)}")
+                    try:
+                        error_body = response.json()
+                        log_error(f"Response Body: {json.dumps(error_body, indent=2)}")
+                    except:
+                        log_error(f"Response Text: {response.text}")
+
                 response.raise_for_status()
                 return response.json()
 
@@ -751,6 +774,17 @@ class LooksGenerator:
                     )
                     time.sleep(wait_time)
                     continue
+
+                # Enhanced error logging for non-successful responses
+                if not response.ok:
+                    log_error(f"HeyGen API Error Response:")
+                    log_error(f"Status Code: {response.status_code}")
+                    log_error(f"Response Headers: {dict(response.headers)}")
+                    try:
+                        error_body = response.json()
+                        log_error(f"Response Body: {json.dumps(error_body, indent=2)}")
+                    except:
+                        log_error(f"Response Text: {response.text}")
 
                 response.raise_for_status()
                 return response.json()

@@ -509,6 +509,43 @@ def debug_schema():
         }), 500
 
 
+@app.route('/api/debug/verify-avatar-group', methods=['GET'])
+def verify_avatar_group():
+    """Verify if HEYGEN_AVATAR_GROUP is a valid Photo Avatar Group"""
+    import os
+    import requests
+
+    api_key = os.getenv('HEYGEN_API_KEY')
+    group_id = os.getenv('HEYGEN_AVATAR_GROUP')
+
+    if not api_key or not group_id:
+        return jsonify({
+            'error': 'Missing HEYGEN_API_KEY or HEYGEN_AVATAR_GROUP',
+            'has_api_key': bool(api_key),
+            'has_group_id': bool(group_id)
+        }), 400
+
+    # Try to get group info
+    try:
+        response = requests.get(
+            f'https://api.heygen.com/v2/photo_avatar/group/{group_id}',
+            headers={'X-Api-Key': api_key},
+            timeout=15
+        )
+
+        return jsonify({
+            'status_code': response.status_code,
+            'is_valid_group': response.ok,
+            'group_id': group_id,
+            'response': response.json() if response.ok else response.text
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'group_id': group_id
+        }), 500
+
+
 @app.route('/api/debug/post/<post_id>')
 def debug_single_post(post_id):
     """Debug endpoint to see full post details including video"""
