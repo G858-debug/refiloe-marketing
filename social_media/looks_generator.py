@@ -414,6 +414,11 @@ class LooksGenerator:
                     # Pattern B: data directly contains talking_photo_ids
                     talking_photo_ids = data.get("talking_photo_ids", [])
                     log_info(f"Extracted {len(talking_photo_ids)} IDs from data.talking_photo_ids")
+                elif "photo_avatar_list" in data:
+                    # Pattern B2: data contains photo_avatar_list array
+                    avatar_list = data.get("photo_avatar_list", [])
+                    talking_photo_ids = [avatar.get("id") for avatar in avatar_list if avatar.get("id")]
+                    log_info(f"Extracted {len(talking_photo_ids)} IDs from data.photo_avatar_list")
                 else:
                     # Pattern C: data itself might be a single look object with an id
                     if "id" in data:
