@@ -258,6 +258,7 @@ class LooksGenerator:
 
         log_info(f"Starting avatar look generation for type '{look_type}'")
 
+        # Build payload - try minimal required fields first
         payload: Dict[str, Any] = {
             "group_id": resolved_group_id,
             "prompt": generation_prompt,
@@ -266,16 +267,26 @@ class LooksGenerator:
         if metadata:
             payload["callback_data"] = metadata
 
-        # Enhanced logging for debugging API requests
-        log_info("="*70)
-        log_info("HeyGen Photo Avatar Look Generation Request")
-        log_info("="*70)
-        log_info(f"Endpoint: /v2/photo_avatar/look/generate")
+        # Log EVERYTHING before making the call
+        log_info("="*80)
+        log_info("HEYGEN PHOTO AVATAR LOOK GENERATION - DEBUG INFO")
+        log_info("="*80)
+        log_info(f"API Endpoint: {HEYGEN_API_BASE_URL}/v2/photo_avatar/look/generate")
         log_info(f"Group ID: {resolved_group_id}")
-        log_info(f"Prompt length: {len(generation_prompt)} characters")
-        log_info(f"Prompt preview: {generation_prompt[:200]}...")
-        log_info(f"Full payload: {json.dumps(payload, indent=2)}")
-        log_info("="*70)
+        log_info(f"Group ID Type: {type(resolved_group_id)}")
+        log_info(f"Group ID Length: {len(resolved_group_id) if resolved_group_id else 0}")
+        log_info(f"Prompt: {generation_prompt}")
+        log_info(f"Prompt Type: {type(generation_prompt)}")
+        log_info(f"Prompt Length: {len(generation_prompt) if generation_prompt else 0}")
+        log_info(f"Look Type: {look_type}")
+        log_info(f"Custom Prompt Provided: {custom_prompt is not None}")
+        log_info("---")
+        log_info(f"Full Payload JSON:")
+        log_info(json.dumps(payload, indent=2))
+        log_info("---")
+        log_info(f"Request Headers:")
+        log_info(json.dumps(self._headers, indent=2))
+        log_info("="*80)
 
         try:
             response = self._post_with_retry(
@@ -703,16 +714,25 @@ class LooksGenerator:
                     time.sleep(wait_time)
                     continue
 
-                # Enhanced error logging for non-successful responses
+                # Log response details before raising error
                 if not response.ok:
-                    log_error(f"HeyGen API Error Response:")
+                    log_error("="*80)
+                    log_error("HEYGEN API ERROR RESPONSE")
+                    log_error("="*80)
                     log_error(f"Status Code: {response.status_code}")
-                    log_error(f"Response Headers: {dict(response.headers)}")
+                    log_error(f"Reason: {response.reason}")
+                    log_error(f"URL: {response.url}")
+                    log_error("Response Headers:")
+                    for key, value in response.headers.items():
+                        log_error(f"  {key}: {value}")
+                    log_error("---")
+                    log_error("Response Body:")
                     try:
-                        error_body = response.json()
-                        log_error(f"Response Body: {json.dumps(error_body, indent=2)}")
+                        error_json = response.json()
+                        log_error(json.dumps(error_json, indent=2))
                     except:
-                        log_error(f"Response Text: {response.text}")
+                        log_error(f"Raw Text: {response.text}")
+                    log_error("="*80)
 
                 response.raise_for_status()
                 return response.json()
@@ -775,16 +795,25 @@ class LooksGenerator:
                     time.sleep(wait_time)
                     continue
 
-                # Enhanced error logging for non-successful responses
+                # Log response details before raising error
                 if not response.ok:
-                    log_error(f"HeyGen API Error Response:")
+                    log_error("="*80)
+                    log_error("HEYGEN API ERROR RESPONSE")
+                    log_error("="*80)
                     log_error(f"Status Code: {response.status_code}")
-                    log_error(f"Response Headers: {dict(response.headers)}")
+                    log_error(f"Reason: {response.reason}")
+                    log_error(f"URL: {response.url}")
+                    log_error("Response Headers:")
+                    for key, value in response.headers.items():
+                        log_error(f"  {key}: {value}")
+                    log_error("---")
+                    log_error("Response Body:")
                     try:
-                        error_body = response.json()
-                        log_error(f"Response Body: {json.dumps(error_body, indent=2)}")
+                        error_json = response.json()
+                        log_error(json.dumps(error_json, indent=2))
                     except:
-                        log_error(f"Response Text: {response.text}")
+                        log_error(f"Raw Text: {response.text}")
+                    log_error("="*80)
 
                 response.raise_for_status()
                 return response.json()
