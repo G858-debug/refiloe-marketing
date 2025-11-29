@@ -258,10 +258,28 @@ class LooksGenerator:
 
         log_info(f"Starting avatar look generation for type '{look_type}'")
 
-        # Build payload - try minimal required fields first
+        # Map look types to appropriate styles for HeyGen API
+        LOOK_TYPE_TO_STYLE = {
+            "gym_trainer": "dynamic",
+            "office_professional": "professional",
+            "outdoor_wellness": "natural",
+            "nutrition_expert": "professional",
+            "yoga_instructor": "natural",
+            "motivational_speaker": "dynamic",
+            "home_workout": "casual",
+            "podcast_host": "casual",
+            "retreat_leader": "natural",
+            "studio_portrait": "professional",
+        }
+
+        # Select appropriate style (default to 'natural' if look_type not in mapping)
+        style_param = LOOK_TYPE_TO_STYLE.get(look_type, "natural")
+
+        # Build payload with required style parameter
         payload: Dict[str, Any] = {
             "group_id": resolved_group_id,
             "prompt": generation_prompt,
+            "style": style_param,  # Required by HeyGen API
         }
 
         if metadata:
