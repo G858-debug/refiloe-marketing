@@ -281,7 +281,7 @@ class LooksGenerator:
         payload: Dict[str, Any] = {
             "group_id": resolved_group_id,
             "prompt": generation_prompt,
-            "orientation": "portrait",  # Options: "portrait", "landscape", "square"
+            "orientation": "vertical",  # vertical/horizontal/square
             "pose": pose_param,  # Describes body position/posture
             "style": "Realistic",  # Options: Realistic, Pixar, Cinematic, Vintage, Noir, Cyberpunk, Unspecified
         }
@@ -299,7 +299,7 @@ class LooksGenerator:
         log_info(f"Group ID Length: {len(resolved_group_id) if resolved_group_id else 0}")
         log_info(f"Look Type: {look_type}")
         log_info(f"Pose: {pose_param}")
-        log_info(f"Orientation: portrait")
+        log_info(f"Orientation: vertical")
         log_info(f"Style: Realistic")
         log_info(f"Custom Prompt Provided: {custom_prompt is not None}")
         log_info(f"Prompt: {generation_prompt}")
