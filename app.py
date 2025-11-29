@@ -2051,6 +2051,15 @@ def test_generate_video():
                     }
                 )
 
+                # DEBUG: See exactly what look_result contains
+                log_info("=" * 80)
+                log_info("DEBUG: RECEIVED look_result FROM generate_avatar_look()")
+                log_info("=" * 80)
+                log_info(f"look_result type: {type(look_result)}")
+                log_info(f"look_result keys: {look_result.keys() if isinstance(look_result, dict) else 'NOT A DICT'}")
+                log_info(f"Full look_result content:\n{json.dumps(look_result, indent=2, default=str)}")
+                log_info("=" * 80)
+
                 # Save to database
                 record_id = looks_gen.save_look_to_database(look_result)
                 look_result['database_record_id'] = record_id
@@ -2076,15 +2085,18 @@ def test_generate_video():
                 image_urls = look_result.get('image_urls', [])
                 image_keys = look_result.get('image_keys', [])
 
-                log_info(f"  preview_url: {preview_url}")
-                log_info(f"  image_urls: {image_urls}")
-                log_info(f"  image_keys: {image_keys}")
-
                 # Use preview_url directly (it's the most reliable)
                 image_url = preview_url
 
                 # Also get image_key if available (Avatar IV can use either)
                 image_key = image_keys[0] if image_keys else None
+
+                # DEBUG: Log extracted values
+                log_info(f"Extracted preview_url: {preview_url}")
+                log_info(f"Extracted image_urls: {image_urls}")
+                log_info(f"Extracted image_keys: {image_keys}")
+                log_info(f"Final image_url for Avatar IV: {image_url}")
+                log_info(f"Final image_key for Avatar IV: {image_key}")
 
                 log_info(f"Will use for Avatar IV:")
                 log_info(f"  image_url: {image_url}")
