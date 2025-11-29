@@ -1982,8 +1982,10 @@ def test_generate_video():
             'video_generation': None
         }
 
-        # Variable to hold the avatar_id to use for video generation
-        avatar_id_for_video = None
+        # Variables to hold image data for Avatar IV video generation
+        image_url = None
+        image_key = None
+        look_type = None
 
         # STEP 1: Generate look if requested
         if generate_look:
@@ -2048,13 +2050,15 @@ def test_generate_video():
                     'database_record_id': record_id
                 }
 
-                # Use the generated photo_avatar_id for video generation
-                avatar_id_for_video = look_result.get('photo_avatar_id')
+                # Extract image URL and key from look generation for Avatar IV
+                image_url = look_result.get('preview_url')
+                image_key = look_result.get('image_keys', [None])[0]  # First image key
+                look_type = look_result.get('look_type')
 
-                if not avatar_id_for_video:
-                    raise ValueError("Look generation did not return a photo_avatar_id")
+                if not image_url and not image_key:
+                    raise ValueError("Look generation did not return usable image")
 
-                log_info(f"Will use generated avatar_id for video: {avatar_id_for_video}")
+                log_info(f"Will use generated image for Avatar IV - image_url: {image_url}, look_type: {look_type}")
 
             except Exception as look_error:
                 log_error(f"Look generation failed: {str(look_error)}")
@@ -2084,41 +2088,40 @@ def test_generate_video():
             )
             log_info("VideoGenerator initialized successfully")
 
-            # Determine avatar_id to use
-            if avatar_id_for_video:
-                # Use the generated look's avatar_id
-                avatar_id = avatar_id_for_video
-                log_info(f"Using generated look avatar_id: {avatar_id}")
-            else:
-                # Use provided avatar_id or fall back to environment variable
-                avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
-                log_info(f"Using provided/default avatar_id: {avatar_id}")
-
             # Get voice and content theme
             voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
             content_theme = data.get('content_theme')
 
-            log_info(f"Video generation parameters - avatar: {avatar_id}, voice: {voice_id}, theme: {content_theme}")
+            # Validate we have image data for Avatar IV
+            if not image_url and not image_key:
+                raise ValueError("Avatar IV requires either image_url or image_key")
+
+            log_info(f"Avatar IV video generation parameters - voice: {voice_id}, theme: {content_theme}")
+            log_info(f"Using Avatar IV with image_url: {image_url}")
             log_info(f"Script: {script[:100]}...")
 
-            # Generate video
-            log_info("Calling generate_avatar_video...")
-            result = video_gen.generate_avatar_video(
-                script_text=script,
-                avatar_id=avatar_id,
+            # Generate video using Avatar IV API (supports gestures and arm movements)
+            log_info("Calling generate_avatar_iv_video...")
+            result = video_gen.generate_avatar_iv_video(
+                script=script,
+                image_url=image_url,
+                image_key=image_key,
                 voice_id=voice_id,
-                style='educational',
-                background_music=True,
+                custom_motion_prompt=None,  # Avatar IV auto-generates gestures
+                enhance_motion=True,
+                aspect_ratio="9:16",  # Vertical video for social media
+                title=f"Test Video - {look_type or 'custom'}",
                 metadata={
                     'test': True,
                     'purpose': 'production_test',
                     'triggered_by': 'api',
                     'content_theme': content_theme,
                     'generated_look': generate_look,
-                    'look_id': response_data['look_generation']['look_id'] if response_data['look_generation'] else None
-                },
-                content_text=script,
-                content_type=content_theme
+                    'look_id': response_data['look_generation']['look_id'] if response_data['look_generation'] else None,
+                    'look_type': look_type,
+                    'source': 'test_video_endpoint',
+                    'timestamp': datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+                }
             )
 
             log_info(f"Video generation result: {result}")
@@ -2177,20 +2180,23 @@ def test_generate_video():
                 'duration': result.get('duration'),
                 'post_id': post_id,
                 'approval_url': f'/approval/view/{post_id}',
-                'avatar_id_used': avatar_id
+                'api_type': 'avatar_iv',
+                'image_url': image_url,
+                'status': result.get('status')
             }
 
             log_info("=== Video generation completed successfully ===")
 
         except Exception as video_error:
-            log_error(f"Video generation failed: {str(video_error)}")
+            log_error(f"Avatar IV video generation failed: {str(video_error)}")
             import traceback
-            log_error(f"Video generation traceback:\n{traceback.format_exc()}")
+            log_error(f"Avatar IV traceback:\n{traceback.format_exc()}")
 
             # Store video generation error
             response_data['video_generation'] = {
                 'success': False,
-                'error': str(video_error)
+                'error': str(video_error),
+                'api_type': 'avatar_iv'
             }
 
             # Determine overall success based on what was requested
