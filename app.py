@@ -2236,7 +2236,6 @@ def test_generate_video():
             log_info(f"Video URL obtained: {video_url}")
 
             # Create post with pending_approval status
-            from datetime import datetime, timedelta
             scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
 
             post_data = {
