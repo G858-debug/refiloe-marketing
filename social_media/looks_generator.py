@@ -387,23 +387,48 @@ class LooksGenerator:
             log_info("="*80)
 
             # Extract photo_avatar_ids from the add response
-            # HeyGen returns an array of look objects, each with an "id" field
+            # HeyGen returns different response structures - handle both cases
+            data = add_result.get("data", {})
 
-            if isinstance(data, list) and len(data) > 0:
-                # Extract IDs from the response array - these ARE the talking_photo_ids
+            talking_photo_ids = []
+
+            if isinstance(data, list):
+                # Case 1: data is directly a list of look objects
                 talking_photo_ids = [look.get("id") for look in data if look.get("id")]
+                log_info(f"Extracted {len(talking_photo_ids)} IDs from list response")
 
-                if talking_photo_ids:
-                    photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
-                    log_info(f"Got {len(talking_photo_ids)} talking_photo_ids from group. Using: {photo_avatar_id}")
+            elif isinstance(data, dict):
+                # Case 2: data is a dict - could have nested structure
+                # Try common HeyGen response patterns:
+
+                # Pattern A: data contains "looks" or "items" array
+                if "looks" in data:
+                    looks_array = data.get("looks", [])
+                    talking_photo_ids = [look.get("id") for look in looks_array if look.get("id")]
+                    log_info(f"Extracted {len(talking_photo_ids)} IDs from data.looks")
+                elif "items" in data:
+                    items_array = data.get("items", [])
+                    talking_photo_ids = [item.get("id") for item in items_array if item.get("id")]
+                    log_info(f"Extracted {len(talking_photo_ids)} IDs from data.items")
+                elif "talking_photo_ids" in data:
+                    # Pattern B: data directly contains talking_photo_ids
+                    talking_photo_ids = data.get("talking_photo_ids", [])
+                    log_info(f"Extracted {len(talking_photo_ids)} IDs from data.talking_photo_ids")
                 else:
-                    # Fallback: use image_key if no IDs found
-                    photo_avatar_id = image_keys[0]
-                    log_warning(f"No IDs found in add response, using image_key: {photo_avatar_id}")
+                    # Pattern C: data itself might be a single look object with an id
+                    if "id" in data:
+                        talking_photo_ids = [data.get("id")]
+                        log_info(f"Extracted 1 ID from data.id: {data.get('id')}")
+                    else:
+                        log_warning(f"Unknown dict structure in add response. Keys: {list(data.keys())}")
+
+            if talking_photo_ids:
+                photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
+                log_info(f"✓ Successfully extracted photo_avatar_id: {photo_avatar_id}")
             else:
-                # Fallback for unexpected response format
+                # Fallback: use image_key if no IDs found
                 photo_avatar_id = image_keys[0]
-                log_warning(f"Unexpected add response format, using image_key: {photo_avatar_id}")
+                log_warning(f"No talking_photo_ids found in response, using image_key fallback: {photo_avatar_id}")
 
             preview_url = image_urls[0]
 
