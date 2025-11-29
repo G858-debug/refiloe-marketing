@@ -1366,6 +1366,18 @@ def test_video_form():
                 </div>
 
                 <div class="form-group">
+                    <label for="motion_prompt">Custom Motion Prompt (Optional):</label>
+                    <textarea
+                        id="motion_prompt"
+                        rows="2"
+                        placeholder="e.g., 'waves enthusiastically' or 'gestures with open hands' or leave empty for automatic gestures"
+                    ></textarea>
+                    <div class="help-text">
+                        Describe specific gestures or movements. Leave empty for Avatar IV to automatically generate natural gestures based on the script.
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label for="content_theme">Content Theme:</label>
                     <select id="content_theme">
                         <option value="">-- Auto-detect from script --</option>
@@ -1684,6 +1696,7 @@ def test_video_form():
                 const script = document.getElementById('script').value;
                 const contentTheme = document.getElementById('content_theme').value;
                 const voiceId = document.getElementById('voice_id').value;
+                const motionPrompt = document.getElementById('motion_prompt').value.trim();
 
                 const videoPayload = {
                     script: script
@@ -1699,6 +1712,11 @@ def test_video_form():
 
                 if (voiceId) {
                     videoPayload.voice_id = voiceId;
+                }
+
+                // Add to payload if provided
+                if (motionPrompt) {
+                    videoPayload.motion_prompt = motionPrompt;
                 }
 
                 const videoResponse = await fetch('/api/test-video', {
@@ -2092,11 +2110,14 @@ def test_generate_video():
             voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
             content_theme = data.get('content_theme')
 
+            # Get optional motion prompt from request
+            motion_prompt = data.get('motion_prompt', '').strip() or None
+
             # Validate we have image data for Avatar IV
             if not image_url and not image_key:
                 raise ValueError("Avatar IV requires either image_url or image_key")
 
-            log_info(f"Avatar IV video generation parameters - voice: {voice_id}, theme: {content_theme}")
+            log_info(f"Avatar IV video generation parameters - voice: {voice_id}, theme: {content_theme}, motion_prompt: {motion_prompt}")
             log_info(f"Using Avatar IV with image_url: {image_url}")
             log_info(f"Script: {script[:100]}...")
 
@@ -2107,7 +2128,7 @@ def test_generate_video():
                 image_url=image_url,
                 image_key=image_key,
                 voice_id=voice_id,
-                custom_motion_prompt=None,  # Avatar IV auto-generates gestures
+                custom_motion_prompt=motion_prompt,  # Use provided motion prompt
                 enhance_motion=True,
                 aspect_ratio="9:16",  # Vertical video for social media
                 title=f"Test Video - {look_type or 'custom'}",
