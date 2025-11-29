@@ -169,7 +169,7 @@ class LooksGenerator:
         if not self.api_key:
             raise ValueError("HEYGEN_API_KEY environment variable is required")
 
-        self.group_id = os.getenv("HEYGEN_PHOTO_AVATAR_GROUP_ID")
+        self.group_id = os.getenv("HEYGEN_AVATAR_GROUP")
         self.sa_tz = pytz.timezone("Africa/Johannesburg")
         self.max_retries = 5
         self.retry_backoff = 5
@@ -242,7 +242,7 @@ class LooksGenerator:
         if not resolved_group_id:
             raise ValueError(
                 "Photo avatar group ID is required. Provide group_id parameter "
-                "or set HEYGEN_PHOTO_AVATAR_GROUP_ID environment variable."
+                "or set HEYGEN_AVATAR_GROUP environment variable."
             )
 
         look_config = REFILOE_LOOKS.get(look_type)

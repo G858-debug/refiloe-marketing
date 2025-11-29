@@ -120,7 +120,7 @@ Tests make real API calls. Requires valid credentials.
 ```bash
 # Set environment variables
 export HEYGEN_API_KEY="your_api_key"
-export HEYGEN_PHOTO_AVATAR_GROUP_ID="your_group_id"
+export HEYGEN_AVATAR_GROUP="your_group_id"
 export SUPABASE_URL="your_supabase_url"
 export SUPABASE_ANON_KEY="your_supabase_key"
 
@@ -164,7 +164,7 @@ open htmlcov/index.html
 | Variable | Description |
 |----------|-------------|
 | `HEYGEN_API_KEY` | HeyGen API key for avatar generation |
-| `HEYGEN_PHOTO_AVATAR_GROUP_ID` | Photo avatar group ID |
+| `HEYGEN_AVATAR_GROUP` | Photo avatar group ID |
 | `SUPABASE_URL` | Supabase database URL |
 | `SUPABASE_ANON_KEY` | Supabase anonymous key |
 
@@ -228,7 +228,7 @@ Before deploying to Railway production, verify:
 
 ### Environment Variables
 - [ ] HEYGEN_API_KEY is set
-- [ ] HEYGEN_PHOTO_AVATAR_GROUP_ID is set
+- [ ] HEYGEN_AVATAR_GROUP is set
 - [ ] SUPABASE_URL is set
 - [ ] SUPABASE_ANON_KEY is set
 

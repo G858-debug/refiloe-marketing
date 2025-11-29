@@ -15,7 +15,7 @@ Before running the script, ensure:
 2. **Environment variables are set** (in `.env`):
    ```bash
    HEYGEN_API_KEY=your-api-key
-   HEYGEN_PHOTO_AVATAR_GROUP_ID=your-group-id
+   HEYGEN_AVATAR_GROUP=your-group-id
    SUPABASE_URL=your-supabase-url
    SUPABASE_SERVICE_KEY=your-service-key
    ```

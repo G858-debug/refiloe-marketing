@@ -51,7 +51,7 @@ This script generates 20 unique avatar looks optimized for different content sce
 
 2. **Environment Variables Set**
    - `HEYGEN_API_KEY` - Your HeyGen API key
-   - `HEYGEN_PHOTO_AVATAR_GROUP_ID` - Your photo avatar group ID
+   - `HEYGEN_AVATAR_GROUP` - Your photo avatar group ID
    - Supabase credentials (for database storage)
 
 3. **Python Dependencies**

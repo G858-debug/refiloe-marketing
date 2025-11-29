@@ -79,7 +79,7 @@ def mock_env_complete() -> Generator[dict, None, None]:
 
     test_env = {
         "HEYGEN_API_KEY": "test_api_key_12345",
-        "HEYGEN_PHOTO_AVATAR_GROUP_ID": "test_group_id_67890",
+        "HEYGEN_AVATAR_GROUP": "test_group_id_67890",
         "HEYGEN_LOOK_POLL_TIMEOUT": "60",
         "HEYGEN_LOOKS_TABLE": "avatar_looks_test",
         "SUPABASE_URL": "https://test.supabase.co",
