@@ -2301,7 +2301,7 @@ def test_generate_video():
             # Maintain backward compatibility with old response format
             final_response['video_id'] = response_data['video_generation']['video_id']
             final_response['video_url'] = response_data['video_generation']['video_url']
-            final_response['post_id'] = response_data['video_generation']['post_id']
+            # Database save skipped for test endpoint - no post_id
             final_response['approval_url'] = response_data['video_generation']['approval_url']
 
         return jsonify(final_response), 200
