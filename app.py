@@ -2153,37 +2153,75 @@ def test_generate_video():
             # Get optional motion prompt from request
             motion_prompt = data.get('motion_prompt', '').strip() or None
 
-            # Validate we have image data for Avatar IV
-            if not image_url and not image_key:
-                raise ValueError("Avatar IV requires either image_url or image_key")
+            # Initialize api_type_used for error handling
+            api_type_used = 'unknown'
 
-            log_info(f"Avatar IV video generation parameters - voice: {voice_id}, theme: {content_theme}, motion_prompt: {motion_prompt}")
-            log_info(f"Using Avatar IV with image_url: {image_url}")
-            log_info(f"Script: {script[:100]}...")
+            # INTELLIGENT API SELECTION
+            # Use Avatar IV if we have image_url (from look generation) - supports gestures
+            # Use Photo Avatar API if we have avatar_id only - standard video
 
-            # Generate video using Avatar IV API (supports gestures and arm movements)
-            log_info("Calling generate_avatar_iv_video...")
-            result = video_gen.generate_avatar_iv_video(
-                script=script,
-                image_url=image_url,
-                image_key=image_key,
-                voice_id=voice_id,
-                custom_motion_prompt=motion_prompt,  # Use provided motion prompt
-                enhance_motion=True,
-                aspect_ratio="9:16",  # Vertical video for social media
-                title=f"Test Video - {look_type or 'custom'}",
-                metadata={
-                    'test': True,
-                    'purpose': 'production_test',
-                    'triggered_by': 'api',
-                    'content_theme': content_theme,
-                    'generated_look': generate_look,
-                    'look_id': response_data['look_generation']['look_id'] if response_data['look_generation'] else None,
-                    'look_type': look_type,
-                    'source': 'test_video_endpoint',
-                    'timestamp': datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
-                }
-            )
+            use_avatar_iv = bool(image_url or image_key)
+            avatar_id_for_photo_avatar = data.get('avatar_id')
+
+            if use_avatar_iv:
+                # AVATAR IV PATH (NEW LOOKS WITH GESTURES)
+                log_info("Using Avatar IV API (supports gestures and arm movements)")
+                log_info(f"Avatar IV parameters - voice: {voice_id}, theme: {content_theme}, motion_prompt: {motion_prompt}")
+                log_info(f"Using Avatar IV with image_url: {image_url}")
+                log_info(f"Script: {script[:100]}...")
+
+                result = video_gen.generate_avatar_iv_video(
+                    script=script,
+                    image_url=image_url,
+                    image_key=image_key,
+                    voice_id=voice_id,
+                    custom_motion_prompt=motion_prompt,
+                    enhance_motion=True,
+                    aspect_ratio="9:16",
+                    title=f"Test Video - {look_type or 'custom'}",
+                    metadata={
+                        'test': True,
+                        'purpose': 'production_test',
+                        'triggered_by': 'api',
+                        'content_theme': content_theme,
+                        'generated_look': generate_look,
+                        'look_id': response_data.get('look_generation', {}).get('look_id') if generate_look else None,
+                        'look_type': look_type,
+                        'source': 'test_video_endpoint',
+                        'timestamp': datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+                    }
+                )
+
+                api_type_used = 'avatar_iv'
+                log_info("Avatar IV video generation initiated")
+
+            elif avatar_id_for_photo_avatar:
+                # PHOTO AVATAR PATH (EXISTING AVATARS - STANDARD)
+                log_info("Using Photo Avatar API (existing avatar)")
+                log_info(f"Photo Avatar parameters - avatar_id: {avatar_id_for_photo_avatar}, voice: {voice_id}")
+                log_info(f"Script: {script[:100]}...")
+
+                result = video_gen.generate_avatar_video(
+                    script_text=script,
+                    avatar_id=avatar_id_for_photo_avatar,
+                    voice_id=voice_id,
+                    style='educational',
+                    background_music=False,
+                    metadata={
+                        'test': True,
+                        'purpose': 'production_test',
+                        'triggered_by': 'api',
+                        'content_theme': content_theme,
+                        'source': 'test_video_endpoint',
+                        'timestamp': datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+                    }
+                )
+
+                api_type_used = 'photo_avatar'
+                log_info("Photo Avatar video generation initiated")
+
+            else:
+                raise ValueError("Must provide either: (1) generate_look=true for Avatar IV, or (2) avatar_id for Photo Avatar")
 
             log_info(f"Video generation result: {result}")
 
@@ -2241,23 +2279,24 @@ def test_generate_video():
                 'duration': result.get('duration'),
                 'post_id': post_id,
                 'approval_url': f'/approval/view/{post_id}',
-                'api_type': 'avatar_iv',
-                'image_url': image_url,
+                'api_type': api_type_used,
+                'image_url': image_url if api_type_used == 'avatar_iv' else None,
+                'avatar_id': avatar_id_for_photo_avatar if api_type_used == 'photo_avatar' else None,
                 'status': result.get('status')
             }
 
             log_info("=== Video generation completed successfully ===")
 
         except Exception as video_error:
-            log_error(f"Avatar IV video generation failed: {str(video_error)}")
+            log_error(f"Video generation failed (API: {api_type_used}): {str(video_error)}")
             import traceback
-            log_error(f"Avatar IV traceback:\n{traceback.format_exc()}")
+            log_error(f"Video generation traceback:\n{traceback.format_exc()}")
 
             # Store video generation error
             response_data['video_generation'] = {
                 'success': False,
                 'error': str(video_error),
-                'api_type': 'avatar_iv'
+                'api_type': api_type_used
             }
 
             # Determine overall success based on what was requested
