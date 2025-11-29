@@ -430,6 +430,21 @@ class LooksGenerator:
             if talking_photo_ids:
                 photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
                 log_info(f"✓ Successfully extracted photo_avatar_id: {photo_avatar_id}")
+
+                # Extract image URLs from add_result for Avatar IV compatibility
+                if isinstance(data, dict) and "photo_avatar_list" in data:
+                    photo_list = data.get("photo_avatar_list", [])
+                    add_result_image_urls = [
+                        photo.get("image_url")
+                        for photo in photo_list
+                        if photo.get("image_url")
+                    ]
+                    if add_result_image_urls:
+                        log_info(f"Extracted {len(add_result_image_urls)} image URLs from add_result")
+                        # Override image_urls with URLs from add_result (more reliable)
+                        image_urls = add_result_image_urls
+                        preview_url = add_result_image_urls[0]
+                        log_info(f"Updated preview_url to: {preview_url}")
             else:
                 # Fallback: use image_key if no IDs found
                 photo_avatar_id = image_keys[0]
