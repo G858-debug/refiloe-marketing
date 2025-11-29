@@ -461,6 +461,10 @@ class VideoGenerator:
         if metadata:
             payload["callback_data"] = metadata
 
+        # Log the full payload being sent for debugging
+        log_info("Avatar IV API payload:")
+        log_info(json.dumps(payload, indent=2))
+
         try:
             # Call Avatar IV endpoint
             response = self._post_with_retry(
@@ -1368,6 +1372,17 @@ class VideoGenerator:
                     )
                     time.sleep(wait_time)
                     continue
+
+                # Log error details before raising
+                if not response.ok:
+                    log_error(f"HeyGen API error response:")
+                    log_error(f"Status Code: {response.status_code}")
+                    log_error(f"Response Headers: {dict(response.headers)}")
+                    try:
+                        error_body = response.json()
+                        log_error(f"Response Body: {json.dumps(error_body, indent=2)}")
+                    except Exception:
+                        log_error(f"Response Text: {response.text}")
 
                 response.raise_for_status()
                 return response.json()
