@@ -85,12 +85,14 @@ class SocialMediaScheduler:
         log_info("Registering social media scheduler jobs.")
 
         job_definitions: List[Dict[str, Any]] = [
-            {
-                "id": "video_generation_daily",
-                "name": "Daily Video Generation",
-                "trigger": CronTrigger(hour=5, minute=0, timezone=SA_TIMEZONE),
-                "callable": self._wrap_job("video_generation_daily", self.run_video_generation),
-            },
+            # TEMPORARILY DISABLED - Modifying video generation codebase
+            # To re-enable: uncomment this job definition
+            # {
+            #     "id": "video_generation_daily",
+            #     "name": "Daily Video Generation",
+            #     "trigger": CronTrigger(hour=5, minute=0, timezone=SA_TIMEZONE),
+            #     "callable": self._wrap_job("video_generation_daily", self.run_video_generation),
+            # },
             {
                 "id": "content_generation_daily",
                 "name": "Daily Content Generation",
