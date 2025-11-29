@@ -546,6 +546,77 @@ def verify_avatar_group():
         }), 500
 
 
+@app.route('/api/debug/test-heygen-look-direct', methods=['POST'])
+def test_heygen_look_direct():
+    """Directly test HeyGen look generation with minimal payload"""
+    import os
+    import requests
+    import json
+
+    api_key = os.getenv('HEYGEN_API_KEY')
+    group_id = os.getenv('HEYGEN_AVATAR_GROUP')
+
+    if not api_key or not group_id:
+        return jsonify({
+            'error': 'Missing credentials',
+            'has_api_key': bool(api_key),
+            'has_group_id': bool(group_id)
+        }), 400
+
+    # Get test prompt from request
+    data = request.get_json() or {}
+    test_prompt = data.get('prompt', 'Professional fitness trainer wearing athletic wear, standing in a modern gym')
+
+    # Try the API call with absolute minimal payload
+    payload = {
+        "group_id": group_id,
+        "prompt": test_prompt
+    }
+
+    headers = {
+        "X-Api-Key": api_key,
+        "Content-Type": "application/json"
+    }
+
+    url = "https://api.heygen.com/v2/photo_avatar/look/generate"
+
+    try:
+        log_info(f"Direct test API call to: {url}")
+        log_info(f"Payload: {json.dumps(payload, indent=2)}")
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        result = {
+            'status_code': response.status_code,
+            'success': response.ok,
+            'url': url,
+            'payload_sent': payload,
+            'headers_sent': {k: v for k, v in headers.items() if k != 'X-Api-Key'},
+        }
+
+        if response.ok:
+            result['response_data'] = response.json()
+        else:
+            result['error_response'] = response.text
+            try:
+                result['error_json'] = response.json()
+            except:
+                pass
+
+        return jsonify(result), response.status_code
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'payload_attempted': payload
+        }), 500
+
+
 @app.route('/api/debug/post/<post_id>')
 def debug_single_post(post_id):
     """Debug endpoint to see full post details including video"""
