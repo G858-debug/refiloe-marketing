@@ -2217,15 +2217,24 @@ def test_generate_video():
 
             log_info(f"Video generation result: {result}")
 
-            # Check if we got a video URL
+            # Check if we got a video ID (required for both sync and async)
             video_url = result.get('video_url')
             video_id = result.get('video_id')
 
-            if not video_url:
-                log_error(f"No video URL in result: {result}")
-                raise ValueError('Video generated but no URL returned')
+            # For async generation (Avatar IV, Photo Avatar), we get video_id and status
+            # Video URL will be available after processing completes
+            if not video_id:
+                log_error(f"No video_id in result: {result}")
+                raise ValueError('Video generation failed - no video_id returned')
 
-            log_info(f"Video URL obtained: {video_url}")
+            log_info(f"Video generation successful - video_id: {video_id}, status: {result.get('status', 'unknown')}")
+
+            # Add video_url if available (sync APIs), otherwise it will come via webhook/status check
+            if not video_url:
+                log_info(f"Video URL not yet available (async generation). Check status with video_id: {video_id}")
+                video_url = None  # Explicitly set to None for clarity
+            else:
+                log_info(f"Video URL obtained: {video_url}")
 
             # Create post with pending_approval status
             scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
@@ -2264,6 +2273,7 @@ def test_generate_video():
             # Store video generation result
             response_data['video_generation'] = {
                 'success': True,
+                'message': 'Video generation successful' if video_url else 'Video generation started (processing async)',
                 'video_id': video_id,
                 'video_url': video_url,
                 'thumbnail_url': result.get('thumbnail_url'),
@@ -2273,7 +2283,7 @@ def test_generate_video():
                 'api_type': api_type_used,
                 'image_url': image_url if api_type_used == 'avatar_iv' else None,
                 'avatar_id': avatar_id_for_photo_avatar if api_type_used == 'photo_avatar' else None,
-                'status': result.get('status')
+                'status': result.get('status', 'unknown')
             }
 
             log_info("=== Video generation completed successfully ===")
