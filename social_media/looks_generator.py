@@ -370,9 +370,24 @@ class LooksGenerator:
                 look_name=look_name
             )
 
+            # DEBUG: Log the complete add_result to understand structure
+            log_info("="*80)
+            log_info("DEBUG: ADD LOOK TO GROUP RESPONSE")
+            log_info("="*80)
+            log_info(f"Full add_result type: {type(add_result)}")
+            log_info(f"Full add_result keys: {add_result.keys() if isinstance(add_result, dict) else 'N/A'}")
+            log_info(f"Full add_result content:\n{json.dumps(add_result, indent=2)}")
+
+            data = add_result.get("data", [])
+            log_info(f"Extracted data type: {type(data)}")
+            log_info(f"Extracted data length: {len(data) if isinstance(data, list) else 'N/A'}")
+            log_info(f"Is data a list? {isinstance(data, list)}")
+            if isinstance(data, list) and len(data) > 0:
+                log_info(f"First item in data: {json.dumps(data[0], indent=2)}")
+            log_info("="*80)
+
             # Extract photo_avatar_ids from the add response
             # HeyGen returns an array of look objects, each with an "id" field
-            data = add_result.get("data", [])
 
             if isinstance(data, list) and len(data) > 0:
                 # Extract IDs from the response array - these ARE the talking_photo_ids
