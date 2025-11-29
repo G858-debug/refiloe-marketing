@@ -145,11 +145,11 @@ if [[ "$DRY_RUN" == "false" ]]; then
     fi
     echo "  HEYGEN_API_KEY: Set"
 
-    if [[ -z "$HEYGEN_PHOTO_AVATAR_GROUP_ID" ]]; then
-        echo -e "${RED}Error: HEYGEN_PHOTO_AVATAR_GROUP_ID is required for live testing${NC}"
+    if [[ -z "$HEYGEN_AVATAR_GROUP" ]]; then
+        echo -e "${RED}Error: HEYGEN_AVATAR_GROUP is required for live testing${NC}"
         exit 1
     fi
-    echo "  HEYGEN_PHOTO_AVATAR_GROUP_ID: Set"
+    echo "  HEYGEN_AVATAR_GROUP: Set"
 
     if [[ -z "$SUPABASE_URL" ]]; then
         echo -e "${YELLOW}Warning: SUPABASE_URL not set - database tests will be skipped${NC}"

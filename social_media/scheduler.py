@@ -610,8 +610,8 @@ class SocialMediaScheduler:
             log_warning("HEYGEN_API_KEY missing; weekly avatar looks job skipped.")
             return
 
-        if not os.getenv("HEYGEN_PHOTO_AVATAR_GROUP_ID"):
-            log_warning("HEYGEN_PHOTO_AVATAR_GROUP_ID missing; weekly avatar looks job skipped.")
+        if not os.getenv("HEYGEN_AVATAR_GROUP"):
+            log_warning("HEYGEN_AVATAR_GROUP missing; weekly avatar looks job skipped.")
             return
 
         try:

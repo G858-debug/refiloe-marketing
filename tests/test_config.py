@@ -26,7 +26,7 @@ def has_live_credentials() -> bool:
     """Check if live API credentials are available."""
     return bool(
         os.getenv("HEYGEN_API_KEY")
-        and os.getenv("HEYGEN_PHOTO_AVATAR_GROUP_ID")
+        and os.getenv("HEYGEN_AVATAR_GROUP")
         and os.getenv("SUPABASE_URL")
         and os.getenv("SUPABASE_ANON_KEY")
     )
@@ -97,7 +97,7 @@ REQUIRED_ENV_VARS = [
         "required_for": ["live_api", "production"],
     },
     {
-        "name": "HEYGEN_PHOTO_AVATAR_GROUP_ID",
+        "name": "HEYGEN_AVATAR_GROUP",
         "description": "Photo avatar group ID for look generation",
         "required_for": ["live_api", "production"],
     },
@@ -388,7 +388,7 @@ DEPLOYMENT_CHECKLIST = [
         "category": "Environment Variables",
         "items": [
             {"check": "HEYGEN_API_KEY is set", "critical": True},
-            {"check": "HEYGEN_PHOTO_AVATAR_GROUP_ID is set", "critical": True},
+            {"check": "HEYGEN_AVATAR_GROUP is set", "critical": True},
             {"check": "SUPABASE_URL is set", "critical": True},
             {"check": "SUPABASE_ANON_KEY is set", "critical": True},
         ],

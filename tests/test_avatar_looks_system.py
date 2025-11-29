@@ -101,7 +101,7 @@ def mock_env_vars():
     """Set up mock environment variables for testing."""
     original_env = os.environ.copy()
     os.environ["HEYGEN_API_KEY"] = "test_api_key_12345"
-    os.environ["HEYGEN_PHOTO_AVATAR_GROUP_ID"] = "test_group_id_67890"
+    os.environ["HEYGEN_AVATAR_GROUP"] = "test_group_id_67890"
     os.environ["HEYGEN_LOOK_POLL_TIMEOUT"] = "60"
     os.environ["HEYGEN_LOOKS_TABLE"] = "avatar_looks"
 
@@ -867,9 +867,9 @@ class TestEnvironmentValidation:
         from social_media.looks_generator import LooksGenerator
 
         # Remove group ID
-        original = os.environ.get("HEYGEN_PHOTO_AVATAR_GROUP_ID")
-        if "HEYGEN_PHOTO_AVATAR_GROUP_ID" in os.environ:
-            del os.environ["HEYGEN_PHOTO_AVATAR_GROUP_ID"]
+        original = os.environ.get("HEYGEN_AVATAR_GROUP")
+        if "HEYGEN_AVATAR_GROUP" in os.environ:
+            del os.environ["HEYGEN_AVATAR_GROUP"]
 
         generator = LooksGenerator(mock_supabase)
 
@@ -878,7 +878,7 @@ class TestEnvironmentValidation:
 
         # Restore
         if original:
-            os.environ["HEYGEN_PHOTO_AVATAR_GROUP_ID"] = original
+            os.environ["HEYGEN_AVATAR_GROUP"] = original
 
         logger.info("generate_avatar_look correctly validates group ID")
 
