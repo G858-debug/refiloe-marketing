@@ -439,13 +439,14 @@ class VideoGenerator:
             "aspect_ratio": aspect_ratio,
         }
 
-        # Add image source (prefer image_key over image_url)
-        if image_key:
-            payload["image_key"] = image_key
-            log_info(f"Using image_key: {image_key}")
-        else:
+        # Add image source (Avatar IV prefers image_url over image_key)
+        if image_url:
             payload["image_url"] = image_url
             log_info(f"Using image_url: {image_url[:50]}...")
+        elif image_key:
+            # Fallback to image_key if no URL available
+            payload["image_key"] = image_key
+            log_info(f"Using image_key: {image_key}")
 
         # Add optional motion prompt
         if custom_motion_prompt:
