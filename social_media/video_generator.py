@@ -375,6 +375,130 @@ class VideoGenerator:
             "All avatar options failed for HeyGen video generation"
         ) from last_error
 
+    def generate_avatar_iv_video(
+        self,
+        script: str,
+        image_url: str = None,
+        image_key: str = None,
+        *,
+        voice_id: Optional[str] = None,
+        custom_motion_prompt: Optional[str] = None,
+        enhance_motion: bool = True,
+        aspect_ratio: str = "9:16",
+        title: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Generate video using Avatar IV API with automatic gestures.
+
+        Avatar IV provides automatic hand gestures, arm movements, and expressive
+        facial dynamics from a single photo.
+
+        Args:
+            script: Text the avatar will speak (max 5000 characters)
+            image_url: Public URL to the image (alternative to image_key)
+            image_key: HeyGen image asset key (from upload or look generation)
+            voice_id: HeyGen voice ID. Uses default if not provided.
+            custom_motion_prompt: Optional motion description (e.g., "waves enthusiastically")
+            enhance_motion: Whether to let AI enhance the motion prompt
+            aspect_ratio: Video aspect ratio ("16:9", "9:16", "1:1")
+            title: Optional video title
+            metadata: Optional metadata dict
+
+        Returns:
+            Dict containing video_id and status
+
+        Raises:
+            ValueError: If neither image_url nor image_key provided
+            VideoGenerationError: If video generation fails
+        """
+        if not image_url and not image_key:
+            raise ValueError("Either image_url or image_key must be provided")
+
+        if not script or len(script.strip()) == 0:
+            raise ValueError("Script cannot be empty")
+
+        if len(script) > 5000:
+            raise ValueError("Script exceeds 5000 character limit")
+
+        # Use provided voice or default
+        resolved_voice_id = voice_id or self.default_voice_id
+        if not resolved_voice_id:
+            raise ValueError("No voice_id provided and no default voice configured")
+
+        log_info("Starting Avatar IV video generation")
+        log_info(f"Script length: {len(script)} characters")
+        log_info(f"Voice: {resolved_voice_id}")
+        log_info(f"Aspect ratio: {aspect_ratio}")
+        if custom_motion_prompt:
+            log_info(f"Motion prompt: {custom_motion_prompt}")
+
+        # Build Avatar IV API payload
+        payload = {
+            "script": script,
+            "voice_id": resolved_voice_id,
+            "aspect_ratio": aspect_ratio,
+        }
+
+        # Add image source (prefer image_key over image_url)
+        if image_key:
+            payload["image_key"] = image_key
+            log_info(f"Using image_key: {image_key}")
+        else:
+            payload["image_url"] = image_url
+            log_info(f"Using image_url: {image_url[:50]}...")
+
+        # Add optional motion prompt
+        if custom_motion_prompt:
+            payload["custom_motion_prompt"] = custom_motion_prompt
+            payload["enhance_custom_motion_prompt"] = enhance_motion
+
+        # Add optional title
+        if title:
+            payload["title"] = title
+
+        # Add metadata if provided
+        if metadata:
+            payload["callback_data"] = metadata
+
+        try:
+            # Call Avatar IV endpoint
+            response = self._post_with_retry(
+                "/v2/video/av4/generate",
+                json=payload
+            )
+
+            data = response.get("data", {})
+            video_id = data.get("video_id")
+
+            if not video_id:
+                raise VideoGenerationError(
+                    "Avatar IV response did not include video_id"
+                )
+
+            log_info(f"Avatar IV video generation started (video_id={video_id})")
+
+            result = {
+                "video_id": video_id,
+                "status": "processing",
+                "api_type": "avatar_iv",
+                "script": script,
+                "voice_id": resolved_voice_id,
+                "aspect_ratio": aspect_ratio,
+            }
+
+            if image_key:
+                result["image_key"] = image_key
+            if image_url:
+                result["image_url"] = image_url
+            if custom_motion_prompt:
+                result["motion_prompt"] = custom_motion_prompt
+
+            return result
+
+        except requests.RequestException as exc:
+            log_error(f"Avatar IV video generation failed: {exc}")
+            raise VideoGenerationError(f"Failed to generate Avatar IV video: {exc}") from exc
+
     def _build_avatar_candidate_chain(
         self,
         requested_avatar_id: Optional[str],
