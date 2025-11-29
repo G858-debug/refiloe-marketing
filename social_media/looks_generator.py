@@ -347,8 +347,7 @@ class LooksGenerator:
 
             log_info(f"Look generation completed successfully with status: {status}")
 
-            # For look generation, HeyGen returns image_key_list, not photo_avatar_id
-            # We need to use the first image_key as the avatar identifier
+            # Extract image keys and URLs
             image_keys = result.get("image_key_list", [])
             image_urls = result.get("image_url_list", [])
 
@@ -357,12 +356,30 @@ class LooksGenerator:
                     f"No images generated. Response: {json.dumps(result, indent=2)}"
                 )
 
-            # Use the first generated image
-            photo_avatar_id = image_keys[0]  # This is the image_key we can use
+            # NEW: Add looks to avatar group to get usable photo_avatar_ids
+            log_info("Adding generated looks to avatar group...")
+            add_result = self._add_look_to_group(
+                group_id=resolved_group_id,
+                image_keys=image_keys,
+                generation_id=generation_id
+            )
+
+            # Extract photo_avatar_ids from the add response
+            # The response should contain talking_photo_ids or photo_avatar_ids
+            data = add_result.get("data", {})
+            talking_photo_ids = data.get("talking_photo_ids", [])
+
+            if talking_photo_ids:
+                photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
+                log_info(f"Got photo_avatar_id from group: {photo_avatar_id}")
+            else:
+                # Fallback: use image_key if no photo_avatar_id returned
+                photo_avatar_id = image_keys[0]
+                log_warning(f"No talking_photo_ids returned, using image_key: {photo_avatar_id}")
+
             preview_url = image_urls[0]
 
-            log_info(f"Generated {len(image_keys)} images. Using first image_key as photo_avatar_id: {photo_avatar_id}")
-            log_info(f"Preview URL: {preview_url}")
+            log_info(f"Generated {len(image_keys)} images. Using photo_avatar_id: {photo_avatar_id}")
 
             generation_result = {
                 "look_id": generation_id,
@@ -935,6 +952,43 @@ class LooksGenerator:
         raise LookGenerationError(
             f"Timed out waiting for generation {generation_id} to complete"
         )
+
+    def _add_look_to_group(
+        self,
+        group_id: str,
+        image_keys: List[str],
+        generation_id: str
+    ) -> Dict[str, Any]:
+        """Add generated look images to the avatar group.
+
+        Args:
+            group_id: The avatar group ID
+            image_keys: List of image keys from look generation
+            generation_id: The generation ID
+
+        Returns:
+            Dict with photo_avatar_ids that can be used for video generation
+        """
+        log_info(f"Adding {len(image_keys)} looks to avatar group {group_id}")
+
+        payload = {
+            "group_id": group_id,
+            "image_keys": image_keys,
+            "generation_id": generation_id
+        }
+
+        try:
+            response = self._post_with_retry(
+                "/v2/photo_avatar/avatar_group/add",
+                json=payload
+            )
+
+            log_info(f"Looks added to group successfully: {json.dumps(response, indent=2)}")
+            return response
+
+        except Exception as e:
+            log_error(f"Failed to add looks to group: {str(e)}")
+            raise
 
     def _poll_motion_status(
         self,
