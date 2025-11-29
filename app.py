@@ -2236,39 +2236,11 @@ def test_generate_video():
             else:
                 log_info(f"Video URL obtained: {video_url}")
 
-            # Create post with pending_approval status
-            scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
-
-            post_data = {
-                'post_type': 'video',
-                'platform': 'facebook',
-                'status': 'pending_approval',
-                'scheduled_time': scheduled_time.isoformat(),
-                'video_url': video_url,
-                'thumbnail_url': result.get('thumbnail_url'),
-                'video_duration': int(result.get('duration', 0)),
-                'video_type': 'test_video',
-                'video_style': result.get('style', 'educational'),
-                'content': script,
-                'title': f'Test video - {script[:100]}...',
-                'content_theme': content_theme or 'test',
-                'has_captions': True,
-                'completion_rate': 0,
-                'avg_watch_time': 0
-            }
-
-            log_info(f"Post data being saved: {json.dumps(post_data, indent=2, default=str)}")
-
-            # Save to database
-            from social_media.database import SocialMediaDatabase
-            db = SocialMediaDatabase(supabase_client)
-            post_id = db.save_post(post_data)
-
-            log_info(f"Post saved with ID: {post_id}")
-
-            if not post_id:
-                log_error("Failed to save post - no ID returned")
-                raise ValueError('Failed to save post to database')
+            # Database save skipped for test endpoint - not needed for Avatar IV testing
+            log_info("Test endpoint completed - database save skipped")
+            log_info(f"Avatar IV video generation successful!")
+            log_info(f"Video ID: {result['video_id']}")
+            log_info(f"Check video status in HeyGen dashboard or via status API")
 
             # Store video generation result
             response_data['video_generation'] = {
@@ -2278,8 +2250,6 @@ def test_generate_video():
                 'video_url': video_url,
                 'thumbnail_url': result.get('thumbnail_url'),
                 'duration': result.get('duration'),
-                'post_id': post_id,
-                'approval_url': f'/approval/view/{post_id}',
                 'api_type': api_type_used,
                 'image_url': image_url if api_type_used == 'avatar_iv' else None,
                 'avatar_id': avatar_id_for_photo_avatar if api_type_used == 'photo_avatar' else None,
