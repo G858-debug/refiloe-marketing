@@ -1976,17 +1976,25 @@ def preview_look():
 @app.route('/api/test-video', methods=['POST'])
 def test_generate_video():
     """Manually trigger a test video generation with optional inline look generation"""
+
+    # VERSION MARKER - Updated 2025-11-29 18:58 UTC
+    log_info("="*80)
+    log_info("CODE VERSION: 2025-11-29-18:58-DEBUG-ENABLED")
+    log_info("test_generate_video() STARTED")
+    log_info("="*80)
+
     if not supabase_client:
         return jsonify({'error': 'Supabase not initialized'}), 503
 
     try:
         log_info("=== Starting test video generation ===")
 
+        data = request.get_json() or {}
+        log_info(f"Received request data keys: {list(data.keys())}")
+
         from social_media.video_generator import VideoGenerator
         import os
 
-        # Get request data
-        data = request.get_json() or {}
         script = data.get('script', 'Hello from Refiloe! This is a test video to verify our HeyGen integration is working perfectly in production.')
 
         # Look generation parameters
