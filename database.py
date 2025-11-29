@@ -39,7 +39,7 @@ class SocialMediaDatabase:
                 # 'trainer_id': REMOVED - doesn't exist in table
                 'post_type': post_data.get('post_type', 'single_image'),
                 'platform': post_data.get('platform', 'facebook'),
-                'content': post_data.get('content') or post_data.get('content_text'),
+                'caption_text': post_data.get('content') or post_data.get('content_text') or post_data.get('caption_text'),
                 'title': post_data.get('title') or post_data.get('content', '')[:100],
                 'content_theme': post_data.get('content_theme', ''),
                 'image_ids': post_data.get('image_ids', []),
@@ -823,13 +823,13 @@ class SocialMediaDatabase:
                     
                     # Get post content
                     post_result = self.db.table('social_posts').select(
-                        'content', 'platform', 'created_at'
+                        'caption_text', 'platform', 'created_at'
                     ).eq('id', winner_id).single().execute()
                     
                     if post_result.data:
                         pattern = {
                             'post_id': winner_id,
-                            'content': post_result.data['content'],
+                            'caption_text': post_result.data['caption_text'],
                             'platform': post_result.data['platform'],
                             'metric_tested': test['metric_tested'],
                             'performance_difference': test['performance_difference'],
