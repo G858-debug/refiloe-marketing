@@ -1616,7 +1616,8 @@ def test_video_form():
             return html;
         }
 
-        // Main video generation function
+        // Main video generation function - COMBINED REQUEST VERSION
+        // Sends a single request with generate_look=true to enable Avatar IV with gestures
         async function generateVideo() {
             const resultDiv = document.getElementById('result');
             const generateBtn = document.getElementById('generateBtn');
@@ -1625,138 +1626,129 @@ def test_video_form():
             generateBtn.disabled = true;
 
             const useGenerateLook = document.getElementById('generate_new').checked;
-            let avatarIdToUse = null;
 
             try {
-                // Step 1: Generate look if selected
+                const script = document.getElementById('script').value;
+                const voiceId = document.getElementById('voice_id').value;
+                const motionPrompt = document.getElementById('motion_prompt').value.trim();
+
+                const payload = {
+                    script: script
+                };
+
+                if (voiceId) {
+                    payload.voice_id = voiceId;
+                }
+
+                if (motionPrompt) {
+                    payload.motion_prompt = motionPrompt;
+                }
+
                 if (useGenerateLook) {
+                    // COMBINED REQUEST: Generate look + video together
+                    // This ensures Avatar IV is used with gestures!
                     resultDiv.innerHTML = updateProgress([
-                        { text: 'Generating custom avatar look... (this may take 2-3 minutes)', status: 'active' },
-                        { text: 'Creating video...', status: 'pending' }
+                        { text: 'Generating custom avatar look and video... (this may take 5-8 minutes)', status: 'active' }
                     ]);
 
                     const lookType = document.getElementById('look_type').value;
-                    const lookPayload = {};
+
+                    // Add generate_look flag for combined processing
+                    payload.generate_look = true;
 
                     if (lookType === 'custom') {
-                        // Get custom look details
+                        // Custom look parameters
                         const outfit = document.getElementById('custom_outfit').value.trim();
                         const environment = document.getElementById('custom_environment').value.trim();
                         const pose = document.getElementById('custom_pose').value.trim();
                         const mood = document.getElementById('custom_mood').value;
 
-                        if (outfit) lookPayload.outfit = outfit;
-                        if (environment) lookPayload.environment = environment;
-                        if (pose) lookPayload.pose = pose;
-                        if (mood) lookPayload.mood = mood;
-                        lookPayload.look_type = 'custom';
+                        payload.look_params = {
+                            look_type: 'custom'
+                        };
+
+                        if (outfit) payload.look_params.outfit = outfit;
+                        if (environment) payload.look_params.environment = environment;
+                        if (pose) payload.look_params.pose = pose;
+                        if (mood) payload.look_params.mood = mood;
                     } else {
-                        lookPayload.look_type = lookType;
-                    }
-
-                    // Call the generate-look API
-                    const lookResponse = await fetch('/api/generate-look', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(lookPayload)
-                    });
-
-                    const lookData = await lookResponse.json();
-
-                    if (!lookResponse.ok || !lookData.success) {
-                        throw new Error(lookData.error || 'Failed to generate avatar look');
-                    }
-
-                    avatarIdToUse = lookData.photo_avatar_id;
-
-                    resultDiv.innerHTML = updateProgress([
-                        { text: 'Look generated successfully!', status: 'complete' },
-                        { text: 'Creating video... (this may take 3-5 minutes)', status: 'active' }
-                    ]);
-
-                    // Add look preview if available
-                    if (lookData.preview_url) {
-                        resultDiv.innerHTML += `
-                            <div style="margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 4px;">
-                                <strong>Generated Look Preview:</strong><br>
-                                <img src="${lookData.preview_url}" style="max-width: 200px; border-radius: 4px; margin-top: 10px;">
-                            </div>
-                        `;
+                        // Predefined look type
+                        payload.look_params = {
+                            look_type: lookType
+                        };
                     }
                 } else {
                     // Using existing avatar
-                    avatarIdToUse = document.getElementById('avatar_id').value.trim() || null;
-
                     resultDiv.innerHTML = updateProgress([
                         { text: 'Generating video... (this may take 3-5 minutes)', status: 'active' }
                     ]);
+
+                    const avatarId = document.getElementById('avatar_id').value.trim();
+                    const contentTheme = document.getElementById('content_theme').value;
+
+                    if (avatarId) {
+                        payload.avatar_id = avatarId;
+                    }
+                    if (contentTheme) {
+                        payload.content_theme = contentTheme;
+                    }
                 }
 
-                // Step 2: Generate the video
-                const script = document.getElementById('script').value;
-                const contentTheme = document.getElementById('content_theme').value;
-                const voiceId = document.getElementById('voice_id').value;
-                const motionPrompt = document.getElementById('motion_prompt').value.trim();
-
-                const videoPayload = {
-                    script: script
-                };
-
-                if (contentTheme) {
-                    videoPayload.content_theme = contentTheme;
-                }
-
-                if (avatarIdToUse) {
-                    videoPayload.avatar_id = avatarIdToUse;
-                }
-
-                if (voiceId) {
-                    videoPayload.voice_id = voiceId;
-                }
-
-                // Add to payload if provided
-                if (motionPrompt) {
-                    videoPayload.motion_prompt = motionPrompt;
-                }
-
-                const videoResponse = await fetch('/api/test-video', {
+                // SINGLE API CALL - backend handles look generation + video generation together
+                const response = await fetch('/api/test-video', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(videoPayload)
+                    body: JSON.stringify(payload)
                 });
 
-                const videoData = await videoResponse.json();
+                const data = await response.json();
 
-                if (videoResponse.ok) {
+                if (response.ok) {
                     let successHtml = updateProgress([
-                        ...(useGenerateLook ? [{ text: 'Look generated successfully!', status: 'complete' }] : []),
                         { text: 'Video created successfully!', status: 'complete' }
                     ]);
 
-                    successHtml += '<h3 style="color: #4CAF50; margin-top: 20px;">✅ Success!</h3>';
-                    successHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">' + JSON.stringify(videoData, null, 2) + '</pre>';
-
-                    if (videoData.post_id) {
+                    // Show look generation details if applicable
+                    if (data.look_generation && data.look_generation.success) {
                         successHtml += `
-                            <div style="margin-top: 15px;">
-                                <a href="/approval/view/${videoData.post_id}" style="color: #4CAF50; font-weight: bold; margin-right: 20px;">
-                                    📝 Review This Video
-                                </a>
-                                <a href="/approval/pending" style="color: #4CAF50; font-weight: bold;">
-                                    📋 View All Pending Approvals
-                                </a>
+                            <div style="margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 4px;">
+                                <strong>Generated Look:</strong><br>
+                                Look ID: ${data.look_generation.look_id}<br>
+                                Photo Avatar ID: ${data.look_generation.photo_avatar_id}<br>
+                                ${data.look_generation.preview_url ? `<img src="${data.look_generation.preview_url}" style="max-width: 200px; border-radius: 4px; margin-top: 10px;">` : ''}
                             </div>
                         `;
                     }
 
+                    successHtml += `
+                        <div style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+                            <strong>Video Details:</strong><br>
+                            Video ID: ${data.video_id}<br>
+                            Status: ${data.video_generation?.status || 'processing'}<br>
+                            API Used: ${data.video_generation?.api_type || 'unknown'}<br>
+                            <br>
+                            <a href="${data.approval_url}" target="_blank" style="display: inline-block; background: #4CAF50; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; font-weight: bold;">
+                                Review Video →
+                            </a>
+                        </div>
+                    `;
+
+                    // Also show raw response for debugging
+                    successHtml += '<details style="margin-top: 15px;"><summary style="cursor: pointer; color: #666;">Show raw response</summary>';
+                    successHtml += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 10px;">' + JSON.stringify(data, null, 2) + '</pre>';
+                    successHtml += '</details>';
+
                     resultDiv.innerHTML = successHtml;
                 } else {
-                    throw new Error(videoData.error || 'Video generation failed');
+                    throw new Error(data.error || 'Failed to generate video');
                 }
+
             } catch (error) {
                 resultDiv.innerHTML = `
-                    <h3 style="color: #dc3545;">❌ Error</h3>
-                    <p>${error.message}</p>
+                    <div class="error" style="background: #ffebee; padding: 15px; border-radius: 4px; border-left: 4px solid #f44336;">
+                        <strong style="color: #c62828;">❌ Error</strong><br>
+                        <span style="color: #b71c1c;">${error.message}</span>
+                    </div>
                 `;
             } finally {
                 generateBtn.disabled = false;
