@@ -357,11 +357,17 @@ class LooksGenerator:
                 )
 
             # NEW: Add looks to avatar group to get usable photo_avatar_ids
+            # Generate a descriptive name for the look
+            look_display_name = look_config.get("name") if look_config else look_type.replace("_", " ").title()
+            current_date = datetime.now(self.sa_tz).strftime("%Y-%m-%d")
+            look_name = f"{look_display_name} Look - {current_date}"
+
             log_info("Adding generated looks to avatar group...")
             add_result = self._add_look_to_group(
                 group_id=resolved_group_id,
                 image_keys=image_keys,
-                generation_id=generation_id
+                generation_id=generation_id,
+                look_name=look_name
             )
 
             # Extract photo_avatar_ids from the add response
@@ -957,7 +963,8 @@ class LooksGenerator:
         self,
         group_id: str,
         image_keys: List[str],
-        generation_id: str
+        generation_id: str,
+        look_name: str
     ) -> Dict[str, Any]:
         """Add generated look images to the avatar group.
 
@@ -965,6 +972,7 @@ class LooksGenerator:
             group_id: The avatar group ID
             image_keys: List of image keys from look generation
             generation_id: The generation ID
+            look_name: Descriptive name for the look
 
         Returns:
             Dict with photo_avatar_ids that can be used for video generation
@@ -973,6 +981,7 @@ class LooksGenerator:
 
         payload = {
             "group_id": group_id,
+            "name": look_name,
             "image_keys": image_keys,
             "generation_id": generation_id
         }
