@@ -301,12 +301,36 @@ class LooksGenerator:
                 json=payload,
             )
 
+            # Log the FULL response to see what HeyGen actually returns
+            log_info("="*80)
+            log_info("HEYGEN SUCCESSFUL RESPONSE")
+            log_info("="*80)
+            log_info(f"Full response: {json.dumps(response, indent=2)}")
+            log_info(f"Response type: {type(response)}")
+            log_info(f"Response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+            log_info("="*80)
+
             data = response.get("data", {})
-            look_id = data.get("look_id") or data.get("id") or response.get("look_id")
+            log_info(f"Data object: {json.dumps(data, indent=2) if data else 'No data object'}")
+
+            # Try multiple possible keys for the look identifier
+            look_id = (
+                data.get("look_id") or
+                data.get("id") or
+                data.get("generation_id") or  # NEW: Try generation_id
+                response.get("look_id") or
+                response.get("generation_id") or  # NEW: Try at root level
+                response.get("id")
+            )
+
+            log_info(f"Extracted look_id: {look_id}")
 
             if not look_id:
+                log_error("Could not find look identifier in response!")
+                log_error(f"Available keys in response: {list(response.keys())}")
+                log_error(f"Available keys in data: {list(data.keys()) if data else 'No data'}")
                 raise LookGenerationError(
-                    "HeyGen response did not include a look identifier"
+                    f"HeyGen response did not include a look identifier. Response keys: {list(response.keys())}"
                 )
 
             log_info(f"Look generation initiated (look_id={look_id}, type={look_type})")
