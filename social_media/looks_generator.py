@@ -371,17 +371,24 @@ class LooksGenerator:
             )
 
             # Extract photo_avatar_ids from the add response
-            # The response should contain talking_photo_ids or photo_avatar_ids
-            data = add_result.get("data", {})
-            talking_photo_ids = data.get("talking_photo_ids", [])
+            # HeyGen returns an array of look objects, each with an "id" field
+            data = add_result.get("data", [])
 
-            if talking_photo_ids:
-                photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
-                log_info(f"Got photo_avatar_id from group: {photo_avatar_id}")
+            if isinstance(data, list) and len(data) > 0:
+                # Extract IDs from the response array - these ARE the talking_photo_ids
+                talking_photo_ids = [look.get("id") for look in data if look.get("id")]
+
+                if talking_photo_ids:
+                    photo_avatar_id = talking_photo_ids[0]  # Use first avatar ID
+                    log_info(f"Got {len(talking_photo_ids)} talking_photo_ids from group. Using: {photo_avatar_id}")
+                else:
+                    # Fallback: use image_key if no IDs found
+                    photo_avatar_id = image_keys[0]
+                    log_warning(f"No IDs found in add response, using image_key: {photo_avatar_id}")
             else:
-                # Fallback: use image_key if no photo_avatar_id returned
+                # Fallback for unexpected response format
                 photo_avatar_id = image_keys[0]
-                log_warning(f"No talking_photo_ids returned, using image_key: {photo_avatar_id}")
+                log_warning(f"Unexpected add response format, using image_key: {photo_avatar_id}")
 
             preview_url = image_urls[0]
 
