@@ -628,7 +628,8 @@ class LooksGenerator:
             # Remove None values
             db_record = {k: v for k, v in db_record.items() if v is not None}
 
-            result = self.supabase_client.table(self.looks_table).insert(db_record).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.supabase_client.table(self.looks_table).insert(db_record)
 
             if result and hasattr(result, "data") and result.data:
                 log_info(f"Saved avatar look to database (id={record_id})")
@@ -712,11 +713,11 @@ class LooksGenerator:
                 "updated_at": datetime.now(self.sa_tz).isoformat(),
             }
 
+            # Update in database (SupabaseRestClient.update() already executes and returns ExecuteResult)
             result = (
                 self.supabase_client.table(self.looks_table)
                 .update(update_data)
                 .eq("id", record_id)
-                .execute()
             )
 
             if result and result.data:

@@ -1278,7 +1278,8 @@ class VideoGenerator:
         }
 
         try:
-            self.supabase_client.table(self.usage_table).insert(record).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            self.supabase_client.table(self.usage_table).insert(record)
             log_debug(f"Recorded HeyGen usage for video {video_id}")
         except Exception as exc:  # pylint: disable=broad-except
             log_warning(f"Failed to record HeyGen usage: {exc}")
@@ -1316,7 +1317,8 @@ class VideoGenerator:
         }
 
         try:
-            self.supabase_client.table(self.video_table).insert(record).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            self.supabase_client.table(self.video_table).insert(record)
             log_info(f"Stored HeyGen video record {video_id} in Supabase")
         except Exception as exc:  # pylint: disable=broad-except
             log_warning(f"Failed to persist HeyGen video record: {exc}")

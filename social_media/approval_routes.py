@@ -208,7 +208,8 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
     try:
         # Delete associated video(s) - note: some posts may not have videos
         try:
-            video_result = db.db.table(_video_table).eq("post_id", post_id).delete().execute()
+            # Delete from database (SupabaseRestClient.delete() already executes and returns ExecuteResult)
+            video_result = db.db.table(_video_table).eq("post_id", post_id).delete()
             deleted_count = len(video_result.data) if video_result.data else 0
             if deleted_count > 0:
                 log_info(f"Deleted {deleted_count} video(s) for post {post_id}")
@@ -223,7 +224,8 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
 
         # Delete associated images - note: some posts may not have images
         try:
-            images_result = db.db.table("social_images").eq("post_id", post_id).delete().execute()
+            # Delete from database (SupabaseRestClient.delete() already executes and returns ExecuteResult)
+            images_result = db.db.table("social_images").eq("post_id", post_id).delete()
             deleted_count = len(images_result.data) if images_result.data else 0
             if deleted_count > 0:
                 log_info(f"Deleted {deleted_count} image(s) for post {post_id}")
@@ -237,7 +239,8 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
 
         # Delete the post itself - THIS is the critical operation
         try:
-            post_result = db.db.table("social_posts").eq("id", post_id).delete().execute()
+            # Delete from database (SupabaseRestClient.delete() already executes and returns ExecuteResult)
+            post_result = db.db.table("social_posts").eq("id", post_id).delete()
 
             # Check if deletion was successful
             if post_result.data:

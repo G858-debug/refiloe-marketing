@@ -205,10 +205,10 @@ class SocialMediaDatabase:
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
-            
-            # Insert into database
-            result = self.db.table('social_images').insert(db_data).execute()
-            
+
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table('social_images').insert(db_data)
+
             if result.data:
                 log_info(f"Image saved successfully with ID: {image_id}")
                 return image_id
@@ -321,16 +321,16 @@ class SocialMediaDatabase:
             ).execute()
             
             if existing.data:
-                # Update existing analytics
+                # Update existing analytics (SupabaseRestClient.update() already executes and returns ExecuteResult)
                 result = self.db.table('social_analytics').update(db_data).eq(
                     'post_id', post_id
-                ).execute()
+                )
                 log_info(f"Updated analytics for post {post_id}")
             else:
-                # Insert new analytics
+                # Insert new analytics (SupabaseRestClient.insert() already executes and returns ExecuteResult)
                 db_data['id'] = str(uuid.uuid4())
                 db_data['created_at'] = datetime.now(self.sa_tz).isoformat()
-                result = self.db.table('social_analytics').insert(db_data).execute()
+                result = self.db.table('social_analytics').insert(db_data)
                 log_info(f"Created new analytics for post {post_id}")
             
             if result.data:
@@ -506,10 +506,10 @@ class SocialMediaDatabase:
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
-            
-            # Insert into database
-            result = self.db.table('content_performance').insert(db_data).execute()
-            
+
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table('content_performance').insert(db_data)
+
             if result.data:
                 log_info(f"Content performance saved successfully with ID: {performance_id}")
                 return performance_id
@@ -552,10 +552,10 @@ class SocialMediaDatabase:
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
-            
-            # Insert into database
-            result = self.db.table('ab_tests').insert(db_data).execute()
-            
+
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table('ab_tests').insert(db_data)
+
             if result.data:
                 log_info(f"A/B test created successfully with ID: {test_id}")
                 return test_id
@@ -630,10 +630,10 @@ class SocialMediaDatabase:
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
-            
-            # Insert into database
-            result = self.db.table('trending_topics').insert(db_data).execute()
-            
+
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table('trending_topics').insert(db_data)
+
             if result.data:
                 log_info(f"Trending topic saved successfully with ID: {topic_id}")
                 return topic_id
@@ -702,9 +702,10 @@ class SocialMediaDatabase:
                     'created_at': datetime.now(self.sa_tz).isoformat(),
                     'updated_at': datetime.now(self.sa_tz).isoformat()
                 }
-                
-                result = self.db.table('hashtag_performance').insert(db_data).execute()
-                
+
+                # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+                result = self.db.table('hashtag_performance').insert(db_data)
+
                 if result.data:
                     log_info(f"Hashtag performance saved successfully with ID: {hashtag_id}")
                     return hashtag_id
