@@ -37,7 +37,10 @@ class ContentGenerator:
         
         self.claude_client = Anthropic(api_key=api_key)
         self.model = "claude-sonnet-4-20250514"  # Using the specified model
-        
+
+        # Load the Refiloe Writing Style Guide
+        self.style_guide = self._load_style_guide()
+
         log_info("ContentGenerator initialized successfully")
     
     def _load_config(self) -> Dict:
@@ -67,6 +70,99 @@ class ContentGenerator:
                     'speaking_style': {'voice': 'First person', 'tone': 'Conversational'}
                 }
             }
+
+    def _load_style_guide(self) -> Dict:
+        """Load the Refiloe Writing Style Guide and extract key patterns
+
+        Returns:
+            Dict: Style guide patterns and instructions for the prompt
+        """
+        style_guide_path = os.path.join(
+            os.path.dirname(self.config_path),
+            'social_media', 'style_guides', 'refiloe_voice.md'
+        )
+
+        style_guide = {
+            'opening': {
+                'rule': 'Never start with a fact. Start with a scene or feeling.',
+                'patterns': [
+                    'Time-stamp moments: "It was 6 AM when..."',
+                    'Sensory hooks: "You know that feeling when..."',
+                    'Scene-setting: "The gym was empty. The spreadsheet was full of red."',
+                    'Atmospheric tension: "Something felt off before the client even walked in."'
+                ]
+            },
+            'em_dashes': {
+                'rule': 'Use 1-2 em-dashes per post for dramatic asides.',
+                'examples': [
+                    'The client ghosted—again—and somehow you\'re the one feeling guilty.',
+                    'Three no-shows this week—not a crisis, but close enough to feel like one.',
+                    'You built a business to help people—not to chase payments at midnight.'
+                ]
+            },
+            'verbs': {
+                'rule': 'Replace neutral verbs with emotional ones.',
+                'upgrades': {
+                    'has': 'carries',
+                    'is': 'feels like / becomes',
+                    'happens': 'hits / lands / creeps in',
+                    'affects': 'gnaws at / lingers / haunts',
+                    'helps': 'saves / transforms / unlocks',
+                    'struggles': 'wrestles / fights / drowns'
+                }
+            },
+            'rhythm': {
+                'rule': 'Mix short punchy sentences with longer flowing ones. Use single-sentence paragraphs for emphasis.',
+                'guidelines': [
+                    'Never more than 3 short sentences in a row (becomes choppy)',
+                    'Never more than 2 long sentences in a row (becomes dense)',
+                    'Single-sentence paragraphs = maximum 2 per post'
+                ]
+            },
+            'closer': {
+                'rule': 'End with a philosophical line that lingers. Make it quotable.',
+                'patterns': [
+                    '"And sometimes..." (reflective)',
+                    '"That\'s the thing about..." (insight)',
+                    '"You didn\'t [become X] to [do Y]" (values reminder)',
+                    'Question that echoes: "When was the last time you trained *yourself*?"'
+                ]
+            },
+            'avoid': [
+                '"Game-changer" (overused)',
+                '"Here\'s the thing..." as an opener (save for middle)',
+                '"Let me tell you..." (too salesy)',
+                'Engagement bait like "Drop a 🔥 if you agree"',
+                'Corporate language: "leverage," "optimize," "maximize"',
+                'Filler words: "Basically," "Actually," "Honestly"'
+            ],
+            'tone': 'Knowing friend sharing hard-won wisdom, not a lecturer giving tips',
+            'post_structure': {
+                'atmospheric_opening': '1-2 sentences - Set the scene with time, place, feeling. Make it specific.',
+                'the_tension': '2-3 sentences - The relatable struggle. Use vivid verbs and em-dash asides.',
+                'the_shift': '1-2 sentences - Something changes. A realisation, a tool, a mindset. Keep it grounded.',
+                'the_insight': '2-3 sentences - Connect the specific to the universal. This is where wisdom shows.',
+                'philosophical_closer': '1 sentence - Leave them thinking. Make it quotable.',
+                'soft_cta': '1 sentence, optional - Question format works best.'
+            },
+            'sa_context': [
+                'Load shedding references (when relevant)',
+                '"Eish" (sparingly, for emphasis)',
+                'Local gym culture nods',
+                'Rand-based examples (R500, R2000)'
+            ]
+        }
+
+        # Try to read the actual file for any updates
+        try:
+            if os.path.exists(style_guide_path):
+                with open(style_guide_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    log_info(f"Style guide loaded from {style_guide_path}")
+        except Exception as e:
+            log_warning(f"Could not read style guide file: {str(e)}. Using embedded defaults.")
+
+        return style_guide
     
     def generate_batch(self, num_posts: int, week_number: int, hook_variations: bool = False, emergency_mode: bool = False) -> List[Dict]:
         """Generate multiple posts at once
@@ -233,14 +329,36 @@ class ContentGenerator:
         speaking_style = ai_settings.get('speaking_style', {})
         emoji_guidelines = ai_settings.get('emoji_guidelines', {})
         
-        # Build the prompt
+        # Build the prompt with Refiloe Writing Style Guide
+        style = self.style_guide
         prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, an AI influencer for personal trainers worldwide.
 
 PERSONALITY & VOICE:
 - {', '.join(personality)}
 - Voice: {speaking_style.get('voice', 'First person')}
 - Tone: {speaking_style.get('tone', 'Conversational and supportive')}
-- Approach: Like talking to a knowledgeable friend
+- Approach: {style.get('tone', 'Knowing friend sharing hard-won wisdom, not a lecturer giving tips')}
+
+WRITING STYLE (Refiloe Voice):
+- OPENING: {style['opening']['rule']} Use time-stamps, sensory details, or atmospheric tension.
+  Examples: {'; '.join(style['opening']['patterns'][:2])}
+- EM-DASHES: {style['em_dashes']['rule']}
+  Example: "{style['em_dashes']['examples'][0]}"
+- VERBS: {style['verbs']['rule']} "Has" becomes "carries", "happens" becomes "hits/lands/creeps in", "helps" becomes "saves/transforms/unlocks"
+- RHYTHM: {style['rhythm']['rule']}
+  {'; '.join(style['rhythm']['guidelines'])}
+- CLOSER: {style['closer']['rule']}
+  Patterns: {'; '.join(style['closer']['patterns'][:3])}
+- AVOID: {'; '.join(style['avoid'][:4])}
+- TONE: {style['tone']}
+
+POST STRUCTURE (Follow this format):
+1. ATMOSPHERIC OPENING ({style['post_structure']['atmospheric_opening']})
+2. THE TENSION ({style['post_structure']['the_tension']})
+3. THE SHIFT ({style['post_structure']['the_shift']})
+4. THE INSIGHT ({style['post_structure']['the_insight']})
+5. PHILOSOPHICAL CLOSER ({style['post_structure']['philosophical_closer']})
+6. OPTIONAL SOFT CTA ({style['post_structure']['soft_cta']})
 
 CONTENT THEME: {theme.replace('_', ' ').title()}
 Theme Description: {theme_config.get('description', '')}
@@ -251,32 +369,36 @@ POST FORMAT: {format_type.replace('_', ' ').title()}
 {f"HOOK DESCRIPTION: {hook_config.get('description', '')}" if hook_type else ""}
 
 HOOK FORMULA:
-{f"Use this specific opening template: {hook_template}" if hook_type and hook_template else "Create a compelling opening that grabs attention immediately"}
+{f"Use this specific opening template: {hook_template}" if hook_type and hook_template else "Create a compelling atmospheric opening that grabs attention immediately - set a scene or feeling, never start with a fact"}
 
 SCROLL-STOPPER REQUIREMENT:
 - The first 7 words MUST grab attention and make people stop scrolling
-- Use power words, numbers, or emotional triggers
-- Create curiosity or urgency
+- Use sensory details, time-stamps, or emotional triggers
+- Create curiosity through atmosphere, not clickbait
 
 SHAREABILITY SCORE REQUIREMENT:
-- Include something surprising, valuable, or controversial enough to share
-- Add specific numbers, statistics, or results
+- Include something surprising, valuable, or philosophical enough to share
+- Make trainers think "that's exactly how it feels"
+- Include a quotable closer they'll want to save
 - Make it relatable to trainer experiences
-- Include actionable insights
 
 CONTENT REQUIREMENTS:
 - Target audience: Personal trainers worldwide
-- Length: 150-200 words for captions
-- Use 1-3 emojis strategically: {emoji_guidelines.get('preferred_emojis', [])}
-- End with an engaging question or call-to-action
+- Length: 150-250 words for captions
+- Every post should feel like a story, not a tip
 - Be relatable and understanding of trainer challenges
-- Include practical, actionable advice
+- Include practical wisdom earned, not advice given
 {f"- EMERGENCY MODE: Generate content quickly with high engagement potential" if emergency_mode else ""}
 
+SA CONTEXT (South African flavour):
+- {chr(10).join(f"- {item}" for item in style.get('sa_context', []))}
+
 EMOJI GUIDELINES:
-- Max per post: {emoji_guidelines.get('max_per_post', 3)}
-- Placement: {emoji_guidelines.get('placement_strategy', [])}
-- Preferred emojis: {emoji_guidelines.get('preferred_emojis', [])}
+- Max per post: {emoji_guidelines.get('max_per_post', 2)}
+- NEVER place emojis in the opening line (breaks atmosphere)
+- Best at end of CTA or as bullet markers
+- Preferred emojis: {emoji_guidelines.get('preferred_emojis', ['✅', '💭', '🏋️', '❤️'])}
+- Avoid: 🔥 (overused), emoji clusters, emojis mid-sentence
 
 CONTENT EXAMPLES FOR THIS THEME:
 {chr(10).join(f"- {example}" for example in theme_examples[:3])}
@@ -285,6 +407,13 @@ CONTENT EXAMPLES FOR THIS THEME:
 
 FORMAT SPECIFIC INSTRUCTIONS:
 {self._get_format_instructions(format_type)}
+
+VOICE CALIBRATION CHECK (Before finalizing, verify):
+1. Does the opening create a scene? (Not just state a fact)
+2. Would a trainer read this and think "that's exactly how it feels"?
+3. Is there at least one em-dash aside?
+4. Does the closer linger? (Could someone quote it?)
+5. Did I avoid generic social media language?
 
 CONTENT GENERATION PROCESS:
 1. Generate 3 different content variations
