@@ -120,7 +120,9 @@ refiloe-marketing/
 │   ├── image_generator.py
 │   ├── facebook_poster.py
 │   ├── database.py
-│   └── config.yaml
+│   ├── config.yaml
+│   └── style_guides/      # Writing style guides
+│       └── refiloe_voice.md  # Refiloe's distinctive voice & tone
 ├── utils/                 # Shared utilities
 │   └── logger.py
 ├── app.py                 # Main Flask application
@@ -132,7 +134,7 @@ refiloe-marketing/
 ## How It Works
 
 1. **Content Generation**: Runs daily at 6:00 AM SAST
-   - AI generates engaging posts for trainers
+   - AI generates engaging posts for trainers using Refiloe's distinctive voice (see [Writing Style Guide](social_media/style_guides/refiloe_voice.md))
    - Creates images using Replicate
    - Saves to Supabase database
 
