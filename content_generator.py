@@ -328,6 +328,22 @@ class ContentGenerator:
         personality = ai_settings.get('personality_traits', [])
         speaking_style = ai_settings.get('speaking_style', {})
         emoji_guidelines = ai_settings.get('emoji_guidelines', {})
+        style_examples = ai_settings.get('style_examples', {})
+
+        # Occasionally include a style example as reference (50% chance)
+        style_example_section = ""
+        if style_examples and random.random() < 0.5:
+            selected_example = self._select_relevant_style_example(theme, style_examples)
+            if selected_example:
+                example_name, example_content = selected_example
+                style_example_section = f"""
+STYLE REFERENCE (Study this example for voice and structure):
+Example: {example_name.replace('_', ' ').title()}
+---
+{example_content.strip()}
+---
+Use this as inspiration for tone, pacing, and emotional resonance. Do NOT copy it directly.
+"""
         
         # Build the prompt with Refiloe Writing Style Guide
         style = self.style_guide
@@ -407,7 +423,7 @@ CONTENT EXAMPLES FOR THIS THEME:
 
 FORMAT SPECIFIC INSTRUCTIONS:
 {self._get_format_instructions(format_type)}
-
+{style_example_section}
 VOICE CALIBRATION CHECK (Before finalizing, verify):
 1. Does the opening create a scene? (Not just state a fact)
 2. Would a trainer read this and think "that's exactly how it feels"?
@@ -549,6 +565,47 @@ Generate engaging, valuable content that personal trainers will love and share!"
         }
         
         return format_instructions.get(format_type, "Create engaging content for this format.")
+
+    def _select_relevant_style_example(self, theme: str, style_examples: Dict) -> Optional[tuple]:
+        """Select a relevant style example based on the content theme
+
+        Args:
+            theme: The current content theme
+            style_examples: Dictionary of style examples from config
+
+        Returns:
+            Optional[tuple]: (example_name, example_content) or None
+        """
+        if not style_examples:
+            return None
+
+        # Map themes to relevant style examples
+        theme_to_example_mapping = {
+            'admin_hacks': ['admin_overwhelm'],
+            'relatable_trainer_life': ['admin_overwhelm', 'client_cancellation', 'client_success'],
+            'client_management_tips': ['client_cancellation', 'client_success'],
+            'engagement_questions': ['client_success', 'admin_overwhelm'],
+            'tech_and_tools': ['admin_overwhelm'],
+            'growth_mindset': ['client_success'],
+            'client_stories': ['client_success'],
+            'business_tips': ['client_cancellation', 'admin_overwhelm'],
+        }
+
+        # Get relevant examples for this theme, or use all examples as fallback
+        relevant_example_names = theme_to_example_mapping.get(theme, list(style_examples.keys()))
+
+        # Filter to only examples that exist in config
+        available_examples = [name for name in relevant_example_names if name in style_examples]
+
+        if not available_examples:
+            # Fallback to any random example if no mapping matches
+            available_examples = list(style_examples.keys())
+
+        if available_examples:
+            selected_name = random.choice(available_examples)
+            return (selected_name, style_examples[selected_name])
+
+        return None
     
     def _get_hook_templates(self) -> Dict[str, str]:
         """Get hook templates for different hook types
