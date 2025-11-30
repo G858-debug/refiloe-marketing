@@ -492,7 +492,8 @@ def debug_schema():
                 'platform': 'test',
                 'status': 'test'
             }
-            result = supabase_client.table('social_posts').insert(test_data).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = supabase_client.table('social_posts').insert(test_data)
             if result.data:
                 columns = list(result.data[0].keys())
             else:
@@ -2572,17 +2573,17 @@ def save_look_rating():
         existing = supabase_client.table('look_ratings').select('*').eq('look_id', look_id).eq('content_type', content_type).execute()
 
         if existing.data:
-            # Update existing rating
+            # Update existing rating (SupabaseRestClient.update() already executes and returns ExecuteResult)
             result = supabase_client.table('look_ratings').update({
                 'rating': rating,
                 'notes': notes,
                 'updated_at': datetime.now(SA_TZ).isoformat()
-            }).eq('look_id', look_id).eq('content_type', content_type).execute()
+            }).eq('look_id', look_id).eq('content_type', content_type)
 
             log_info(f"Updated rating for look {look_id}, content_type {content_type}")
         else:
-            # Insert new rating
-            result = supabase_client.table('look_ratings').insert(db_record).execute()
+            # Insert new rating (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = supabase_client.table('look_ratings').insert(db_record)
             log_info(f"Created new rating for look {look_id}, content_type {content_type}")
 
         if result and hasattr(result, 'data'):

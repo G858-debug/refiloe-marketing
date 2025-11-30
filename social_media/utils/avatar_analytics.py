@@ -128,7 +128,8 @@ class AvatarAnalytics:
         }
 
         try:
-            result = self.db.table(self.TABLE_NAME).insert(payload).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table(self.TABLE_NAME).insert(payload)
             if result.data:
                 log_info(
                     f"Recorded avatar performance entry for {avatar_id} on content {content_id}"
@@ -770,7 +771,8 @@ class AvatarAnalytics:
                 "created_at": datetime.now(self.sa_tz).isoformat(),
             }
 
-            result = self.db.table(self.AB_TEST_TABLE).insert(payload).execute()
+            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
+            result = self.db.table(self.AB_TEST_TABLE).insert(payload)
             if result.data:
                 log_info(
                     f"Stored avatar A/B test result for content {performance_row.get('content_id')}"

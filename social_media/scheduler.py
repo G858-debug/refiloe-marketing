@@ -445,9 +445,10 @@ class SocialMediaScheduler:
                     "updated_at": datetime.now(SA_TIMEZONE).isoformat()
                 }
 
+                # Update in database (SupabaseRestClient.update() already executes and returns ExecuteResult)
                 self.supabase_client.table("social_posts").update(update_data).eq(
                     "id", post_id
-                ).execute()
+                )
 
                 log_info(f"Updated post {post_id} for retry {new_retry_count} in {backoff_minutes} minutes")
 
@@ -470,9 +471,10 @@ class SocialMediaScheduler:
                 "updated_at": datetime.now(SA_TIMEZONE).isoformat()
             }
 
+            # Update in database (SupabaseRestClient.update() already executes and returns ExecuteResult)
             result = self.supabase_client.table("social_posts").update(update_data).eq(
                 "id", post_id
-            ).execute()
+            )
 
             if result.data:
                 log_info(f"Post {post_id} marked as published with Facebook ID: {facebook_post_id}")
@@ -514,9 +516,10 @@ class SocialMediaScheduler:
                 "updated_at": datetime.now(SA_TIMEZONE).isoformat()
             }
 
+            # Update in database (SupabaseRestClient.update() already executes and returns ExecuteResult)
             result = self.supabase_client.table("social_posts").update(update_data).eq(
                 "id", post_id
-            ).execute()
+            )
 
             if result.data:
                 log_info(f"Post {post_id} marked as failed: {error_message}")
