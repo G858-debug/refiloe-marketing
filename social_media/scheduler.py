@@ -25,6 +25,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 import traceback
 
 from utils.logger import log_error, log_info, log_warning
+from utils.whatsapp_notifier import WhatsAppNotifier
+from social_media.weekly_report import WeeklyReportGenerator
 
 
 SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
@@ -39,6 +41,9 @@ class SocialMediaScheduler:
         self.scheduler = BackgroundScheduler(timezone=SA_TIMEZONE)
         self._jobs_registered = False
         self._last_run: Dict[str, Dict[str, Optional[str]]] = {}
+        self.sa_tz = SA_TIMEZONE
+        self.whatsapp = WhatsAppNotifier()
+        self.report_generator = WeeklyReportGenerator(supabase_client)
 
     # --------------------------------------------------------------------- #
     # Lifecycle management
@@ -584,10 +589,7 @@ class SocialMediaScheduler:
 
     def _send_notification(self, notification_type: str, message: str, details: Dict[str, Any]) -> None:
         """
-        Send notification for post events.
-
-        Future implementation: Email/Slack notifications
-        Current implementation: Structured logging
+        Send notification via WhatsApp and logging.
 
         Args:
             notification_type: Type of notification (success, failure, warning, error)
@@ -612,8 +614,17 @@ class SocialMediaScheduler:
         else:
             log_info(f"📢 NOTIFICATION [{notification_type.upper()}]: {message} | Details: {details}")
 
-        # TODO: Implement email notifications
-        # TODO: Implement Slack notifications
+        # Send via WhatsApp for important notifications
+        important_types = ['failure', 'error', 'viral', 'milestone']
+        if notification_type in important_types and self.whatsapp:
+            try:
+                self.whatsapp.send_alert(
+                    notification_type,
+                    message,
+                    details
+                )
+            except Exception as e:
+                log_error(f"Failed to send WhatsApp notification: {e}")
 
     def run_weekly_avatar_looks(self) -> None:
         """Weekly job at 3:00 AM SAST every Sunday to generate fresh avatar looks.
@@ -795,54 +806,35 @@ class SocialMediaScheduler:
             log_error(f"Error while collecting analytics: {exc}\n{traceback.format_exc()}")
 
     def run_weekly_report(self) -> None:
-        """Weekly job at 8:00 PM SAST every Saturday to generate weekly performance report."""
-        if self.supabase_client is None:
-            log_warning("Supabase client unavailable; skipping weekly report job.")
-            return
-
+        """Generate and send weekly performance report via WhatsApp."""
         try:
-            from social_media.weekly_report import generate_weekly_report
-        except ImportError as exc:
-            log_error(f"Weekly report module unavailable: {exc}")
-            return
+            log_info("Starting weekly report generation...")
 
-        try:
-            log_info("Starting weekly report generation")
+            # Generate report
+            report = self.report_generator.generate_report()
 
-            # Generate report in all formats
-            text_report = generate_weekly_report(
-                self.supabase_client,
-                output_format="text"
-            )
+            # Format for WhatsApp
+            whatsapp_text = self.report_generator.format_for_whatsapp()
 
-            json_report = generate_weekly_report(
-                self.supabase_client,
-                output_format="json"
-            )
+            # Send via WhatsApp
+            result = self.whatsapp.send_weekly_report(whatsapp_text)
 
-            html_report = generate_weekly_report(
-                self.supabase_client,
-                output_format="html"
-            )
-
-            if text_report.get("success"):
-                log_info("Weekly report generated successfully")
-                log_info("=" * 80)
-                log_info("WEEKLY REPORT (TEXT FORMAT)")
-                log_info("=" * 80)
-                log_info(text_report.get("report", ""))
-
-                # Save report to database for future reference
-                self._save_weekly_report(text_report, json_report, html_report)
-
-                # TODO: Send report via email/WhatsApp
-                # TODO: Post report to internal dashboard
-                log_info("Weekly report job completed successfully")
+            if result.get('success'):
+                log_info("Weekly report sent successfully via WhatsApp")
             else:
-                log_error(f"Failed to generate weekly report: {text_report.get('error', 'Unknown error')}")
+                log_error(f"Failed to send weekly report: {result.get('error')}")
 
-        except Exception as exc:  # pragma: no cover - unexpected errors
-            log_error(f"Unexpected error during weekly report job: {exc}\n{traceback.format_exc()}")
+            # Also save to database for dashboard
+            self._save_report_to_database(report)
+
+        except Exception as e:
+            log_error(f"Error in weekly report job: {e}")
+            # Try to send error notification
+            self.whatsapp.send_alert(
+                'error',
+                'Weekly Report Failed',
+                {'error': str(e)}
+            )
 
     def run_comment_processing(self) -> None:
         """
@@ -916,47 +908,23 @@ class SocialMediaScheduler:
         except Exception as exc:  # pragma: no cover - unexpected errors
             log_error(f"Unexpected error during comment processing job: {exc}\n{traceback.format_exc()}")
 
-    def _save_weekly_report(
-        self,
-        text_report: Dict[str, Any],
-        json_report: Dict[str, Any],
-        html_report: Dict[str, Any]
-    ) -> None:
+    def _save_report_to_database(self, report: Dict[str, Any]) -> None:
         """
-        Save weekly report to database for historical tracking.
+        Save weekly report to database for dashboard viewing.
 
         Args:
-            text_report: Report in text format
-            json_report: Report in JSON format
-            html_report: Report in HTML format
+            report: Report data dictionary containing metrics and metadata
         """
         try:
-            # Extract period information
-            period = text_report.get("period", {})
-            data = text_report.get("data", {})
-
-            # Prepare report record
             report_record = {
                 "id": str(uuid.uuid4()),
-                "report_type": "weekly",
-                "period_start": period.get("start"),
-                "period_end": period.get("end"),
-                "report_text": text_report.get("report", ""),
-                "report_json": json.loads(json_report.get("report", "{}")),
-                "report_html": html_report.get("report", ""),
-                "summary_metrics": {
-                    "total_posts": data.get("posts", {}).get("total_posts", 0),
-                    "total_reach": data.get("analytics", {}).get("total_reach", 0),
-                    "total_engagement": data.get("analytics", {}).get("total_engagement", 0),
-                    "avg_engagement_rate": data.get("analytics", {}).get("avg_engagement_rate", 0),
-                    "videos_generated": data.get("videos", {}).get("videos_generated", 0),
-                },
-                "created_at": datetime.now(SA_TIMEZONE).isoformat(),
-                "updated_at": datetime.now(SA_TIMEZONE).isoformat(),
+                "report_date": datetime.now(SA_TIMEZONE).date().isoformat(),
+                "metrics_json": report,
+                "sent_at": datetime.now(SA_TIMEZONE).isoformat(),
+                "created_at": datetime.now(SA_TIMEZONE).isoformat()
             }
 
-            # Try to save to weekly_reports table
-            # Note: This table needs to be created in the database
+            # Save to weekly_reports table
             result = self.supabase_client.table("weekly_reports").insert(report_record)
 
             if hasattr(result, "data") and result.data:

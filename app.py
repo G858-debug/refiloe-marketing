@@ -655,44 +655,61 @@ def debug_single_post(post_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/test-whatsapp', methods=['GET'])
+@app.route('/api/test-whatsapp')
 def test_whatsapp():
     """Test WhatsApp notification connection"""
+    from utils.whatsapp_notifier import WhatsAppNotifier
+
     try:
-        # Get WhatsApp notifier instance
-        notifier = get_whatsapp_notifier()
-
-        # Check if enabled
-        if not notifier.enabled:
-            return jsonify({
-                'success': False,
-                'message': 'WhatsApp notifications are disabled',
-                'tip': 'Set ENABLE_WHATSAPP_NOTIFICATIONS=true in your .env file'
-            }), 200
-
-        # Test connection
-        success = notifier.test_connection()
-
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'WhatsApp connection successful! Test message sent.',
-                'phone_number': notifier.notification_phone
-            }), 200
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'WhatsApp connection failed. Check logs for details.',
-                'phone_number': notifier.notification_phone
-            }), 500
-
+        notifier = WhatsAppNotifier()
+        result = notifier.test_connection()
+        return jsonify({
+            'success': result,
+            'message': 'WhatsApp test message sent!' if result else 'Failed to send test message'
+        }), 200 if result else 500
     except Exception as e:
-        log_error(f"WhatsApp test endpoint error: {str(e)}")
         return jsonify({
             'success': False,
-            'error': str(e),
-            'message': 'Failed to test WhatsApp connection'
+            'error': str(e)
         }), 500
+
+
+@app.route('/api/trigger-weekly-report')
+def trigger_weekly_report():
+    """Manually trigger weekly report (for testing)"""
+    if not scheduler:
+        return jsonify({'error': 'Scheduler not initialized'}), 503
+
+    try:
+        scheduler.run_weekly_report()
+        return jsonify({
+            'success': True,
+            'message': 'Weekly report triggered'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/reports/latest')
+def get_latest_report():
+    """Get the most recent weekly report"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('weekly_reports').select('*').order(
+            'created_at', desc=True
+        ).limit(1).execute()
+
+        if result.data:
+            return jsonify(result.data[0]), 200
+        else:
+            return jsonify({'message': 'No reports found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/test/content')
