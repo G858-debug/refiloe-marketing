@@ -17,12 +17,15 @@ Supports multiple output formats:
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
 
+from database import SocialMediaDatabase
 from utils.logger import log_debug, log_error, log_info, log_warning
+from utils.whatsapp_notifier import WhatsAppNotifier
 
 
 SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
@@ -38,63 +41,80 @@ class WeeklyReportGenerator:
         Args:
             supabase_client: Supabase client instance for database queries
         """
-        self.db = supabase_client
+        self.supabase_client = supabase_client
+        self.db = SocialMediaDatabase(supabase_client)
         self.sa_tz = SA_TIMEZONE
+        self._cached_report_data = None  # Cache for report data to avoid regenerating
 
     def generate_report(
         self,
-        end_date: Optional[datetime] = None,
-        output_format: str = "text"
+        week_start: Optional[datetime] = None,
+        week_end: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """
-        Generate a weekly report for the past 7 days.
+        Generate a weekly report for the specified period.
 
         Args:
-            end_date: End date for the report period (defaults to now)
-            output_format: Output format - 'text', 'html', or 'json'
+            week_start: Start date for the report period (defaults to 7 days ago)
+            week_end: End date for the report period (defaults to now)
 
         Returns:
             Dict containing:
                 - success: bool
-                - report: str (formatted report based on output_format)
-                - data: dict (raw data used to generate the report)
+                - metrics: dict (raw metrics data)
+                - formatted: dict (formatted versions for different outputs)
+                - insights: list (actionable insights)
+                - period: dict (start and end dates)
                 - error: str (if success is False)
         """
         try:
             # Determine date range
-            if end_date is None:
-                end_date = datetime.now(self.sa_tz)
+            if week_end is None:
+                week_end = datetime.now(self.sa_tz)
             else:
-                # Ensure end_date is timezone-aware
-                if end_date.tzinfo is None:
-                    end_date = self.sa_tz.localize(end_date)
+                # Ensure week_end is timezone-aware
+                if week_end.tzinfo is None:
+                    week_end = self.sa_tz.localize(week_end)
                 else:
-                    end_date = end_date.astimezone(self.sa_tz)
+                    week_end = week_end.astimezone(self.sa_tz)
 
-            start_date = end_date - timedelta(days=7)
+            if week_start is None:
+                week_start = week_end - timedelta(days=7)
+            else:
+                # Ensure week_start is timezone-aware
+                if week_start.tzinfo is None:
+                    week_start = self.sa_tz.localize(week_start)
+                else:
+                    week_start = week_start.astimezone(self.sa_tz)
 
-            log_info(f"Generating weekly report from {start_date.date()} to {end_date.date()}")
+            log_info(f"Generating weekly report from {week_start.date()} to {week_end.date()}")
 
             # Collect metrics from all sources
-            metrics = self._collect_metrics(start_date, end_date)
+            metrics = self._collect_metrics(week_start, week_end)
 
-            # Generate formatted report
-            if output_format == "json":
-                report = self._format_json(metrics, start_date, end_date)
-            elif output_format == "html":
-                report = self._format_html(metrics, start_date, end_date)
-            else:  # Default to text
-                report = self._format_text(metrics, start_date, end_date)
+            # Add growth metrics (week-over-week comparison)
+            growth_metrics = self._calculate_growth_metrics(week_start, week_end)
+            metrics['growth'] = growth_metrics
+
+            # Cache the data for format methods
+            self._cached_report_data = {
+                'metrics': metrics,
+                'week_start': week_start,
+                'week_end': week_end
+            }
+
+            # Generate insights
+            insights = self._generate_insights(metrics)
 
             log_info("Weekly report generated successfully")
 
             return {
                 "success": True,
-                "report": report,
-                "data": metrics,
+                "metrics": metrics,
+                "insights": insights,
                 "period": {
-                    "start": start_date.isoformat(),
-                    "end": end_date.isoformat()
+                    "start": week_start.isoformat(),
+                    "end": week_end.isoformat()
                 }
             }
 
@@ -102,8 +122,9 @@ class WeeklyReportGenerator:
             log_error(f"Error generating weekly report: {e}")
             return {
                 "success": False,
-                "report": "",
-                "data": {},
+                "metrics": {},
+                "insights": [],
+                "period": {},
                 "error": str(e)
             }
 
@@ -147,32 +168,38 @@ class WeeklyReportGenerator:
             Dict containing post metrics
         """
         try:
-            # Query published posts in the date range
-            result = self.db.table('social_posts').select(
-                'id, post_type, caption_text, published_time, status, platform'
-            ).eq(
-                'status', 'published'
+            # Query all posts created in the date range
+            all_posts_result = self.supabase_client.table('social_posts').select(
+                'id, post_type, caption_text, published_time, status, platform, created_at'
             ).gte(
-                'published_time', start_date.isoformat()
+                'created_at', start_date.isoformat()
             ).lte(
-                'published_time', end_date.isoformat()
+                'created_at', end_date.isoformat()
             ).execute()
 
-            posts = result.data if result.data else []
+            all_posts = all_posts_result.data if all_posts_result.data else []
 
-            log_info(f"Found {len(posts)} published posts in the reporting period")
+            # Filter by status
+            published_posts = [p for p in all_posts if p.get('status') == 'published']
+            failed_posts = [p for p in all_posts if p.get('status') == 'failed']
+
+            log_info(f"Found {len(all_posts)} total posts, {len(published_posts)} published, {len(failed_posts)} failed in the reporting period")
 
             return {
-                "total_posts": len(posts),
-                "posts_by_type": self._group_by_field(posts, 'post_type'),
-                "posts_by_platform": self._group_by_field(posts, 'platform'),
-                "posts": posts
+                "total_posts_created": len(all_posts),
+                "total_posts_published": len(published_posts),
+                "total_posts_failed": len(failed_posts),
+                "posts_by_type": self._group_by_field(published_posts, 'post_type'),
+                "posts_by_platform": self._group_by_field(published_posts, 'platform'),
+                "posts": published_posts
             }
 
         except Exception as e:
             log_error(f"Error collecting post metrics: {e}")
             return {
-                "total_posts": 0,
+                "total_posts_created": 0,
+                "total_posts_published": 0,
+                "total_posts_failed": 0,
                 "posts_by_type": {},
                 "posts_by_platform": {},
                 "posts": []
@@ -195,7 +222,7 @@ class WeeklyReportGenerator:
         """
         try:
             # Get post IDs from the period
-            posts_result = self.db.table('social_posts').select(
+            posts_result = self.supabase_client.table('social_posts').select(
                 'id'
             ).eq(
                 'status', 'published'
@@ -212,7 +239,7 @@ class WeeklyReportGenerator:
                 return self._empty_analytics_metrics()
 
             # Query analytics for these posts
-            analytics_result = self.db.table('social_analytics').select(
+            analytics_result = self.supabase_client.table('social_analytics').select(
                 'post_id, likes, comments, shares, reach, impressions, clicks, engagement_rate'
             ).in_(
                 'post_id', post_ids
@@ -273,7 +300,7 @@ class WeeklyReportGenerator:
         """
         try:
             # Query generated videos in the date range
-            result = self.db.table('generated_videos').select(
+            result = self.supabase_client.table('generated_videos').select(
                 'id, video_id, video_url, status, created_at'
             ).gte(
                 'created_at', start_date.isoformat()
@@ -289,8 +316,8 @@ class WeeklyReportGenerator:
             completed_videos = [v for v in videos if v.get('status') == 'completed']
 
             # Get video posts from social_posts
-            video_posts_result = self.db.table('social_posts').select(
-                'completion_rate, avg_watch_time, video_url'
+            video_posts_result = self.supabase_client.table('social_posts').select(
+                'completion_rate, avg_watch_time, video_url, video_duration'
             ).eq(
                 'post_type', 'video'
             ).eq(
@@ -310,10 +337,15 @@ class WeeklyReportGenerator:
             watch_times = [v.get('avg_watch_time', 0) for v in video_posts if v.get('avg_watch_time')]
             avg_watch_time = sum(watch_times) / len(watch_times) if watch_times else 0
 
+            # Calculate total video duration
+            durations = [v.get('video_duration', 0) for v in video_posts if v.get('video_duration')]
+            total_video_duration = sum(durations) if durations else 0
+
             return {
                 "videos_generated": len(videos),
                 "videos_completed": len(completed_videos),
                 "videos_published": len(video_posts),
+                "total_video_duration": round(total_video_duration, 2),
                 "avg_completion_rate": round(avg_completion_rate, 2),
                 "avg_watch_time": round(avg_watch_time, 2),
                 "total_video_views": 0  # Placeholder - would need view tracking
@@ -345,7 +377,7 @@ class WeeklyReportGenerator:
             next_week_start = end_date
             next_week_end = end_date + timedelta(days=7)
 
-            result = self.db.table('social_posts').select(
+            result = self.supabase_client.table('social_posts').select(
                 'id, scheduled_time, post_type'
             ).eq(
                 'status', 'scheduled'
@@ -431,7 +463,7 @@ class WeeklyReportGenerator:
             Dict containing post details
         """
         try:
-            result = self.db.table('social_posts').select(
+            result = self.supabase_client.table('social_posts').select(
                 'caption_text, post_type, platform, published_time'
             ).eq(
                 'id', post_id
@@ -924,6 +956,90 @@ class WeeklyReportGenerator:
 
         return json.dumps(report_data, indent=2)
 
+    def _calculate_growth_metrics(
+        self,
+        week_start: datetime,
+        week_end: datetime
+    ) -> Dict[str, Any]:
+        """
+        Calculate week-over-week growth metrics.
+
+        Args:
+            week_start: Start of current week
+            week_end: End of current week
+
+        Returns:
+            Dict containing growth metrics and comparisons
+        """
+        try:
+            # Calculate previous week period
+            prev_week_end = week_start - timedelta(seconds=1)
+            prev_week_start = prev_week_end - timedelta(days=7)
+
+            log_info(f"Calculating growth metrics: comparing {week_start.date()}-{week_end.date()} to {prev_week_start.date()}-{prev_week_end.date()}")
+
+            # Get metrics for previous week
+            prev_metrics = self._collect_metrics(prev_week_start, prev_week_end)
+
+            # Get current week metrics from cache
+            curr_metrics = self._cached_report_data.get('metrics', {}) if self._cached_report_data else {}
+
+            growth = {}
+
+            # Compare posts
+            curr_posts = curr_metrics.get('posts', {}).get('total_posts_published', 0)
+            prev_posts = prev_metrics.get('posts', {}).get('total_posts_published', 0)
+            growth['posts_change'] = self._calculate_percentage_change(curr_posts, prev_posts)
+            growth['posts_significant'] = abs(growth['posts_change']) > 20
+
+            # Compare engagement
+            curr_engagement = curr_metrics.get('analytics', {}).get('total_engagement', 0)
+            prev_engagement = prev_metrics.get('analytics', {}).get('total_engagement', 0)
+            growth['engagement_change'] = self._calculate_percentage_change(curr_engagement, prev_engagement)
+            growth['engagement_significant'] = abs(growth['engagement_change']) > 20
+
+            # Compare reach
+            curr_reach = curr_metrics.get('analytics', {}).get('total_reach', 0)
+            prev_reach = prev_metrics.get('analytics', {}).get('total_reach', 0)
+            growth['reach_change'] = self._calculate_percentage_change(curr_reach, prev_reach)
+            growth['reach_significant'] = abs(growth['reach_change']) > 20
+
+            # Compare engagement rate
+            curr_rate = curr_metrics.get('analytics', {}).get('avg_engagement_rate', 0)
+            prev_rate = prev_metrics.get('analytics', {}).get('avg_engagement_rate', 0)
+            growth['engagement_rate_change'] = self._calculate_percentage_change(curr_rate, prev_rate)
+            growth['engagement_rate_significant'] = abs(growth['engagement_rate_change']) > 20
+
+            # Compare videos
+            curr_videos = curr_metrics.get('videos', {}).get('videos_published', 0)
+            prev_videos = prev_metrics.get('videos', {}).get('videos_published', 0)
+            growth['videos_change'] = self._calculate_percentage_change(curr_videos, prev_videos)
+            growth['videos_significant'] = abs(growth['videos_change']) > 20
+
+            log_info(f"Growth metrics calculated successfully")
+            return growth
+
+        except Exception as e:
+            log_error(f"Error calculating growth metrics: {e}")
+            return {
+                'posts_change': 0,
+                'engagement_change': 0,
+                'reach_change': 0,
+                'engagement_rate_change': 0,
+                'videos_change': 0,
+                'posts_significant': False,
+                'engagement_significant': False,
+                'reach_significant': False,
+                'engagement_rate_significant': False,
+                'videos_significant': False
+            }
+
+    def _calculate_percentage_change(self, current: float, previous: float) -> float:
+        """Calculate percentage change between two values."""
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round(((current - previous) / previous) * 100, 1)
+
     def _generate_insights(self, metrics: Dict[str, Any]) -> List[str]:
         """
         Generate insights and recommendations based on metrics.
@@ -940,6 +1056,7 @@ class WeeklyReportGenerator:
         analytics = metrics.get('analytics', {})
         videos = metrics.get('videos', {})
         scheduled = metrics.get('scheduled', {})
+        growth = metrics.get('growth', {})
 
         total_posts = posts.get('total_posts', 0)
         avg_engagement = analytics.get('avg_engagement_rate', 0)
@@ -989,24 +1106,268 @@ class WeeklyReportGenerator:
             top_type = top_post.get('post_type', 'content')
             insights.append(f"Your top performing post was a {top_type} post with {top_post.get('engagement_rate', 0):.1f}% engagement. Consider creating more similar content.")
 
+        # Growth insights
+        if growth:
+            # Engagement growth
+            engagement_change = growth.get('engagement_change', 0)
+            if growth.get('engagement_significant'):
+                direction = "up" if engagement_change > 0 else "down"
+                insights.append(f"🔥 Significant change: Engagement is {direction} {abs(engagement_change):.0f}% compared to last week!")
+
+            # Reach growth
+            reach_change = growth.get('reach_change', 0)
+            if growth.get('reach_significant'):
+                direction = "increased" if reach_change > 0 else "decreased"
+                insights.append(f"📊 Reach has {direction} by {abs(reach_change):.0f}% compared to last week.")
+
         return insights
+
+    # ================================================================
+    # PUBLIC API METHODS
+    # ================================================================
+
+    def format_for_whatsapp(self) -> str:
+        """
+        Format report for WhatsApp (concise, under 4000 characters).
+
+        Returns:
+            Formatted WhatsApp message string
+        """
+        if not self._cached_report_data:
+            log_error("No report data available. Call generate_report() first.")
+            return "Error: No report data available"
+
+        metrics = self._cached_report_data['metrics']
+        week_start = self._cached_report_data['week_start']
+        week_end = self._cached_report_data['week_end']
+        insights = self._generate_insights(metrics)
+
+        posts = metrics.get('posts', {})
+        analytics = metrics.get('analytics', {})
+        videos = metrics.get('videos', {})
+        scheduled = metrics.get('scheduled', {})
+        growth = metrics.get('growth', {})
+
+        # Build concise WhatsApp message
+        lines = []
+        lines.append("📊 *REFILOE WEEKLY REPORT*")
+        lines.append(f"Week of {week_start.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+
+        # Content Published
+        lines.append("📱 *CONTENT PUBLISHED*")
+        lines.append(f"• Posts: {posts.get('total_posts_published', 0)}")
+        lines.append(f"• Videos: {videos.get('videos_published', 0)}")
+        lines.append(f"• Reach: {analytics.get('total_reach', 0):,}")
+        lines.append("")
+
+        # Engagement
+        lines.append("💬 *ENGAGEMENT*")
+        lines.append(f"• Total: {analytics.get('total_engagement', 0):,}")
+        lines.append(f"• Rate: {analytics.get('avg_engagement_rate', 0):.1f}%")
+        lines.append(f"• Comments: {analytics.get('total_comments', 0):,}")
+
+        # Show growth if significant
+        if growth.get('engagement_significant'):
+            change = growth.get('engagement_change', 0)
+            emoji = "📈" if change > 0 else "📉"
+            lines.append(f"{emoji} {'+' if change > 0 else ''}{change:.0f}% vs last week")
+        lines.append("")
+
+        # Top Performer
+        top_performers = analytics.get('top_performers', [])
+        if top_performers:
+            top = top_performers[0]
+            lines.append("🏆 *TOP PERFORMER*")
+            caption = top.get('post_caption', '')[:60]
+            lines.append(f'"{caption}..."')
+            lines.append(f"Engagement: {top.get('engagement_rate', 0):.1f}% | Reach: {top.get('reach', 0):,}")
+            lines.append("")
+
+        # Week Highlights
+        lines.append("📈 *WEEK HIGHLIGHTS*")
+        for insight in insights[:3]:  # Top 3 insights only
+            # Remove emojis if they make it too long
+            clean_insight = insight
+            lines.append(f"• {clean_insight}")
+        lines.append("")
+
+        # Dashboard link
+        dashboard_url = os.getenv('DASHBOARD_URL', 'https://refiloe-marketing.com')
+        lines.append("🔗 *Full Dashboard:*")
+        lines.append(dashboard_url)
+
+        message = "\n".join(lines)
+
+        # Ensure under 4000 characters
+        if len(message) > 4000:
+            # Trim insights if needed
+            lines = []
+            lines.append("📊 *REFILOE WEEKLY REPORT*")
+            lines.append(f"Week of {week_start.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}")
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append("")
+            lines.append("📱 *CONTENT*")
+            lines.append(f"Posts: {posts.get('total_posts_published', 0)} | Videos: {videos.get('videos_published', 0)}")
+            lines.append(f"Reach: {analytics.get('total_reach', 0):,}")
+            lines.append("")
+            lines.append("💬 *ENGAGEMENT*")
+            lines.append(f"Total: {analytics.get('total_engagement', 0):,} | Rate: {analytics.get('avg_engagement_rate', 0):.1f}%")
+            lines.append("")
+            lines.append("🔗 Full Dashboard:")
+            lines.append(dashboard_url)
+            message = "\n".join(lines)
+
+        log_info(f"WhatsApp report formatted ({len(message)} characters)")
+        return message
+
+    def format_for_html(self) -> str:
+        """
+        Format report for HTML web dashboard.
+
+        Returns:
+            Formatted HTML string
+        """
+        if not self._cached_report_data:
+            log_error("No report data available. Call generate_report() first.")
+            return "<p>Error: No report data available</p>"
+
+        metrics = self._cached_report_data['metrics']
+        week_start = self._cached_report_data['week_start']
+        week_end = self._cached_report_data['week_end']
+
+        return self._format_html(metrics, week_start, week_end)
+
+    def format_for_json(self) -> str:
+        """
+        Format report for JSON API consumption.
+
+        Returns:
+            Formatted JSON string
+        """
+        if not self._cached_report_data:
+            log_error("No report data available. Call generate_report() first.")
+            return json.dumps({"error": "No report data available"})
+
+        metrics = self._cached_report_data['metrics']
+        week_start = self._cached_report_data['week_start']
+        week_end = self._cached_report_data['week_end']
+
+        return self._format_json(metrics, week_start, week_end)
+
+    def get_insights(self) -> List[str]:
+        """
+        Get actionable insights from the generated report.
+
+        Returns:
+            List of insight strings
+        """
+        if not self._cached_report_data:
+            log_error("No report data available. Call generate_report() first.")
+            return []
+
+        metrics = self._cached_report_data['metrics']
+        return self._generate_insights(metrics)
 
 
 def generate_weekly_report(
     supabase_client,
-    end_date: Optional[datetime] = None,
-    output_format: str = "text"
+    week_start: Optional[datetime] = None,
+    week_end: Optional[datetime] = None
 ) -> Dict[str, Any]:
     """
     Convenience function to generate a weekly report.
 
     Args:
         supabase_client: Supabase client instance
-        end_date: End date for the report period (defaults to now)
-        output_format: Output format - 'text', 'html', or 'json'
+        week_start: Start date for the report period (defaults to 7 days ago)
+        week_end: End date for the report period (defaults to now)
 
     Returns:
-        Dict containing report data and formatted output
+        Dict containing report data and metrics
     """
     generator = WeeklyReportGenerator(supabase_client)
-    return generator.generate_report(end_date=end_date, output_format=output_format)
+    return generator.generate_report(week_start=week_start, week_end=week_end)
+
+
+def run_weekly_report(supabase_client) -> Dict[str, Any]:
+    """
+    Scheduled job function to generate and send weekly report via WhatsApp.
+
+    This function should be called by a scheduler (e.g., cron job, APScheduler)
+    to automatically generate and send weekly reports.
+
+    Args:
+        supabase_client: Supabase client instance
+
+    Returns:
+        Dict containing:
+            - success: bool
+            - report_generated: bool
+            - whatsapp_sent: bool
+            - message_id: str (if sent successfully)
+            - error: str (if failed)
+    """
+    try:
+        log_info("Starting scheduled weekly report generation")
+
+        # Generate the weekly report
+        generator = WeeklyReportGenerator(supabase_client)
+        result = generator.generate_report()
+
+        if not result.get('success'):
+            error_msg = result.get('error', 'Unknown error generating report')
+            log_error(f"Failed to generate weekly report: {error_msg}")
+            return {
+                'success': False,
+                'report_generated': False,
+                'whatsapp_sent': False,
+                'error': error_msg
+            }
+
+        log_info("Weekly report generated successfully")
+
+        # Format for WhatsApp
+        whatsapp_message = generator.format_for_whatsapp()
+
+        if not whatsapp_message or whatsapp_message.startswith("Error:"):
+            log_error("Failed to format report for WhatsApp")
+            return {
+                'success': False,
+                'report_generated': True,
+                'whatsapp_sent': False,
+                'error': 'Failed to format WhatsApp message'
+            }
+
+        # Send via WhatsApp
+        notifier = WhatsAppNotifier()
+        send_result = notifier.send_weekly_report(whatsapp_message)
+
+        if send_result.get('success'):
+            log_info(f"Weekly report sent successfully via WhatsApp - Message ID: {send_result.get('message_id')}")
+            return {
+                'success': True,
+                'report_generated': True,
+                'whatsapp_sent': True,
+                'message_id': send_result.get('message_id'),
+                'period': result.get('period', {})
+            }
+        else:
+            error_msg = send_result.get('error', 'Unknown error sending WhatsApp message')
+            log_error(f"Failed to send weekly report via WhatsApp: {error_msg}")
+            return {
+                'success': False,
+                'report_generated': True,
+                'whatsapp_sent': False,
+                'error': error_msg
+            }
+
+    except Exception as e:
+        log_error(f"Unexpected error in run_weekly_report: {str(e)}")
+        return {
+            'success': False,
+            'report_generated': False,
+            'whatsapp_sent': False,
+            'error': str(e)
+        }
