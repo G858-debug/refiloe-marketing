@@ -11,8 +11,10 @@ shut down the scheduler without leaving background threads behind.
 
 from __future__ import annotations
 
+import json
 import os
 import time
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
@@ -116,6 +118,12 @@ class SocialMediaScheduler:
                 "name": "Weekly Avatar Looks Generation",
                 "trigger": CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("weekly_avatar_looks", self.run_weekly_avatar_looks),
+            },
+            {
+                "id": "weekly_report_generation",
+                "name": "Weekly Report Generation",
+                "trigger": CronTrigger(day_of_week="sat", hour=20, minute=0, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("weekly_report_generation", self.run_weekly_report),
             },
         ]
 
@@ -779,6 +787,109 @@ class SocialMediaScheduler:
             log_info(f"Analytics collection job inspecting {len(posts)} recent posts.")
         except Exception as exc:  # pragma: no cover - Supabase/network errors
             log_error(f"Error while collecting analytics: {exc}\n{traceback.format_exc()}")
+
+    def run_weekly_report(self) -> None:
+        """Weekly job at 8:00 PM SAST every Saturday to generate weekly performance report."""
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping weekly report job.")
+            return
+
+        try:
+            from social_media.weekly_report import generate_weekly_report
+        except ImportError as exc:
+            log_error(f"Weekly report module unavailable: {exc}")
+            return
+
+        try:
+            log_info("Starting weekly report generation")
+
+            # Generate report in all formats
+            text_report = generate_weekly_report(
+                self.supabase_client,
+                output_format="text"
+            )
+
+            json_report = generate_weekly_report(
+                self.supabase_client,
+                output_format="json"
+            )
+
+            html_report = generate_weekly_report(
+                self.supabase_client,
+                output_format="html"
+            )
+
+            if text_report.get("success"):
+                log_info("Weekly report generated successfully")
+                log_info("=" * 80)
+                log_info("WEEKLY REPORT (TEXT FORMAT)")
+                log_info("=" * 80)
+                log_info(text_report.get("report", ""))
+
+                # Save report to database for future reference
+                self._save_weekly_report(text_report, json_report, html_report)
+
+                # TODO: Send report via email/WhatsApp
+                # TODO: Post report to internal dashboard
+                log_info("Weekly report job completed successfully")
+            else:
+                log_error(f"Failed to generate weekly report: {text_report.get('error', 'Unknown error')}")
+
+        except Exception as exc:  # pragma: no cover - unexpected errors
+            log_error(f"Unexpected error during weekly report job: {exc}\n{traceback.format_exc()}")
+
+    def _save_weekly_report(
+        self,
+        text_report: Dict[str, Any],
+        json_report: Dict[str, Any],
+        html_report: Dict[str, Any]
+    ) -> None:
+        """
+        Save weekly report to database for historical tracking.
+
+        Args:
+            text_report: Report in text format
+            json_report: Report in JSON format
+            html_report: Report in HTML format
+        """
+        try:
+            # Extract period information
+            period = text_report.get("period", {})
+            data = text_report.get("data", {})
+
+            # Prepare report record
+            report_record = {
+                "id": str(uuid.uuid4()),
+                "report_type": "weekly",
+                "period_start": period.get("start"),
+                "period_end": period.get("end"),
+                "report_text": text_report.get("report", ""),
+                "report_json": json.loads(json_report.get("report", "{}")),
+                "report_html": html_report.get("report", ""),
+                "summary_metrics": {
+                    "total_posts": data.get("posts", {}).get("total_posts", 0),
+                    "total_reach": data.get("analytics", {}).get("total_reach", 0),
+                    "total_engagement": data.get("analytics", {}).get("total_engagement", 0),
+                    "avg_engagement_rate": data.get("analytics", {}).get("avg_engagement_rate", 0),
+                    "videos_generated": data.get("videos", {}).get("videos_generated", 0),
+                },
+                "created_at": datetime.now(SA_TIMEZONE).isoformat(),
+                "updated_at": datetime.now(SA_TIMEZONE).isoformat(),
+            }
+
+            # Try to save to weekly_reports table
+            # Note: This table needs to be created in the database
+            result = self.supabase_client.table("weekly_reports").insert(report_record)
+
+            if hasattr(result, "data") and result.data:
+                log_info(f"Weekly report saved to database with ID: {report_record['id']}")
+            else:
+                log_warning("Weekly report generated but could not be saved to database")
+
+        except Exception as exc:
+            # Don't fail the job if saving fails - report was still generated
+            log_warning(f"Could not save weekly report to database: {exc}")
+            log_warning("Report was still generated successfully - database save is optional")
 
     # --------------------------------------------------------------------- #
     # Status reporting helpers
