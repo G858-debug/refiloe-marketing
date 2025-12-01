@@ -977,7 +977,123 @@ class SocialMediaDatabase:
             
             log_info(f"Generated performance analytics for trainer {trainer_id} over {days} days")
             return analytics
-                
+
         except Exception as e:
             log_error(f"Error getting performance analytics: {str(e)}")
             return {}
+
+    # ============================================
+    # WEEKLY REPORTS METHODS
+    # ============================================
+
+    def save_weekly_report(self, report_data: Dict) -> str:
+        """Save a weekly report to the database
+
+        Args:
+            report_data: Dictionary containing report information
+                - week_start: datetime - Start of the report week
+                - week_end: datetime - End of the report week
+                - metrics: dict - Metrics snapshot
+                - whatsapp_text: str (optional) - WhatsApp formatted text
+                - html_content: str (optional) - HTML formatted content
+                - insights: list (optional) - Generated insights
+                - sent_via_whatsapp: bool (optional) - Whether sent via WhatsApp
+                - whatsapp_sent_at: datetime (optional) - When sent via WhatsApp
+                - whatsapp_message_id: str (optional) - WhatsApp message ID
+
+        Returns:
+            str: Report UUID if successful, empty string if failed
+        """
+        try:
+            # Generate UUID for the report
+            report_id = str(uuid.uuid4())
+
+            log_info(f"Attempting to save weekly report with ID: {report_id}")
+
+            # Prepare data for insertion
+            db_data = {
+                'id': report_id,
+                'week_start': report_data.get('week_start'),
+                'week_end': report_data.get('week_end'),
+                'metrics': report_data.get('metrics', {}),
+                'whatsapp_text': report_data.get('whatsapp_text'),
+                'html_content': report_data.get('html_content'),
+                'insights': report_data.get('insights', []),
+                'sent_via_whatsapp': report_data.get('sent_via_whatsapp', False),
+                'whatsapp_sent_at': report_data.get('whatsapp_sent_at'),
+                'whatsapp_message_id': report_data.get('whatsapp_message_id'),
+                'created_at': datetime.now(self.sa_tz).isoformat(),
+                'updated_at': datetime.now(self.sa_tz).isoformat()
+            }
+
+            # Remove None values to avoid inserting nulls where not allowed
+            db_data = {k: v for k, v in db_data.items() if v is not None}
+
+            log_info(f"Inserting weekly report data: {db_data}")
+
+            # Insert into database
+            result = self.db.table('weekly_reports').insert(db_data)
+
+            # Check if insertion was successful
+            if result and hasattr(result, 'data') and result.data:
+                log_info(f"Weekly report saved successfully with ID: {report_id}")
+                return report_id
+
+            # If we get here, something went wrong
+            log_error(f"Failed to save weekly report - unexpected result structure: {result}")
+            return ""
+
+        except Exception as e:
+            log_error(f"Error saving weekly report: {str(e)}")
+            log_error(f"Report data that failed: {report_data}")
+            return ""
+
+    def get_weekly_reports(self, limit: int = 10) -> List[Dict]:
+        """Fetch recent weekly reports
+
+        Args:
+            limit: Maximum number of reports to return (default: 10)
+
+        Returns:
+            List[Dict]: List of weekly reports ordered by week_start DESC
+        """
+        try:
+            result = self.db.table('weekly_reports').select('*').order(
+                'week_start', desc=True
+            ).limit(limit).execute()
+
+            if result.data:
+                log_info(f"Retrieved {len(result.data)} weekly reports")
+                return result.data
+            else:
+                log_info("No weekly reports found")
+                return []
+
+        except Exception as e:
+            log_error(f"Error getting weekly reports: {str(e)}")
+            return []
+
+    def get_report_by_id(self, report_id: str) -> Optional[Dict]:
+        """Fetch a single weekly report by ID
+
+        Args:
+            report_id: UUID of the report
+
+        Returns:
+            Optional[Dict]: Report data if found, None otherwise
+        """
+        try:
+            result = self.db.table('weekly_reports').select('*').eq(
+                'id', report_id
+            ).single().execute()
+
+            if result.data:
+                log_info(f"Retrieved weekly report with ID: {report_id}")
+                return result.data
+            else:
+                log_info(f"No weekly report found with ID: {report_id}")
+                return None
+
+        except Exception as e:
+            log_error(f"Error getting weekly report by ID: {str(e)}")
+            return None
