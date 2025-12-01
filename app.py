@@ -2918,6 +2918,197 @@ def get_comment_stats():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================
+# CONTENT DASHBOARD ROUTES
+# ============================================
+
+@app.route('/dashboard')
+def content_dashboard():
+    """Main content management dashboard"""
+    return render_template('dashboard.html')
+
+
+@app.route('/dashboard/post/<post_id>')
+def view_post_detail(post_id):
+    """View single post details"""
+    if not supabase_client:
+        return "Database not connected", 503
+
+    try:
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return "Post not found", 404
+
+        post = result.data[0]
+
+        # Format scheduled time
+        if post.get('scheduled_time'):
+            try:
+                dt = datetime.fromisoformat(post['scheduled_time'].replace('Z', '+00:00'))
+                post['scheduled_time_formatted'] = dt.strftime('%a, %b %d at %H:%M')
+            except Exception:
+                post['scheduled_time_formatted'] = post['scheduled_time']
+        else:
+            post['scheduled_time_formatted'] = 'Not scheduled'
+
+        # Parse generation_prompt to get video_script, carousel_slides, hashtags
+        if post.get('generation_prompt'):
+            try:
+                metadata = json.loads(post['generation_prompt'])
+                post['video_script'] = metadata.get('video_script')
+                post['carousel_slides'] = metadata.get('carousel_slides')
+                post['hashtags'] = metadata.get('hashtags')
+            except Exception:
+                pass
+
+        # Parse carousel slides if JSON string
+        if post.get('carousel_slides') and isinstance(post['carousel_slides'], str):
+            try:
+                post['carousel_slides'] = json.loads(post['carousel_slides'])
+            except Exception:
+                pass
+
+        # Parse hashtags if JSON string
+        if post.get('hashtags') and isinstance(post['hashtags'], str):
+            try:
+                post['hashtags'] = json.loads(post['hashtags'])
+            except Exception:
+                pass
+
+        return render_template('post_detail.html', post=post)
+
+    except Exception as e:
+        log_error(f"Error fetching post {post_id}: {e}")
+        return f"Error: {str(e)}", 500
+
+
+@app.route('/api/dashboard/posts')
+def api_dashboard_posts():
+    """API: Get all posts for dashboard"""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').select('*').order(
+            'scheduled_time', desc=False
+        ).limit(100).execute()
+
+        posts = result.data if result.data else []
+
+        return jsonify({
+            'success': True,
+            'posts': posts,
+            'count': len(posts)
+        })
+
+    except Exception as e:
+        log_error(f"Error fetching dashboard posts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/seed-launch', methods=['POST'])
+def api_seed_launch_content():
+    """API: Generate and save launch content"""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.launch_content import seed_launch_content
+
+        # Get optional start date from request
+        start_date = None
+        if request.json and request.json.get('start_date'):
+            start_date = datetime.fromisoformat(request.json['start_date'])
+
+        post_ids = seed_launch_content(supabase_client, start_date)
+
+        return jsonify({
+            'success': True,
+            'posts_created': len(post_ids),
+            'post_ids': post_ids,
+            'message': f'Created {len(post_ids)} launch posts'
+        })
+
+    except Exception as e:
+        log_error(f"Error seeding launch content: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/approve/<post_id>', methods=['POST'])
+def api_approve_post(post_id):
+    """API: Approve a single post"""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').update({
+            'status': 'scheduled',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        if result.data:
+            log_info(f"Post {post_id} approved and scheduled")
+            return jsonify({'success': True, 'message': 'Post approved'})
+        else:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+    except Exception as e:
+        log_error(f"Error approving post {post_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/reject/<post_id>', methods=['POST'])
+def api_reject_post(post_id):
+    """API: Reject a single post"""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').update({
+            'status': 'rejected',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        if result.data:
+            log_info(f"Post {post_id} rejected")
+            return jsonify({'success': True, 'message': 'Post rejected'})
+        else:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+    except Exception as e:
+        log_error(f"Error rejecting post {post_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/approve-all', methods=['POST'])
+def api_approve_all_posts():
+    """API: Approve all pending posts"""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').update({
+            'status': 'scheduled',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('status', 'pending_approval').execute()
+
+        approved_count = len(result.data) if result.data else 0
+        log_info(f"Approved {approved_count} posts")
+
+        return jsonify({
+            'success': True,
+            'approved_count': approved_count,
+            'message': f'Approved {approved_count} posts'
+        })
+
+    except Exception as e:
+        log_error(f"Error approving all posts: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""

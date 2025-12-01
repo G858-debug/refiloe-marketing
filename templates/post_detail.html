@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Details - Refiloe</title>
+    <style>
+        /* Base styles */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .header a { color: white; text-decoration: none; }
+        .header a:hover { text-decoration: underline; }
+        .header h1 { font-size: 20px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .meta-item label {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .meta-item span {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .content-preview {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+
+        .script-section {
+            margin-top: 20px;
+        }
+        .script-section h3 {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 10px;
+        }
+        .script-content {
+            background: #fef3c7;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #f59e0b;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+
+        .carousel-slides {
+            display: grid;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .slide {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        .slide-number {
+            font-weight: 600;
+            color: #3b82f6;
+            margin-bottom: 5px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-pending_approval, .badge-pending-approval { background: #fef3c7; color: #b45309; }
+        .badge-scheduled { background: #dbeafe; color: #1d4ed8; }
+        .badge-published { background: #dcfce7; color: #15803d; }
+        .badge-rejected { background: #fee2e2; color: #dc2626; }
+
+        .hashtags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .hashtag {
+            background: #e0e7ff;
+            color: #4338ca;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 13px;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+        }
+        .toast {
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: #22c55e; }
+        .toast.error { background: #ef4444; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/dashboard">&larr; Back to Dashboard</a>
+        <h1 style="margin-top: 10px;">Post Details</h1>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Post Information</h2>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <label>Status</label>
+                    <span class="badge badge-{{ post.status|replace('_', '-') }}">{{ post.status|replace('_', ' ')|title }}</span>
+                </div>
+                <div class="meta-item">
+                    <label>Type</label>
+                    <span>{{ post.post_type|title if post.post_type else 'Post' }}</span>
+                </div>
+                <div class="meta-item">
+                    <label>Platform</label>
+                    <span>{{ post.platform|title if post.platform else 'Facebook' }}</span>
+                </div>
+                <div class="meta-item">
+                    <label>Theme</label>
+                    <span>{{ post.content_theme|replace('_', ' ')|title if post.content_theme else 'General' }}</span>
+                </div>
+                <div class="meta-item">
+                    <label>Scheduled For</label>
+                    <span>{{ post.scheduled_time_formatted }}</span>
+                </div>
+                <div class="meta-item">
+                    <label>Video Duration</label>
+                    <span>{{ (post.video_duration|string ~ 's') if post.video_duration else 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Caption / Content</h2>
+            <div class="content-preview">{{ post.content_text or post.content or 'No content' }}</div>
+
+            {% if post.hashtags %}
+            <div class="hashtags">
+                {% for tag in post.hashtags %}
+                <span class="hashtag">{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if post.video_script %}
+        <div class="card">
+            <h2>Video Script</h2>
+            <div class="script-content">{{ post.video_script }}</div>
+        </div>
+        {% endif %}
+
+        {% if post.carousel_slides %}
+        <div class="card">
+            <h2>Carousel Slides</h2>
+            <div class="carousel-slides">
+                {% for slide in post.carousel_slides %}
+                <div class="slide">
+                    <div class="slide-number">Slide {{ slide.slide_number or loop.index }}</div>
+                    <div>{{ slide.text or slide.description }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if post.status == 'pending_approval' %}
+        <div class="actions">
+            <button class="btn btn-success" onclick="approvePost('{{ post.id }}')">Approve Post</button>
+            <button class="btn btn-danger" onclick="rejectPost('{{ post.id }}')">Reject Post</button>
+            <a href="/dashboard" class="btn btn-secondary">&larr; Back</a>
+        </div>
+        {% else %}
+        <div class="actions">
+            <a href="/dashboard" class="btn btn-secondary">&larr; Back to Dashboard</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toasts"></div>
+
+    <script>
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toasts');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        async function approvePost(postId) {
+            if (!confirm('Approve this post?')) return;
+
+            try {
+                const response = await fetch(`/api/dashboard/approve/${postId}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Post approved!', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showToast('Failed to approve post', 'error');
+            }
+        }
+
+        async function rejectPost(postId) {
+            if (!confirm('Reject this post? It will not be published.')) return;
+
+            try {
+                const response = await fetch(`/api/dashboard/reject/${postId}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Post rejected', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showToast('Failed to reject post', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
