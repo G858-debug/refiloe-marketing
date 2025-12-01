@@ -717,15 +717,15 @@ def test_content_generation():
     """Test content generation (for debugging)"""
     if not supabase_client:
         return jsonify({'error': 'Supabase not initialized'}), 503
-    
+
     try:
         from social_media.content_generator import ContentGenerator
-        
+
         generator = ContentGenerator('social_media/config.yaml', supabase_client)
-        
+
         # Generate one test post
         post = generator.generate_single_post('admin_hacks', 'single_image_with_caption')
-        
+
         if post:
             return jsonify({
                 'success': True,
@@ -738,9 +738,48 @@ def test_content_generation():
             }), 200
         else:
             return jsonify({'error': 'Failed to generate post'}), 500
-            
+
     except Exception as e:
         log_error(f"Error testing content generation: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/launch-content/preview')
+def preview_launch_content():
+    """Preview launch content without saving"""
+    try:
+        from social_media.launch_content import get_launch_content_preview
+        content = get_launch_content_preview()
+        return jsonify({'success': True, 'posts': content, 'count': len(content)}), 200
+    except Exception as e:
+        log_error(f"Error previewing launch content: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/launch-content/seed', methods=['POST'])
+def seed_launch_content_route():
+    """Generate and save launch content to database"""
+    if not supabase_client:
+        return jsonify({'error': 'Supabase not initialized'}), 503
+
+    try:
+        from social_media.launch_content import seed_launch_content as seed_func
+        from datetime import datetime
+
+        start_date_str = request.json.get('start_date') if request.json else None
+        start_date = None
+        if start_date_str:
+            start_date = datetime.fromisoformat(start_date_str)
+
+        post_ids = seed_func(supabase_client, start_date)
+        return jsonify({
+            'success': True,
+            'posts_created': len(post_ids),
+            'post_ids': post_ids,
+            'message': f'Created {len(post_ids)} launch posts. Review at /approval/pending'
+        }), 201
+    except Exception as e:
+        log_error(f"Error seeding launch content: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
