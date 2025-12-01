@@ -22,6 +22,7 @@ from config import config
 # Import utilities
 from utils.logger import log_info, log_error, log_warning
 from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
+from utils.whatsapp_notifier import get_whatsapp_notifier
 
 from social_media.approval_routes import approval_bp
 from social_media.analytics_routes import analytics_bp
@@ -652,6 +653,46 @@ def debug_single_post(post_id):
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/test-whatsapp', methods=['GET'])
+def test_whatsapp():
+    """Test WhatsApp notification connection"""
+    try:
+        # Get WhatsApp notifier instance
+        notifier = get_whatsapp_notifier()
+
+        # Check if enabled
+        if not notifier.enabled:
+            return jsonify({
+                'success': False,
+                'message': 'WhatsApp notifications are disabled',
+                'tip': 'Set ENABLE_WHATSAPP_NOTIFICATIONS=true in your .env file'
+            }), 200
+
+        # Test connection
+        success = notifier.test_connection()
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'WhatsApp connection successful! Test message sent.',
+                'phone_number': notifier.notification_phone
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'WhatsApp connection failed. Check logs for details.',
+                'phone_number': notifier.notification_phone
+            }), 500
+
+    except Exception as e:
+        log_error(f"WhatsApp test endpoint error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Failed to test WhatsApp connection'
+        }), 500
 
 
 @app.route('/api/test/content')
