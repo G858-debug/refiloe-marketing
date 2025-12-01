@@ -693,6 +693,89 @@ def trigger_weekly_report():
         }), 500
 
 
+@app.route('/api/trainer-audit/submit', methods=['POST'])
+def submit_trainer_audit():
+    """Submit a trainer time audit form"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from database import SocialMediaDatabase
+        db = SocialMediaDatabase(supabase_client)
+
+        # Get form data from request
+        audit_data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['name', 'phone', 'activeClients', 'hourlyRate',
+                          'schedulingHours', 'paymentHours', 'programHours',
+                          'messageHours', 'adminHours', 'totalHours',
+                          'weeklyLost', 'monthlyLost', 'yearlyLost']
+
+        missing_fields = [field for field in required_fields if field not in audit_data]
+        if missing_fields:
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }), 400
+
+        # Save to database
+        audit_id = db.save_trainer_audit(audit_data)
+
+        if audit_id:
+            log_info(f"Trainer audit submitted successfully: {audit_id}")
+
+            # TODO: Send WhatsApp message with personalized report
+            # whatsapp_notifier = get_whatsapp_notifier()
+            # if whatsapp_notifier:
+            #     whatsapp_notifier.send_trainer_audit_report(audit_data)
+
+            return jsonify({
+                'success': True,
+                'audit_id': audit_id,
+                'message': 'Your audit has been saved! Check your WhatsApp for your personalized report.'
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save audit data'
+            }), 500
+
+    except Exception as e:
+        log_error(f"Error submitting trainer audit: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/trainer-audit/list', methods=['GET'])
+def list_trainer_audits():
+    """Get list of trainer audit submissions (admin only)"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        from database import SocialMediaDatabase
+        db = SocialMediaDatabase(supabase_client)
+
+        limit = request.args.get('limit', 50, type=int)
+        audits = db.get_trainer_audits(limit=limit)
+
+        return jsonify({
+            'success': True,
+            'count': len(audits),
+            'audits': audits
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error fetching trainer audits: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/reports/latest')
 def get_latest_report():
     """Get the most recent weekly report"""
@@ -2413,6 +2496,12 @@ def test_generate_video():
             'error': str(e),
             'traceback': error_traceback
         }), 500
+
+
+@app.route('/trainer-time-audit')
+def trainer_time_audit():
+    """Trainer Time Audit Calculator - Lead generation tool"""
+    return render_template('trainer_time_audit.html')
 
 
 @app.route('/looks-gallery')

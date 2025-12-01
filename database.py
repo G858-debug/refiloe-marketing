@@ -1097,3 +1097,78 @@ class SocialMediaDatabase:
         except Exception as e:
             log_error(f"Error getting weekly report by ID: {str(e)}")
             return None
+
+    def save_trainer_audit(self, audit_data: Dict) -> Optional[str]:
+        """Save a trainer time audit submission
+
+        Args:
+            audit_data: Dictionary containing audit form data
+
+        Returns:
+            str: Audit UUID if successful, None if failed
+        """
+        try:
+            audit_id = str(uuid.uuid4())
+
+            log_info(f"Attempting to save trainer audit with ID: {audit_id}")
+
+            # Prepare data for insertion
+            db_data = {
+                'id': audit_id,
+                'name': audit_data.get('name'),
+                'country_code': audit_data.get('countryCode', '+27'),
+                'phone': audit_data.get('phone'),
+                'active_clients': audit_data.get('activeClients'),
+                'hourly_rate': audit_data.get('hourlyRate'),
+                'scheduling_hours': audit_data.get('schedulingHours'),
+                'payment_hours': audit_data.get('paymentHours'),
+                'program_hours': audit_data.get('programHours'),
+                'message_hours': audit_data.get('messageHours'),
+                'admin_hours': audit_data.get('adminHours'),
+                'total_hours': audit_data.get('totalHours'),
+                'weekly_lost': audit_data.get('weeklyLost'),
+                'monthly_lost': audit_data.get('monthlyLost'),
+                'yearly_lost': audit_data.get('yearlyLost'),
+                'biggest_time_sink': audit_data.get('biggestTimeSink')
+            }
+
+            # Insert into database
+            result = self.db.table('trainer_audits').insert(db_data).execute()
+
+            if result.data:
+                log_info(f"Successfully saved trainer audit: {audit_id}")
+                return audit_id
+            else:
+                log_error("Failed to save trainer audit - no data returned")
+                return None
+
+        except Exception as e:
+            log_error(f"Error saving trainer audit: {str(e)}")
+            import traceback
+            log_error(f"Traceback: {traceback.format_exc()}")
+            return None
+
+    def get_trainer_audits(self, limit: int = 50) -> List[Dict]:
+        """Fetch recent trainer audit submissions
+
+        Args:
+            limit: Maximum number of audits to return (default: 50)
+
+        Returns:
+            List[Dict]: List of trainer audits ordered by created_at DESC
+        """
+        try:
+            result = self.db.table('trainer_audits').select('*').order(
+                'created_at', desc=True
+            ).limit(limit).execute()
+
+            if result.data:
+                log_info(f"Retrieved {len(result.data)} trainer audits")
+                return result.data
+            else:
+                log_info("No trainer audits found")
+                return []
+
+        except Exception as e:
+            log_error(f"Error getting trainer audits: {str(e)}")
+            return []

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Trainer Time Audit | Refiloe</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'refiloe-purple': '#6B46C1',
+                        'refiloe-violet': '#7C3AED',
+                        'refiloe-gold': '#F59E0B',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .slider-track {
+            background: linear-gradient(to right, #7C3AED 0%, #7C3AED var(--value), #E5E7EB var(--value), #E5E7EB 100%);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-50 to-violet-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const TrainerTimeAudit = () => {
+            // State management
+            const [step, setStep] = useState(1);
+            const [formData, setFormData] = useState({
+                activeClients: 10,
+                schedulingHours: 3,
+                paymentHours: 2,
+                programHours: 4,
+                messageHours: 5,
+                adminHours: 3,
+                hourlyRate: 500
+            });
+            const [leadData, setLeadData] = useState({
+                name: '',
+                countryCode: '+27',
+                phone: ''
+            });
+            const [showSuccess, setShowSuccess] = useState(false);
+            const [isAnimating, setIsAnimating] = useState(false);
+
+            // Calculate totals
+            const totalHours = formData.schedulingHours + formData.paymentHours +
+                              formData.programHours + formData.messageHours +
+                              formData.adminHours;
+            const weeklyLost = totalHours * formData.hourlyRate;
+            const monthlyLost = weeklyLost * 4;
+            const yearlyLost = weeklyLost * 52;
+
+            // Find biggest time sink
+            const timeBreakdown = [
+                { label: 'Scheduling/Bookings', hours: formData.schedulingHours, color: 'bg-purple-500' },
+                { label: 'Chasing Payments', hours: formData.paymentHours, color: 'bg-violet-500' },
+                { label: 'Writing Programs', hours: formData.programHours, color: 'bg-indigo-500' },
+                { label: 'Client Messages', hours: formData.messageHours, color: 'bg-purple-400' },
+                { label: 'Admin/Paperwork', hours: formData.adminHours, color: 'bg-violet-400' }
+            ];
+            const biggestTimeSink = timeBreakdown.reduce((max, item) =>
+                item.hours > max.hours ? item : max
+            );
+
+            const getTipForTimeSink = (label) => {
+                const tips = {
+                    'Scheduling/Bookings': 'Most of your time goes to scheduling. Imagine having clients book their own sessions automatically!',
+                    'Chasing Payments': 'Payment follow-ups are eating your time. Automated payment reminders could reclaim these hours.',
+                    'Writing Programs': 'Program creation takes the most time. Templates and automation could speed this up 5x.',
+                    'Client Messages': 'Messages are your biggest drain. A centralized system could cut this time in half.',
+                    'Admin/Paperwork': 'Admin is killing your productivity. Smart automation could reduce this by 80%.'
+                };
+                return tips[label] || 'You could reclaim so much time with the right systems in place.';
+            };
+
+            const handleInputChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+            };
+
+            const handleLeadChange = (field, value) => {
+                setLeadData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const nextStep = () => {
+                setIsAnimating(true);
+                setTimeout(() => {
+                    setStep(prev => prev + 1);
+                    setIsAnimating(false);
+                }, 300);
+            };
+
+            const prevStep = () => {
+                setIsAnimating(true);
+                setTimeout(() => {
+                    setStep(prev => prev - 1);
+                    setIsAnimating(false);
+                }, 300);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+
+                // Prepare audit data for submission
+                const auditData = {
+                    name: leadData.name,
+                    countryCode: leadData.countryCode,
+                    phone: leadData.phone,
+                    activeClients: formData.activeClients,
+                    hourlyRate: formData.hourlyRate,
+                    schedulingHours: formData.schedulingHours,
+                    paymentHours: formData.paymentHours,
+                    programHours: formData.programHours,
+                    messageHours: formData.messageHours,
+                    adminHours: formData.adminHours,
+                    totalHours: totalHours,
+                    weeklyLost: weeklyLost,
+                    monthlyLost: monthlyLost,
+                    yearlyLost: yearlyLost,
+                    biggestTimeSink: biggestTimeSink.label
+                };
+
+                try {
+                    const response = await fetch('/api/trainer-audit/submit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(auditData)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        console.log('Audit saved successfully:', result.audit_id);
+                        setShowSuccess(true);
+                    } else {
+                        console.error('Failed to save audit:', result.error);
+                        alert('There was an error saving your audit. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error submitting audit:', error);
+                    alert('There was an error submitting your audit. Please try again.');
+                }
+            };
+
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('en-ZA', {
+                    style: 'currency',
+                    currency: 'ZAR',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(amount);
+            };
+
+            const shareResults = async () => {
+                const shareText = `I just discovered I'm losing ${totalHours} hours every week to admin tasks! That's ${formatCurrency(monthlyLost)} per month. 😱\n\nTake the Trainer Time Audit: ${window.location.href}`;
+
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: 'My Trainer Time Audit Results',
+                            text: shareText
+                        });
+                    } catch (err) {
+                        console.log('Share cancelled');
+                    }
+                } else {
+                    navigator.clipboard.writeText(shareText);
+                    alert('Results copied to clipboard!');
+                }
+            };
+
+            const SliderInput = ({ label, value, onChange, min = 0, max = 10 }) => (
+                <div className="mb-6">
+                    <label className="block text-gray-700 font-medium mb-2">
+                        {label}
+                    </label>
+                    <div className="flex items-center gap-4">
+                        <input
+                            type="range"
+                            min={min}
+                            max={max}
+                            step="0.5"
+                            value={value}
+                            onChange={(e) => onChange(parseFloat(e.target.value))}
+                            className="flex-1 h-2 rounded-lg appearance-none cursor-pointer"
+                            style={{
+                                background: `linear-gradient(to right, #7C3AED 0%, #7C3AED ${(value/max)*100}%, #E5E7EB ${(value/max)*100}%, #E5E7EB 100%)`
+                            }}
+                        />
+                        <span className="text-2xl font-bold text-refiloe-purple w-16 text-right">
+                            {value}h
+                        </span>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen py-8 px-4">
+                    <div className="max-w-2xl mx-auto">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <h1 className="text-4xl md:text-5xl font-bold text-refiloe-purple mb-3">
+                                The Trainer Time Audit
+                            </h1>
+                            <p className="text-lg md:text-xl text-gray-600">
+                                Discover how much time (and money) admin is costing you
+                            </p>
+                            <div className="mt-6 flex justify-center items-center gap-2">
+                                {[1, 2, 3].map((num) => (
+                                    <div key={num} className="flex items-center">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                                            step >= num
+                                                ? 'bg-refiloe-purple text-white'
+                                                : 'bg-gray-200 text-gray-400'
+                                        }`}>
+                                            {num}
+                                        </div>
+                                        {num < 3 && (
+                                            <div className={`w-12 h-1 ${
+                                                step > num ? 'bg-refiloe-purple' : 'bg-gray-200'
+                                            }`} />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-2 text-sm text-gray-500 font-medium">
+                                Step {step} of 3
+                            </div>
+                        </div>
+
+                        {/* Main Card */}
+                        <div className={`bg-white rounded-2xl shadow-xl p-6 md:p-8 transition-all duration-300 ${
+                            isAnimating ? 'opacity-0 transform scale-95' : 'opacity-100 transform scale-100'
+                        }`}>
+                            {/* Step 1: Input Form */}
+                            {step === 1 && (
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                                        Let's calculate your time drain
+                                    </h2>
+
+                                    <div className="mb-6">
+                                        <label className="block text-gray-700 font-medium mb-2">
+                                            How many active clients do you have?
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="100"
+                                            value={formData.activeClients}
+                                            onChange={(e) => handleInputChange('activeClients', e.target.value)}
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-refiloe-purple focus:outline-none text-lg"
+                                        />
+                                    </div>
+
+                                    <div className="bg-purple-50 rounded-lg p-4 mb-6">
+                                        <p className="text-sm text-purple-800 font-medium">
+                                            Now, let's look at where your time goes each week...
+                                        </p>
+                                    </div>
+
+                                    <SliderInput
+                                        label="Hours per week on scheduling/bookings?"
+                                        value={formData.schedulingHours}
+                                        onChange={(val) => handleInputChange('schedulingHours', val)}
+                                    />
+
+                                    <SliderInput
+                                        label="Hours per week chasing payments?"
+                                        value={formData.paymentHours}
+                                        onChange={(val) => handleInputChange('paymentHours', val)}
+                                    />
+
+                                    <SliderInput
+                                        label="Hours per week writing programs?"
+                                        value={formData.programHours}
+                                        onChange={(val) => handleInputChange('programHours', val)}
+                                    />
+
+                                    <SliderInput
+                                        label="Hours per week on client messages?"
+                                        value={formData.messageHours}
+                                        onChange={(val) => handleInputChange('messageHours', val)}
+                                    />
+
+                                    <SliderInput
+                                        label="Hours per week on admin/paperwork?"
+                                        value={formData.adminHours}
+                                        onChange={(val) => handleInputChange('adminHours', val)}
+                                    />
+
+                                    <div className="mb-6">
+                                        <label className="block text-gray-700 font-medium mb-2">
+                                            What do you charge per hour? (Rands)
+                                        </label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-lg">
+                                                R
+                                            </span>
+                                            <input
+                                                type="number"
+                                                min="100"
+                                                max="5000"
+                                                step="50"
+                                                value={formData.hourlyRate}
+                                                onChange={(e) => handleInputChange('hourlyRate', e.target.value)}
+                                                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-refiloe-purple focus:outline-none text-lg"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-purple-100 to-violet-100 rounded-lg p-4 mb-6">
+                                        <p className="text-center text-purple-800 font-semibold">
+                                            💡 You're spending <span className="text-2xl">{totalHours}</span> hours/week on admin
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={nextStep}
+                                        className="w-full bg-gradient-to-r from-refiloe-purple to-refiloe-violet text-white font-bold py-4 rounded-lg hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                                    >
+                                        See My Results →
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Step 2: Results Display */}
+                            {step === 2 && (
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+                                        Your Time Audit Results
+                                    </h2>
+
+                                    {/* Big Impact Number */}
+                                    <div className="bg-gradient-to-br from-refiloe-purple to-refiloe-violet rounded-2xl p-8 text-white text-center mb-6 shadow-lg">
+                                        <p className="text-lg mb-2 opacity-90">You're losing</p>
+                                        <p className="text-6xl font-bold mb-2">{totalHours}</p>
+                                        <p className="text-2xl mb-4">hours every week to admin</p>
+                                        <div className="h-px bg-white opacity-30 my-4" />
+                                        <p className="text-sm opacity-75">That's equivalent to</p>
+                                        <p className="text-3xl font-bold mt-2">
+                                            {Math.round((totalHours / 40) * 100)}% of a full-time job
+                                        </p>
+                                    </div>
+
+                                    {/* Money Impact */}
+                                    <div className="grid md:grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-purple-50 rounded-xl p-6 border-2 border-purple-200">
+                                            <p className="text-sm text-purple-600 font-medium mb-1">Monthly Revenue Lost</p>
+                                            <p className="text-3xl font-bold text-refiloe-purple">
+                                                {formatCurrency(monthlyLost)}
+                                            </p>
+                                            <p className="text-xs text-gray-600 mt-1">you could be earning</p>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-refiloe-gold to-yellow-500 rounded-xl p-6 text-white shadow-lg">
+                                            <p className="text-sm opacity-90 font-medium mb-1">Yearly Revenue Lost</p>
+                                            <p className="text-3xl font-bold">
+                                                {formatCurrency(yearlyLost)}
+                                            </p>
+                                            <p className="text-xs opacity-75 mt-1">per year! 😱</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Time Breakdown */}
+                                    <div className="mb-6">
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                                            Where Your Time Goes
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {timeBreakdown.map((item, idx) => (
+                                                <div key={idx}>
+                                                    <div className="flex justify-between text-sm mb-1">
+                                                        <span className="text-gray-700 font-medium">{item.label}</span>
+                                                        <span className="text-gray-600">{item.hours}h ({Math.round((item.hours/totalHours)*100)}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-3">
+                                                        <div
+                                                            className={`${item.color} h-3 rounded-full transition-all duration-500`}
+                                                            style={{ width: `${(item.hours/totalHours)*100}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Personalized Tip */}
+                                    <div className="bg-amber-50 border-l-4 border-refiloe-gold rounded-lg p-4 mb-6">
+                                        <p className="text-sm font-semibold text-amber-900 mb-2">
+                                            💡 Your Biggest Opportunity
+                                        </p>
+                                        <p className="text-sm text-amber-800">
+                                            {getTipForTimeSink(biggestTimeSink.label)}
+                                        </p>
+                                    </div>
+
+                                    {/* Empathy Message */}
+                                    <div className="bg-purple-50 rounded-lg p-4 mb-6 text-center">
+                                        <p className="text-sm text-purple-800">
+                                            Don't worry - you're not alone. Most trainers lose <strong>15+ hours weekly</strong> to tasks like these. The good news? There's a better way.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={prevStep}
+                                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all"
+                                        >
+                                            ← Back
+                                        </button>
+                                        <button
+                                            onClick={nextStep}
+                                            className="flex-1 bg-gradient-to-r from-refiloe-purple to-refiloe-violet text-white font-bold py-3 rounded-lg hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                                        >
+                                            Get My Free Report →
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        onClick={shareResults}
+                                        className="w-full mt-3 bg-white border-2 border-refiloe-purple text-refiloe-purple font-semibold py-3 rounded-lg hover:bg-purple-50 transition-all"
+                                    >
+                                        📤 Share Your Results
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Step 3: Lead Capture */}
+                            {step === 3 && !showSuccess && (
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-800 mb-3 text-center">
+                                        Get Your Personalized Report
+                                    </h2>
+                                    <p className="text-gray-600 text-center mb-6">
+                                        Plus 5 actionable tips to reclaim your time
+                                    </p>
+
+                                    <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 mb-6">
+                                        <p className="text-sm text-purple-800 font-medium mb-2">
+                                            📊 Your personalized report includes:
+                                        </p>
+                                        <ul className="text-sm text-purple-700 space-y-1 ml-4">
+                                            <li>✓ Complete breakdown of your time and money lost</li>
+                                            <li>✓ 5 specific strategies to automate your biggest time drains</li>
+                                            <li>✓ Quick wins you can implement this week</li>
+                                            <li>✓ Free resources to help you scale smarter</li>
+                                        </ul>
+                                    </div>
+
+                                    <form onSubmit={handleSubmit}>
+                                        <div className="mb-4">
+                                            <label className="block text-gray-700 font-medium mb-2">
+                                                Your Name
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={leadData.name}
+                                                onChange={(e) => handleLeadChange('name', e.target.value)}
+                                                placeholder="e.g., Sarah Johnson"
+                                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-refiloe-purple focus:outline-none"
+                                            />
+                                        </div>
+
+                                        <div className="mb-6">
+                                            <label className="block text-gray-700 font-medium mb-2">
+                                                WhatsApp Number
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={leadData.countryCode}
+                                                    onChange={(e) => handleLeadChange('countryCode', e.target.value)}
+                                                    className="px-3 py-3 border-2 border-gray-300 rounded-lg focus:border-refiloe-purple focus:outline-none"
+                                                >
+                                                    <option value="+27">🇿🇦 +27</option>
+                                                    <option value="+1">🇺🇸 +1</option>
+                                                    <option value="+44">🇬🇧 +44</option>
+                                                    <option value="+61">🇦🇺 +61</option>
+                                                    <option value="+91">🇮🇳 +91</option>
+                                                </select>
+                                                <input
+                                                    type="tel"
+                                                    required
+                                                    value={leadData.phone}
+                                                    onChange={(e) => handleLeadChange('phone', e.target.value)}
+                                                    placeholder="82 123 4567"
+                                                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-refiloe-purple focus:outline-none"
+                                                />
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                We'll send your report via WhatsApp within 5 minutes
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            className="w-full bg-gradient-to-r from-refiloe-purple to-refiloe-violet text-white font-bold py-4 rounded-lg hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                                        >
+                                            📲 Send My Report
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={prevStep}
+                                            className="w-full mt-3 text-gray-600 font-medium py-2 hover:text-gray-800 transition-all"
+                                        >
+                                            ← Back to Results
+                                        </button>
+                                    </form>
+
+                                    <p className="text-xs text-center text-gray-500 mt-4">
+                                        By submitting, you agree to receive helpful tips from Refiloe. Unsubscribe anytime.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Success Message */}
+                            {step === 3 && showSuccess && (
+                                <div className="text-center py-8">
+                                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-3xl font-bold text-gray-800 mb-3">
+                                        You're All Set! 🎉
+                                    </h2>
+                                    <p className="text-lg text-gray-600 mb-6">
+                                        Check your WhatsApp - your personalized Time Audit Report is on its way!
+                                    </p>
+                                    <div className="bg-purple-50 rounded-lg p-6 mb-6">
+                                        <p className="text-sm text-purple-800 font-medium mb-2">
+                                            What's Next?
+                                        </p>
+                                        <p className="text-sm text-purple-700">
+                                            Your report includes specific, actionable steps you can take TODAY to start reclaiming those {totalHours} hours per week. Review the tips and pick one to implement this week!
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={shareResults}
+                                        className="bg-gradient-to-r from-refiloe-purple to-refiloe-violet text-white font-bold py-3 px-8 rounded-lg hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                                    >
+                                        📤 Share This Tool With Other Trainers
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Branding */}
+                        <div className="text-center mt-8">
+                            <p className="text-sm text-gray-500">
+                                Powered by <span className="font-semibold text-refiloe-purple">Refiloe</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TrainerTimeAudit />);
+    </script>
+</body>
+</html>
