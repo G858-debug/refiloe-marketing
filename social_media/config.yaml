@@ -1,0 +1,229 @@
+# Social Media Configuration for Aggressive Growth
+# Refiloe Marketing Platform
+
+# Posting Schedule Configuration
+posting_schedule:
+  week_1:
+    enabled: true
+    posts_per_day: 4
+    times: ["08:00", "12:00", "16:00", "20:00"]
+    timezone: "SAST"
+    content_mix:
+      video: 50%
+      carousel: 30%
+      single_image: 20%
+
+  week_2_to_4:
+    enabled: true
+    posts_per_day: 3
+    times: ["08:00", "13:00", "18:00"]
+    timezone: "SAST"
+
+  week_5_plus:
+    enabled: true
+    posts_per_day: 3
+    times: ["07:00", "12:00", "19:00"]
+    timezone: "SAST"
+
+# Stories Configuration
+stories:
+  enabled: true
+  posts_per_day: 2
+  types: ["behind_the_scenes", "quick_tips", "polls"]
+  duration: 15  # seconds
+
+# Reels Configuration
+reels:
+  enabled: true
+  posts_per_day: 1
+  max_duration: 60
+  trending_sounds: true
+
+# Content Hooks
+content_hooks:
+  pain_points:
+    - "Struggling to attract consistent clients?"
+    - "Tired of clients ghosting after one session?"
+    - "Spending hours on admin instead of training?"
+    - "Can't scale beyond 1-on-1 sessions?"
+    - "Low engagement on your fitness posts?"
+    - "Pricing too low and feeling undervalued?"
+    - "No system for tracking client progress?"
+    - "Difficult to stand out in a saturated market?"
+    - "Wasting money on ads that don't convert?"
+    - "Not sure how to package your services?"
+    - "Clients not seeing results and blaming you?"
+    - "Feeling burnt out from irregular income?"
+    - "Struggling to get testimonials from clients?"
+    - "Don't know how to leverage social media effectively?"
+    - "No clear brand identity or positioning?"
+    - "Missing out on corporate wellness opportunities?"
+    - "Can't justify raising your rates?"
+    - "Losing clients to cheaper online programs?"
+    - "No strategy for client retention?"
+    - "Spending too much time creating content?"
+
+  success_stories:
+    - "How I went from 5 to 50 clients in 3 months"
+    - "The simple system that doubled my client retention"
+    - "From R300 to R1200 per session - my pricing journey"
+    - "How I filled my calendar using Instagram alone"
+    - "The content strategy that brought me 20+ leads per week"
+    - "Why I stopped doing free consultations (and what happened)"
+    - "How I automated 80% of my admin work"
+    - "The mindset shift that transformed my training business"
+    - "From side hustle to R50k/month in 6 months"
+    - "How one viral reel changed my entire business"
+
+  engagement_questions:
+    - "What's your biggest challenge as a fitness professional right now?"
+    - "Drop a 💪 if you're ready to level up your training business"
+    - "Morning or evening training sessions - which converts better for you?"
+    - "What would you do with 10 extra clients this month?"
+    - "Comment 'GROWTH' if you want my free client attraction checklist"
+    - "Poll: What's holding you back? A) Time B) Money C) Knowledge D) Fear"
+    - "Tag a trainer who needs to see this"
+    - "What's one business goal you're crushing this month?"
+    - "Real talk: What's your current monthly revenue target?"
+    - "If you could change ONE thing about your training business, what would it be?"
+
+# Hashtag Strategy
+hashtag_strategy:
+  primary:
+    - "#PersonalTrainer"
+    - "#FitnessCoach"
+    - "#PTBusiness"
+    - "#FitnessEntrepreneur"
+    - "#TrainerLife"
+
+  niche:
+    - "#OnlinePersonalTraining"
+    - "#FitnessBusinessCoach"
+    - "#PersonalTrainerMarketing"
+    - "#PTSuccess"
+    - "#FitPro"
+    - "#TrainerTips"
+    - "#GymBusinessGrowth"
+    - "#FitnessIndustry"
+    - "#PTMarketing"
+    - "#TrainerCommunity"
+    - "#FitnessProfessional"
+    - "#CertifiedPersonalTrainer"
+    - "#OnlineCoaching"
+    - "#FitnessBusinessTips"
+    - "#PTLifestyle"
+
+  regional:
+    south_africa:
+      - "#SAFitness"
+      - "#SouthAfricanTrainer"
+      - "#PTSouthAfrica"
+      - "#JohannesburgFitness"
+      - "#CapeTownPT"
+      - "#DurbanTrainer"
+      - "#PretoriaFitness"
+      - "#SAFitPro"
+
+    africa:
+      - "#AfricanFitness"
+      - "#AfricaFitPro"
+      - "#FitnessAfrica"
+
+    international:
+      - "#GlobalFitness"
+      - "#WorldwidePT"
+      - "#InternationalCoach"
+
+  trending:
+    enabled: true
+    refresh_daily: true
+    slot_count: 3
+    research_tools:
+      - "Instagram Explore"
+      - "TikTok Discover"
+      - "Google Trends"
+
+  max_per_post: 25
+  rotation_strategy: "mix_all_categories"
+
+# Content Pillars
+content_pillars:
+  education: 30%  # Training tips, business advice
+  inspiration: 25%  # Success stories, motivation
+  entertainment: 20%  # Behind the scenes, day in life
+  promotion: 15%  # Services, offers, testimonials
+  engagement: 10%  # Questions, polls, challenges
+
+# Engagement Settings
+engagement:
+  auto_reply:
+    enabled: true
+    response_time_minutes: 15
+    personalization: true
+
+  dm_automation:
+    enabled: true
+    welcome_sequence: true
+    lead_qualification: true
+
+  comment_management:
+    enabled: true
+    sentiment_analysis: true
+    priority_keywords: ["interested", "how much", "sign up", "more info", "dm me"]
+
+# Analytics Tracking
+analytics:
+  metrics:
+    - engagement_rate
+    - reach
+    - impressions
+    - follower_growth
+    - conversion_rate
+    - best_posting_times
+    - top_performing_content
+
+  reporting:
+    frequency: "weekly"
+    dashboard: true
+    alerts: true
+
+# A/B Testing
+ab_testing:
+  enabled: true
+  variables:
+    - post_times
+    - content_formats
+    - caption_length
+    - cta_placement
+    - hashtag_count
+
+  minimum_sample_size: 100
+  confidence_level: 95%
+
+# Growth Tactics
+growth_tactics:
+  collaboration:
+    enabled: true
+    target_accounts: "fitness_influencers, wellness_brands, nutrition_coaches"
+    frequency: "weekly"
+
+  contests:
+    enabled: true
+    frequency: "monthly"
+    prize_ideas: ["free_training_session", "business_consultation", "course_access"]
+
+  user_generated_content:
+    enabled: true
+    incentives: true
+    showcase_frequency: "daily"
+
+# Brand Voice
+brand_voice:
+  tone: "professional, motivating, authentic, direct"
+  language: "conversational yet expert"
+  emojis: "moderate use, professionally placed"
+  personality_traits:
+    - "empowering"
+    - "results-focused"
+    - "community-driven"
+    - "innovation-minded"
