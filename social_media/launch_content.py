@@ -1,9 +1,16 @@
-"""Launch Content Generator for Refiloe's Facebook Campaign.
+"""VALUE-FIRST Launch Content Generator for Refiloe's Facebook Campaign.
 
-This module generates pre-defined launch content for the first 3 days of
-Refiloe's Facebook marketing campaign with specific posts, themes, and schedules.
+This module generates pure value content for the first 3 days of Refiloe's Facebook
+marketing campaign. Refiloe is presented as a personality/influencer helping trainers,
+NOT as a product or service.
 
-Author: Refiloe AI Assistant
+CRITICAL RULES:
+- NO product mentions, no "sign up", no "coming soon", no pricing hints
+- Refiloe is "a friend who gets the trainer life and shares helpful tips"
+- Pure value content that builds trust and following
+- Focus on relatable struggles, actionable tips, and community building
+
+Author: Refiloe Marketing Team
 Created: 2024-12-01
 """
 
@@ -18,14 +25,14 @@ SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
 
 
 class LaunchContentGenerator:
-    """Generates 9 pre-defined posts for the first 3 days of Facebook launch.
+    """Generates 9 VALUE-FIRST posts for the first 3 days of Facebook launch.
 
     This class creates a carefully orchestrated launch sequence with:
-    - Day 1: Introduction posts
-    - Day 2: Value proposition posts
-    - Day 3: Engagement posts
+    - Day 1: Meet Refiloe (The Personality)
+    - Day 2: Pure Value (Actionable Tips)
+    - Day 3: Engagement (Build Community)
 
-    Each post is designed with specific timing, content, and CTAs.
+    Each post focuses on building trust and providing value, with NO product mentions.
     """
 
     def __init__(self):
@@ -56,61 +63,73 @@ class LaunchContentGenerator:
 
         posts = []
 
-        # DAY 1 - INTRODUCTION
+        # DAY 1 - MEET REFILOE (The Personality)
         posts.append(self._create_day1_post1(start_date))
         posts.append(self._create_day1_post2(start_date))
         posts.append(self._create_day1_post3(start_date))
 
-        # DAY 2 - VALUE
+        # DAY 2 - PURE VALUE (Actionable Tips)
         posts.append(self._create_day2_post1(start_date))
         posts.append(self._create_day2_post2(start_date))
         posts.append(self._create_day2_post3(start_date))
 
-        # DAY 3 - ENGAGEMENT
+        # DAY 3 - ENGAGEMENT (Build Community)
         posts.append(self._create_day3_post1(start_date))
         posts.append(self._create_day3_post2(start_date))
         posts.append(self._create_day3_post3(start_date))
 
-        log_info(f"Generated {len(posts)} launch posts starting from {start_date.date()}")
+        log_info(f"Generated {len(posts)} VALUE-FIRST launch posts starting from {start_date.date()}")
         return posts
 
     # ========================================================================
-    # DAY 1 - INTRODUCTION
+    # DAY 1 - MEET REFILOE (The Personality)
     # ========================================================================
 
     def _create_day1_post1(self, start_date: datetime) -> Dict[str, Any]:
         """Day 1, Post 1 (08:00): Video 60s - 'Meet Refiloe'"""
         scheduled_time = start_date.replace(hour=8, minute=0)
 
-        content_text = """What if you never had to chase clients for payments again? 🤔
+        content_text = """If you're a personal trainer drowning in admin... this page is for you. 💪
 
-Meet Refiloe - your AI assistant that handles all the boring admin work trainers hate.
+Hey! I'm Refiloe.
 
-While you're changing lives in the gym, Refiloe is:
-✅ Managing your schedule
-✅ Chasing payments
-✅ Sending client reminders
-✅ Handling bookings
+I've spent years studying what makes trainers successful - and what holds them back.
 
-Because you became a trainer to transform bodies, not to become an accountant.
+Spoiler: It's rarely their training knowledge. It's usually the business side.
 
-Follow for more trainer life hacks! 💪
+The scheduling nightmares. The payment chasing. The endless WhatsApp messages.
 
-#PersonalTrainer #FitnessCoach #TrainerLife #RefiloeAI #AdminHacks #FitnessBusiness #TrainerTools"""
+So I created this page to share everything I've learned about working smarter, not harder.
 
-        video_script = """Hi, I'm Refiloe - and I'm here to ask you a question.
+Every week I'll share:
+→ Time-saving hacks that actually work
+→ Real talk about the trainer struggle
+→ Tips to grow your business without burning out
 
-What if you never had to chase clients for payments again? What if you never had to stress about double bookings, or spend hours writing the same programs over and over?
+If that sounds useful, give me a follow.
 
-I'm an AI assistant built specifically for personal trainers like you. I handle all the jobs trainers don't want to do.
+Let's make the business side of training suck less. 💪
 
-While you're in the gym changing lives, I'm managing your schedule, chasing payments, sending client reminders, and handling all your bookings.
+#PersonalTrainer #FitnessCoach #TrainerLife #PTLife #FitnessBusiness #TrainerTips"""
 
-Because here's the truth - you became a trainer to transform bodies and change lives, not to become an accountant or an admin assistant.
+        video_script = """Hey! I'm Refiloe.
 
-So if you're tired of spending 15 hours a week on admin that doesn't make you money... follow me. I've got some life hacks that are going to change your business.
+I've spent years studying what makes trainers successful - and what holds them back.
 
-Let's do this together."""
+Spoiler: It's rarely their training knowledge. It's usually the business side.
+
+The scheduling nightmares. The payment chasing. The endless WhatsApp messages.
+
+So I created this page to share everything I've learned about working smarter, not harder.
+
+Every week I'll share:
+- Time-saving hacks that actually work
+- Real talk about the trainer struggle
+- Tips to grow your business without burning out
+
+If that sounds useful, give me a follow.
+
+Let's make the business side of training suck less. 💪"""
 
         return {
             "day": 1,
@@ -122,61 +141,56 @@ Let's do this together."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
-            "avatar_id_env": "HEYGEN_AVATAR_PROFESSIONAL_CLOSEUP",
+            "avatar_id_env": "HEYGEN_AVATAR_WARMSMILE_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#RefiloeAI", "#AdminHacks", "#FitnessBusiness", "#TrainerTools"],
-            "call_to_action": "Follow for more trainer life hacks!",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"],
+            "call_to_action": "Follow for trainer tips that actually work",
+            "engagement_type": "follow",
             "status": "pending_approval"
         }
 
     def _create_day1_post2(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 1, Post 2 (13:00): Carousel 5 images - '5 Admin Tasks Killing Your Time'"""
+        """Day 1, Post 2 (13:00): Carousel 5 images - '5 Time Thieves Every Trainer Knows'"""
         scheduled_time = start_date.replace(hour=13, minute=0)
 
-        content_text = """5 admin tasks silently killing your training time ⏰
+        content_text = """5 Time Thieves Stealing Hours From Your Week ⏰
 
-Swipe to see if you're guilty →
+Swipe to see which one hits hardest →
 
-Every hour spent on admin is an hour you're NOT:
-→ Training clients
-→ Building relationships
-→ Growing your income
+Every trainer knows these struggles. The question is: which one steals the MOST of your time?
 
-Which one do you hate most? Drop a number in the comments! 👇
+Is it the schedule shuffle? The payment chase? The message marathon?
 
-#PersonalTrainer #FitnessCoach #TrainerLife #AdminHacks #FitnessBusiness #TimeManagement #TrainerTips"""
+Comment your number 👇 Let's see which one we all hate the most.
+
+#PersonalTrainer #TrainerLife #FitnessCoach #TrainerProblems #FitnessBusiness #PTLife"""
 
         carousel_slides = [
             {
                 "slide_number": 1,
-                "title": "5 Admin Tasks Killing Your Time",
-                "content": "Are you spending more time managing your business than actually training?",
-                "design_notes": "Bold text, attention-grabbing colors"
+                "text": "5 Time Thieves Stealing Hours From Your Week",
+                "description": "Hook slide - bold, attention-grabbing design with clock/time imagery"
             },
             {
                 "slide_number": 2,
-                "title": "1. Scheduling Chaos",
-                "content": "Juggling WhatsApp messages, phone calls, and double bookings. 3 hours per week down the drain.",
-                "design_notes": "Calendar icon, frustrated trainer imagery"
+                "text": "🕐 The Schedule Shuffle",
+                "description": "Clients changing times last minute, you playing calendar Tetris for hours"
             },
             {
                 "slide_number": 3,
-                "title": "2. Payment Chasing",
-                "content": "Awkward conversations, late payments, tracking who owes what. Another 2 hours gone.",
-                "design_notes": "Money/invoice icon, uncomfortable vibe"
+                "text": "💸 The Payment Chase",
+                "description": "Awkwardly reminding clients about unpaid sessions (again and again)"
             },
             {
                 "slide_number": 4,
-                "title": "3. Program Writing",
-                "content": "Typing the same exercises over and over. 4 hours of repetitive work every week.",
-                "design_notes": "Clipboard/document icon, repetitive feel"
+                "text": "📱 The Message Marathon",
+                "description": "Replying to 50 WhatsApps before your first coffee"
             },
             {
                 "slide_number": 5,
-                "title": "4. Client Reminders",
-                "content": "Manual messages for sessions, payments, check-ins. 3 more hours wasted.",
-                "design_notes": "Phone/notification icon, overwhelmed trainer"
+                "text": "📋 The Program Puzzle",
+                "description": "Writing the same exercises differently for every single client"
             }
         ]
 
@@ -186,49 +200,54 @@ Which one do you hate most? Drop a number in the comments! 👇
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "carousel",
             "platform": "facebook",
-            "content_theme": "admin_hacks",
+            "content_theme": "relatable_trainer_life",
             "content_text": content_text,
             "video_script": None,
             "video_duration": None,
             "avatar_id_env": None,
             "carousel_slides": carousel_slides,
-            "image_prompt": "Modern, clean carousel design for fitness professionals showing admin pain points",
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#AdminHacks", "#FitnessBusiness", "#TimeManagement", "#TrainerTips"],
-            "call_to_action": "Which one do you hate most? Comment below!",
+            "image_prompt": "Modern carousel design for personal trainers - vibrant colors (coral/purple), clean typography, relatable pain points, professional but approachable aesthetic",
+            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#FitnessBusiness", "#PTLife"],
+            "call_to_action": "Comment 1-4 - which steals the most of YOUR time?",
+            "engagement_type": "comment",
             "status": "pending_approval"
         }
 
     def _create_day1_post3(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 1, Post 3 (18:00): Video 30s - Pain Point Meme"""
+        """Day 1, Post 3 (18:00): Video 30s - Relatable Moment"""
         scheduled_time = start_date.replace(hour=18, minute=0)
 
-        content_text = """POV: Your 6am client cancels at 5:55am 😤
+        content_text = """POV: Your 6am client at 5:55am... 😤
 
-Tag a trainer who knows this pain TOO well 👇
+*Phone buzzes*
 
-But here's the thing... there's a better way.
+"Hey, so sorry, something came up, can we reschedule?"
 
-Stay tuned 👀
+You're already at the gym.
+You've been up since 5.
+You turned down a lie-in for this.
 
-#PersonalTrainer #TrainerLife #FitnessCoach #TrainerProblems #RefiloeAI #GymLife #FitnessBusiness"""
+And now you've got a free hour you didn't plan for... and a gap in your income.
 
-        video_script = """POV: It's 5:55 in the morning. You're already dressed, coffee in hand, mentally prepping for your 6am client.
+Sound familiar?
 
-Your phone buzzes.
+Drop a 😤 if you've lived this.
 
-"Hey sorry, can't make it today."
+#PersonalTrainer #TrainerLife #FitnessCoach #TrainerProblems #GymLife #FitPro"""
 
-FIVE. MINUTES. BEFORE.
+        video_script = """*Phone buzzes*
 
-If you're a trainer, you know this pain. You've lived this pain.
+'Hey, so sorry, something came up, can we reschedule?'
 
-The early wake-up. The lost income. The scramble to fill the slot.
+You're already at the gym.
+You've been up since 5.
+You turned down a lie-in for this.
 
-But what if I told you... there's a better way?
+And now you've got a free hour you didn't plan for... and a gap in your income.
 
-What if your clients got automatic reminders 24 hours before? What if late cancellations triggered automatic fees? What if your entire schedule managed itself?
+Sound familiar?
 
-Stick around. You're going to want to see this."""
+Drop a 😤 if you've lived this."""
 
         return {
             "day": 1,
@@ -243,59 +262,67 @@ Stick around. You're going to want to see this."""
             "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#RefiloeAI", "#GymLife", "#FitnessBusiness"],
-            "call_to_action": "Tag a trainer who needs to hear this!",
+            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"],
+            "call_to_action": "Drop a 😤 if this has happened to you",
+            "engagement_type": "emoji_react",
             "status": "pending_approval"
         }
 
     # ========================================================================
-    # DAY 2 - VALUE
+    # DAY 2 - PURE VALUE (Actionable Tips)
     # ========================================================================
 
     def _create_day2_post1(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 2, Post 1 (08:00): Video 60s - 'The Hidden 15 Hours'"""
+        """Day 2, Post 1 (08:00): Video 60s - 'The 15 Hour Problem'"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=8, minute=0)
 
-        content_text = """Trainers lose 15 hours EVERY WEEK to admin. Here's where it goes... ⏰
+        content_text = """The average personal trainer loses 15 hours every single week. Here's where it goes. ⏰
 
-📅 Scheduling: 3 hours
-💰 Chasing payments: 2 hours
-📝 Program writing: 4 hours
-💬 Client communications: 3 hours
-📞 Managing bookings: 3 hours
+I've talked to hundreds of trainers, and the pattern is always the same.
 
-That's 15 hours you could be:
-→ Training MORE clients
-→ Earning MORE money
-→ Actually having a LIFE
+Here's where your 15 hours disappear:
 
-Save this for later. You're going to need it. 🔖
+📅 3 hours - Scheduling and rescheduling sessions
+💰 2 hours - Chasing payments and sending reminders
+📝 4 hours - Writing and adjusting training programs
+💬 3 hours - Replying to client messages and questions
+📊 3 hours - General admin, invoices, tracking
 
-#PersonalTrainer #FitnessCoach #TrainerLife #AdminHacks #FitnessBusiness #TimeManagement #ProductivityTips"""
+That's 15 hours. Every. Single. Week.
 
-        video_script = """Let me show you something that's going to blow your mind.
+60 hours a month you could spend training clients.
+Or with your family.
+Or just... resting.
 
-The average personal trainer loses 15 hours every single week to administrative tasks. FIFTEEN HOURS.
+Over the next few weeks, I'm going to share specific tips for each of these.
 
-Let me break down where it's going:
+But first - I'm curious. Which of these eats the most of YOUR time?
 
-3 hours on scheduling - back and forth messages, finding times, avoiding double bookings.
+Comment below. I read every single one. 👇
 
-2 hours chasing payments - awkward conversations, tracking who paid, who didn't, who's late.
+#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #TrainerTips #TimeManagement #PTLife"""
 
-4 hours writing programs - typing the same exercises over and over for different clients.
+        video_script = """I've talked to hundreds of trainers, and the pattern is always the same.
 
-3 hours on client communications - session reminders, check-ins, motivation messages.
+Here's where your 15 hours disappear:
 
-And 3 hours managing bookings - cancellations, rescheduling, filling empty slots.
+3 hours - Scheduling and rescheduling sessions
+2 hours - Chasing payments and sending reminders
+4 hours - Writing and adjusting training programs
+3 hours - Replying to client messages and questions
+3 hours - General admin, invoices, tracking
 
-Now here's the crazy part. That's 15 hours you could be training MORE clients. Earning MORE money. Or actually having a life outside the gym.
+That's 15 hours. Every. Single. Week.
 
-15 hours. Every. Single. Week.
+60 hours a month you could spend training clients.
+Or with your family.
+Or just... resting.
 
-What would you do with that time back?
+Over the next few weeks, I'm going to share specific tips for each of these.
 
-Drop a comment and let me know. Because I'm about to show you how to get it back."""
+But first - I'm curious. Which of these eats the most of YOUR time?
+
+Comment below. I read every single one."""
 
         return {
             "day": 2,
@@ -303,35 +330,39 @@ Drop a comment and let me know. Because I'm about to show you how to get it back
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "video",
             "platform": "facebook",
-            "content_theme": "admin_hacks",
+            "content_theme": "education",
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
             "avatar_id_env": "HEYGEN_AVATAR_PROFESSIONAL_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#AdminHacks", "#FitnessBusiness", "#TimeManagement", "#ProductivityTips"],
-            "call_to_action": "Save this for later",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"],
+            "call_to_action": "Comment which one steals the most of your time",
+            "engagement_type": "comment",
             "status": "pending_approval"
         }
 
     def _create_day2_post2(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 2, Post 2 (13:00): Single Image - Motivational Quote"""
+        """Day 2, Post 2 (13:00): Single Image - Quote"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=13, minute=0)
 
-        content_text = """"You became a trainer to change lives, not to become an accountant." 💯
+        content_text = """"You became a trainer to change lives. Not to become a part-time accountant." 💯
 
 Read that again.
 
-Your gift is transforming bodies and minds. Not spreadsheets and invoices.
+Your gift is transforming bodies and minds.
+Not spreadsheets.
+Not invoices.
+Not chasing payments.
 
 So why are you spending more time on admin than what you actually love?
 
-Tag a trainer who needs this reminder 👇
+Tag a trainer who needs to hear this 👇
 
-#PersonalTrainer #FitnessCoach #TrainerLife #Motivation #FitnessBusiness #TrainerMotivation #FitnessMotivation"""
+#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #TrainerCommunity #FitPro"""
 
-        image_prompt = "Motivational quote image with bold typography: 'You became a trainer to change lives, not to become an accountant.' Modern gradient background (orange to coral), clean sans-serif font, professional fitness aesthetic"
+        image_prompt = "Bold motivational quote image: 'You became a trainer to change lives. Not to become a part-time accountant.' White text on deep purple/dark gradient background, clean minimal design, modern sans-serif font, professional fitness aesthetic"
 
         return {
             "day": 2,
@@ -346,50 +377,53 @@ Tag a trainer who needs this reminder 👇
             "avatar_id_env": None,
             "carousel_slides": None,
             "image_prompt": image_prompt,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#Motivation", "#FitnessBusiness", "#TrainerMotivation", "#FitnessMotivation"],
-            "call_to_action": "Tag a trainer who needs to hear this",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerCommunity", "#FitPro"],
+            "call_to_action": "Tag a trainer friend",
+            "engagement_type": "tag",
             "status": "pending_approval"
         }
 
     def _create_day2_post3(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 2, Post 3 (18:00): Video 30s - Quick Tip"""
+        """Day 2, Post 3 (18:00): Video 30s - Quick Tip #1"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=18, minute=0)
 
-        content_text = """Stop doing this with your clients... 🛑
+        content_text = """Quick tip that'll save you 2 hours this week... ⚡
 
-Manual reminders are costing you time AND money.
+Here's something most trainers don't do:
 
-Here's what smart trainers do instead 👇
+Create a 'FAQ voice note library.'
 
-Automate everything:
-✅ Session reminders (24hrs before)
-✅ Payment notifications
-✅ Program delivery
-✅ Check-in prompts
+Record yourself answering the 10 questions clients ask most:
+→ What should I eat before training?
+→ How sore is too sore?
+→ Can I train if I'm sick?
 
-Your time = Your money. Protect both. 💰
+Save them in a folder.
 
-#PersonalTrainer #FitnessCoach #ClientManagement #TrainerTips #FitnessBusiness #Automation #TrainerLife"""
+Next time someone asks?
+Forward the voice note. 10 seconds instead of 10 minutes.
 
-        video_script = """Quick question - are you still sending manual reminders to your clients?
+You're welcome. 😉
 
-Stop. Just stop.
+Save this for later 📌
 
-Every minute you spend typing "Hey, see you tomorrow at 6am!" is a minute you're not making money.
+#PersonalTrainer #FitnessCoach #TrainerTips #TrainerLife #FitnessBusiness #ProductivityTips"""
 
-Here's what smart trainers do instead:
+        video_script = """Here's something most trainers don't do:
 
-They automate their client reminders. 24 hours before every session - automatic message. No thinking required.
+Create a 'FAQ voice note library.'
 
-They automate payment notifications. Your client gets a reminder. You get paid on time. Nobody feels awkward.
+Record yourself answering the 10 questions clients ask most:
+- What should I eat before training?
+- How sore is too sore?
+- Can I train if I'm sick?
 
-They automate program delivery and check-in prompts.
+Save them in a folder.
 
-Why? Because your time equals your money. And you need to protect both.
+Next time someone asks?
+Forward the voice note. 10 seconds instead of 10 minutes.
 
-The trainers winning in 2024 aren't working harder. They're working smarter.
-
-Which one are you going to be?"""
+You're welcome. 😉"""
 
         return {
             "day": 2,
@@ -397,60 +431,68 @@ Which one are you going to be?"""
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "video",
             "platform": "facebook",
-            "content_theme": "client_management_tips",
+            "content_theme": "actionable_tip",
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "HEYGEN_AVATAR_WARMSMILE_CLOSEUP",
+            "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#ClientManagement", "#TrainerTips", "#FitnessBusiness", "#Automation", "#TrainerLife"],
-            "call_to_action": "Follow for more trainer tips!",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"],
+            "call_to_action": "Save this for later 📌",
+            "engagement_type": "save",
             "status": "pending_approval"
         }
 
     # ========================================================================
-    # DAY 3 - ENGAGEMENT
+    # DAY 3 - ENGAGEMENT (Build Community)
     # ========================================================================
 
     def _create_day3_post1(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 3, Post 1 (08:00): Video 45s - Transformation Teaser"""
+        """Day 3, Post 1 (08:00): Video 45s - The Dream"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=8, minute=0)
 
-        content_text = """What would you do with 15 extra hours every week? ⏰
+        content_text = """Imagine this for a second... ✨
 
-Imagine:
-🎯 Taking on 5 more clients = R7,500+ extra/month
-🌴 Actually taking a day off without stress
-🎓 Learning new training techniques
-💪 Training YOURSELF for once
-👨‍👩‍👧 Spending time with family
+You wake up. No 5am alarm panic.
 
-That's what happens when your admin runs itself.
+Your schedule for the day is already set. No back-and-forth messages.
 
-Drop a 🙋 if you want this life!
+Payments came in automatically. No awkward reminders sent.
 
-#PersonalTrainer #FitnessCoach #TrainerLife #WorkLifeBalance #FitnessBusiness #TrainerSuccess #RefiloeAI"""
+Your clients got their programs. Without you copy-pasting anything.
 
-        video_script = """Close your eyes for a second. Actually, don't - you need to watch this.
+You just... train people. The thing you actually love.
 
-But imagine... what would you do with 15 extra hours every single week?
+This isn't fantasy. There are trainers living this right now.
 
-Maybe you'd take on 5 more clients. That's an extra R7,500 or more per month. Maybe you'd actually take a day off without stressing about your business falling apart.
+And over the coming weeks, I'm going to show you exactly how they do it.
 
-Maybe you'd learn new training techniques. Invest in that certification you've been putting off.
+If you want in, make sure you're following.
 
-Or here's a crazy idea - maybe you'd actually train YOURSELF for once. Or spend time with your family.
+And drop a 🙋 if this sounds like the dream.
 
-This isn't fantasy. This is what happens when your admin runs itself.
+#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #WorkLifeBalance #TrainerSuccess"""
 
-When scheduling is automatic. When payments chase themselves. When your programs write themselves. When client communication happens without you lifting a finger.
+        video_script = """Close your eyes. Imagine this:
 
-The trainers living this life right now? They're not superhuman. They just stopped doing everything manually.
+You wake up. No 5am alarm panic.
 
-So I'll ask again - what would YOU do with 15 extra hours every week?
+Your schedule for the day is already set. No back-and-forth messages.
 
-Drop a 🙋 in the comments if you want this."""
+Payments came in automatically. No awkward reminders sent.
+
+Your clients got their programs. Without you copy-pasting anything.
+
+You just... train people. The thing you actually love.
+
+This isn't fantasy. There are trainers living this right now.
+
+And over the coming weeks, I'm going to show you exactly how they do it.
+
+If you want in, make sure you're following.
+
+And drop a 🙋 if this sounds like the dream."""
 
         return {
             "day": 3,
@@ -458,58 +500,57 @@ Drop a 🙋 in the comments if you want this."""
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "video",
             "platform": "facebook",
-            "content_theme": "success_stories",
+            "content_theme": "inspiration",
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 45,
             "avatar_id_env": "HEYGEN_AVATAR_WARMSMILE_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#WorkLifeBalance", "#FitnessBusiness", "#TrainerSuccess", "#RefiloeAI"],
-            "call_to_action": "Drop a 🙋 if you want this",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"],
+            "call_to_action": "Drop a 🙋 if this is the dream",
+            "engagement_type": "emoji_react",
             "status": "pending_approval"
         }
 
     def _create_day3_post2(self, start_date: datetime) -> Dict[str, Any]:
-        """Day 3, Post 2 (13:00): Carousel 4 images - 'What If Your Admin Did Itself?'"""
+        """Day 3, Post 2 (13:00): Carousel 4 images - 'The 3 Types of Trainers'"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=13, minute=0)
 
-        content_text = """What if your admin... just did itself? 🤯
+        content_text = """The 3 Types of Trainers (Which one are you?) 🤔
 
-Swipe to see what's possible →
+Swipe to find yourself →
 
-The future of personal training isn't working harder.
+No judgment here. We've all been at least 2 of these at some point.
 
-It's working smarter.
+But the question is: which one do you WANT to be?
 
-Which feature would help you most? Drop 1, 2, 3, or 4 below! 👇
+Comment 🏃, 📊, or 🧠 - be honest!
 
-#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #Automation #BusinessGrowth #TrainerTips"""
+(And if you're the Organizer drowning in spreadsheets... I see you 😅)
+
+#PersonalTrainer #TrainerLife #FitnessCoach #TrainerCommunity #FitnessBusiness #PTLife"""
 
         carousel_slides = [
             {
                 "slide_number": 1,
-                "title": "What If Your Admin Did Itself?",
-                "content": "The future of training is automated. Swipe to see what's possible.",
-                "design_notes": "Futuristic, tech-forward design"
+                "text": "The 3 Types of Trainers",
+                "description": "Which one are you? (Hook slide with bold typography)"
             },
             {
                 "slide_number": 2,
-                "title": "Automated Scheduling",
-                "content": "Clients book themselves. Calendar syncs automatically. No more double bookings. Ever.",
-                "design_notes": "Calendar interface, clean and organized"
+                "text": "THE HUSTLER 🏃",
+                "description": "Works 6am-9pm, says yes to everything, burning out slowly but surely"
             },
             {
                 "slide_number": 3,
-                "title": "Payment Reminders",
-                "content": "Invoices send themselves. Reminders go out automatically. You get paid on time, every time.",
-                "design_notes": "Payment/money graphics, professional"
+                "text": "THE ORGANIZER 📊",
+                "description": "Spreadsheets for everything, but still drowning in admin, just... neatly"
             },
             {
                 "slide_number": 4,
-                "title": "More Time for Clients",
-                "content": "15 hours back in your week. More training. More income. More life.",
-                "design_notes": "Trainer with client, happy and engaged"
+                "text": "THE SMART ONE 🧠",
+                "description": "Works less, earns more, has systems that run without them"
             }
         ]
 
@@ -519,15 +560,16 @@ Which feature would help you most? Drop 1, 2, 3, or 4 below! 👇
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "carousel",
             "platform": "facebook",
-            "content_theme": "business_growth",
+            "content_theme": "engagement",
             "content_text": content_text,
             "video_script": None,
             "video_duration": None,
             "avatar_id_env": None,
             "carousel_slides": carousel_slides,
-            "image_prompt": "Modern tech-forward carousel for fitness business automation",
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#Automation", "#BusinessGrowth", "#TrainerTips"],
-            "call_to_action": "Which feature would help you most?",
+            "image_prompt": "Fun, engaging carousel design showing 3 trainer personality types - vibrant colors, playful but professional, relatable illustrations or icons",
+            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerCommunity", "#FitnessBusiness", "#PTLife"],
+            "call_to_action": "Comment 🏃, 📊, or 🧠 - be honest!",
+            "engagement_type": "comment",
             "status": "pending_approval"
         }
 
@@ -535,42 +577,43 @@ Which feature would help you most? Drop 1, 2, 3, or 4 below! 👇
         """Day 3, Post 3 (18:00): Video 30s - Community Question"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=18, minute=0)
 
-        content_text = """Be honest with me... 🤔
+        content_text = """Be honest with me for a second... 💭
 
-What's your BIGGEST admin struggle as a trainer?
+I want to make this page actually useful for you.
 
-Is it:
-A) Scheduling chaos
-B) Chasing payments
-C) Writing programs
-D) Client communication
-E) Something else?
+So tell me:
 
-Drop your answer below - I'm reading every comment and creating content to help YOU specifically 👇
+What's the ONE thing about running your training business that frustrates you most?
 
-#PersonalTrainer #FitnessCoach #TrainerLife #TrainerCommunity #FitnessBusiness #TrainerProblems #Engagement"""
+Is it the scheduling chaos?
+The awkward money conversations?
+Clients who ghost?
+Something else?
 
-        video_script = """Alright, be honest with me.
+Drop it in the comments.
 
-What's your BIGGEST admin struggle as a personal trainer?
+I'll create content specifically to help with whatever you're struggling with most.
 
-Is it scheduling? The constant back and forth, the double bookings, the cancellations?
+This page is for YOU. So tell me what you need. 👇
 
-Is it chasing payments? Those awkward conversations, the late payers, tracking who owes what?
+#PersonalTrainer #FitnessCoach #TrainerLife #TrainerCommunity #FitnessBusiness #FitPro"""
 
-Is it writing programs? Typing the same exercises over and over until your fingers hurt?
+        video_script = """I want to make this page actually useful for you.
 
-Is it client communication? The constant messages, the reminders, the check-ins?
+So tell me:
 
-Or is it something else entirely that I haven't even mentioned?
+What's the ONE thing about running your training business that frustrates you most?
 
-Here's why I'm asking: I'm here to help you. Really help you. And the only way I can do that is if you tell me what you're actually struggling with.
+Is it the scheduling chaos?
+The awkward money conversations?
+Clients who ghost?
+Something else?
 
-So drop your answer in the comments. A, B, C, D, or E for something else.
+Drop it in the comments.
 
-I'm reading every single comment, and I'm going to create content specifically to solve YOUR problems.
+I'll create content specifically to help with whatever you're struggling with most.
 
-This is your community. Let's build it together."""
+This page is for YOU. So tell me what you need."""
 
         return {
             "day": 3,
@@ -578,21 +621,37 @@ This is your community. Let's build it together."""
             "scheduled_time": scheduled_time.isoformat(),
             "post_type": "video",
             "platform": "facebook",
-            "content_theme": "engagement_questions",
+            "content_theme": "engagement",
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
             "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#TrainerProblems", "#Engagement"],
-            "call_to_action": "Comment your answer below!",
+            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"],
+            "call_to_action": "Comment your biggest frustration 👇",
+            "engagement_type": "comment",
             "status": "pending_approval"
         }
 
 
+def get_launch_content_preview() -> List[Dict[str, Any]]:
+    """Get a preview of all 9 launch posts without saving to database.
+
+    Returns:
+        List of 9 post dictionaries with complete metadata
+    """
+    log_info("Generating VALUE-FIRST launch content preview...")
+
+    generator = LaunchContentGenerator()
+    posts = generator.generate_all_posts()
+
+    log_info(f"Preview generated: {len(posts)} posts")
+    return posts
+
+
 def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) -> List[str]:
-    """Generate and save all 9 launch posts to the database.
+    """Generate and save all 9 VALUE-FIRST launch posts to the database.
 
     Args:
         supabase_client: Supabase client instance for database operations
@@ -606,14 +665,14 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
     """
     from database import SocialMediaDatabase
 
-    log_info("Starting launch content generation and seeding...")
+    log_info("Starting VALUE-FIRST launch content generation and seeding...")
 
     # Initialize generator
     generator = LaunchContentGenerator()
 
     # Generate all posts
     posts = generator.generate_all_posts(start_date)
-    log_info(f"Generated {len(posts)} launch posts")
+    log_info(f"Generated {len(posts)} VALUE-FIRST launch posts")
 
     # Initialize database
     db = SocialMediaDatabase(supabase_client)
@@ -633,14 +692,16 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
                 "image_prompt": post.get("image_prompt"),
                 "hashtags": post.get("hashtags", []),
                 "call_to_action": post.get("call_to_action"),
-                "launch_content": True
+                "engagement_type": post.get("engagement_type"),
+                "launch_content": True,
+                "value_first": True  # Flag to identify VALUE-FIRST content
             }
 
             post_data = {
                 "post_type": post["post_type"],
                 "platform": post["platform"],
                 "content": post["content_text"],  # Maps to caption_text in DB
-                "title": f"Day {post['day']} - Post {post['post_number']}",
+                "title": f"Day {post['day']} - Post {post['post_number']} ({post['content_theme']})",
                 "content_theme": post["content_theme"],
                 "scheduled_time": post["scheduled_time"],
                 "status": post["status"],
@@ -652,7 +713,7 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
 
             if post_id:
                 created_ids.append(post_id)
-                log_info(f"✓ Saved post {idx}/9: Day {post['day']}, Post {post['post_number']} (ID: {post_id})")
+                log_info(f"✓ Saved post {idx}/9: Day {post['day']}, Post {post['post_number']} - {post['content_theme']} (ID: {post_id})")
             else:
                 log_error(f"✗ Failed to save post {idx}/9: Day {post['day']}, Post {post['post_number']}")
 
@@ -660,23 +721,38 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
             log_error(f"Error saving post {idx}/9: {str(e)}")
             continue
 
-    log_info(f"Launch content seeding complete. Created {len(created_ids)}/{len(posts)} posts")
+    log_info(f"VALUE-FIRST launch content seeding complete. Created {len(created_ids)}/{len(posts)} posts")
     return created_ids
 
 
-def get_launch_content_preview() -> List[Dict[str, Any]]:
-    """Get a preview of all 9 launch posts without saving to database.
+def clear_launch_content(supabase_client) -> int:
+    """Delete any existing launch content (for regeneration).
+
+    Args:
+        supabase_client: Supabase client instance for database operations
 
     Returns:
-        List of 9 post dictionaries with complete metadata
+        int: Count of posts deleted
     """
-    log_info("Generating launch content preview...")
+    try:
+        log_info("Clearing existing launch content...")
 
-    generator = LaunchContentGenerator()
-    posts = generator.generate_all_posts()
+        # Delete posts where generation_prompt contains "launch_content": true
+        result = supabase_client.table('social_posts').delete().like('generation_prompt', '%"launch_content": true%').execute()
 
-    log_info(f"Preview generated: {len(posts)} posts")
-    return posts
+        deleted_count = len(result.data) if result.data else 0
+        log_info(f"Deleted {deleted_count} launch content posts")
+
+        return deleted_count
+
+    except Exception as e:
+        log_error(f"Error clearing launch content: {str(e)}")
+        return 0
 
 
-__all__ = ["LaunchContentGenerator", "seed_launch_content", "get_launch_content_preview"]
+__all__ = [
+    "LaunchContentGenerator",
+    "get_launch_content_preview",
+    "seed_launch_content",
+    "clear_launch_content"
+]

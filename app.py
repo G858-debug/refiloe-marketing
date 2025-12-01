@@ -783,6 +783,26 @@ def seed_launch_content_route():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/launch-content/clear', methods=['POST'])
+def clear_launch_content_route():
+    """Clear existing launch content (for regeneration)"""
+    if not supabase_client:
+        return jsonify({'error': 'Supabase not initialized'}), 503
+
+    try:
+        from social_media.launch_content import clear_launch_content
+
+        deleted_count = clear_launch_content(supabase_client)
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Cleared {deleted_count} launch content posts'
+        }), 200
+    except Exception as e:
+        log_error(f"Error clearing launch content: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generate-real-video', methods=['POST'])
 def generate_real_video():
     """Generate a real marketing video with actual content"""
