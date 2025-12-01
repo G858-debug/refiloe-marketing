@@ -507,7 +507,7 @@ class FacebookPoster:
     def validate_credentials(self) -> bool:
         """
         Validate Facebook credentials by making a test API call.
-        
+
         Returns:
             True if credentials are valid, False otherwise
         """
@@ -521,6 +521,75 @@ class FacebookPoster:
                 return False
         except Exception as e:
             log_error(f"Facebook credentials validation error: {e}")
+            return False
+
+    def get_post_comments(self, post_id: str, limit: int = 100) -> List[Dict]:
+        """
+        Fetch comments for a specific Facebook post.
+
+        Args:
+            post_id: Facebook post ID
+            limit: Maximum number of comments to fetch (default: 100)
+
+        Returns:
+            List of comment dictionaries with comment data
+        """
+        try:
+            log_info(f"Fetching comments for post: {post_id}")
+
+            url = f"{self.base_url}/{post_id}/comments"
+            params = {
+                'fields': 'id,message,from,created_time,like_count,comment_count',
+                'limit': limit,
+                'access_token': self.page_access_token
+            }
+
+            response = self._make_api_request('GET', url, params=params)
+
+            if response.get('data'):
+                comments = response['data']
+                log_info(f"Retrieved {len(comments)} comments for post {post_id}")
+                return comments
+            else:
+                log_info(f"No comments found for post {post_id}")
+                return []
+
+        except Exception as e:
+            log_error(f"Exception in get_post_comments: {e}")
+            return []
+
+    def reply_to_comment(self, comment_id: str, message: str) -> bool:
+        """
+        Reply to a Facebook comment.
+
+        Args:
+            comment_id: Facebook comment ID to reply to
+            message: Reply message text
+
+        Returns:
+            True if reply was posted successfully, False otherwise
+        """
+        try:
+            log_info(f"Posting reply to comment: {comment_id}")
+
+            url = f"{self.base_url}/{comment_id}/comments"
+            data = {
+                'message': message,
+                'access_token': self.page_access_token
+            }
+
+            response = self._make_api_request('POST', url, data=data)
+
+            if response.get('id'):
+                log_info(f"Successfully posted reply: {response['id']}")
+                return True
+            else:
+                error_msg = response.get('error', {}).get('message', 'Unknown error')
+                log_error(f"Failed to post reply: {error_msg}")
+                return False
+
+        except Exception as e:
+            log_error(f"Exception in reply_to_comment: {e}")
             return False
 
 

@@ -2630,6 +2630,177 @@ def get_look_ratings():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================
+# FACEBOOK WEBHOOK ENDPOINTS
+# ============================================
+
+@app.route('/webhook/facebook', methods=['GET'])
+def facebook_webhook_verify():
+    """
+    Facebook webhook verification endpoint.
+    Facebook will call this endpoint to verify the webhook URL.
+    """
+    try:
+        # Get verification parameters from Facebook
+        mode = request.args.get('hub.mode')
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+
+        # Verify token (should match your configured verify token)
+        verify_token = os.getenv('FACEBOOK_VERIFY_TOKEN', 'refiloe_webhook_token_2025')
+
+        if mode == 'subscribe' and token == verify_token:
+            log_info("Facebook webhook verified successfully")
+            return challenge, 200
+        else:
+            log_warning("Facebook webhook verification failed")
+            return 'Verification failed', 403
+
+    except Exception as e:
+        log_error(f"Error in webhook verification: {e}")
+        return 'Error', 500
+
+
+@app.route('/webhook/facebook', methods=['POST'])
+def facebook_webhook_receive():
+    """
+    Facebook webhook receiver endpoint.
+    Receives notifications about comments, reactions, and other page events.
+    """
+    try:
+        # Get webhook data
+        data = request.get_json()
+
+        if not data:
+            return 'No data received', 400
+
+        log_info(f"Received Facebook webhook: {data.get('object', 'unknown')}")
+
+        # Process webhook entries
+        if data.get('object') == 'page':
+            entries = data.get('entry', [])
+
+            for entry in entries:
+                # Handle comment events
+                if 'changes' in entry:
+                    for change in entry['changes']:
+                        if change.get('field') == 'feed':
+                            # This is a comment or post event
+                            value = change.get('value', {})
+
+                            # Check if it's a comment
+                            if value.get('item') == 'comment':
+                                # Process comment asynchronously or add to queue
+                                log_info(f"New comment detected: {value.get('comment_id')}")
+                                # Note: In production, you'd queue this for processing
+                                # For now, we'll rely on the scheduled job to pick it up
+
+        return 'EVENT_RECEIVED', 200
+
+    except Exception as e:
+        log_error(f"Error processing Facebook webhook: {e}")
+        return 'Error processing webhook', 500
+
+
+@app.route('/api/comments/flagged', methods=['GET'])
+def get_flagged_comments():
+    """
+    Get comments that have been flagged for human review.
+    """
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        limit = int(request.args.get('limit', 50))
+
+        result = supabase_client.table('comment_interactions').select(
+            '*'
+        ).eq('flagged_for_review', True).order(
+            'created_at', desc=True
+        ).limit(limit).execute()
+
+        comments = result.data if result.data else []
+
+        return jsonify({
+            'success': True,
+            'count': len(comments),
+            'comments': comments
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error fetching flagged comments: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/comments/stats', methods=['GET'])
+def get_comment_stats():
+    """
+    Get statistics about comment interactions.
+    """
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get date range (default: last 7 days)
+        days = int(request.args.get('days', 7))
+        cutoff_date = (datetime.now(SA_TZ) - timedelta(days=days)).isoformat()
+
+        # Get all comments in date range
+        result = supabase_client.table('comment_interactions').select(
+            'category', 'replied_at', 'flagged_for_review', 'sentiment_score'
+        ).gte('created_at', cutoff_date).execute()
+
+        comments = result.data if result.data else []
+
+        # Calculate statistics
+        stats = {
+            'total_comments': len(comments),
+            'by_category': {},
+            'replied_count': 0,
+            'flagged_count': 0,
+            'avg_sentiment': 0.0
+        }
+
+        sentiment_scores = []
+
+        for comment in comments:
+            # Count by category
+            category = comment.get('category', 'unknown')
+            stats['by_category'][category] = stats['by_category'].get(category, 0) + 1
+
+            # Count replies
+            if comment.get('replied_at'):
+                stats['replied_count'] += 1
+
+            # Count flagged
+            if comment.get('flagged_for_review'):
+                stats['flagged_count'] += 1
+
+            # Collect sentiment scores
+            if comment.get('sentiment_score') is not None:
+                sentiment_scores.append(comment['sentiment_score'])
+
+        # Calculate average sentiment
+        if sentiment_scores:
+            stats['avg_sentiment'] = round(sum(sentiment_scores) / len(sentiment_scores), 2)
+
+        # Calculate reply rate
+        stats['reply_rate'] = round(
+            (stats['replied_count'] / stats['total_comments'] * 100) if stats['total_comments'] > 0 else 0,
+            1
+        )
+
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'period_days': days
+        }), 200
+
+    except Exception as e:
+        log_error(f"Error calculating comment stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
