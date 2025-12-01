@@ -3109,6 +3109,37 @@ def api_approve_all_posts():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/fresh-start', methods=['POST'])
+def api_fresh_start():
+    """Delete all old posts and create fresh launch content."""
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.launch_content import clear_all_test_posts, seed_launch_content
+
+        # Step 1: Delete old/test posts
+        deleted_count = clear_all_test_posts(supabase_client)
+        log_info(f"Deleted {deleted_count} old posts")
+
+        # Step 2: Seed fresh launch content
+        post_ids = seed_launch_content(supabase_client)
+
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'created_count': len(post_ids),
+            'post_ids': post_ids,
+            'message': f'Deleted {deleted_count} old posts, created {len(post_ids)} fresh launch posts'
+        })
+
+    except Exception as e:
+        log_error(f"Error in fresh start: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""

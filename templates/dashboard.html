@@ -255,6 +255,9 @@
             <button class="btn btn-success" onclick="approveAll()">
                 Approve All Pending
             </button>
+            <button class="btn btn-danger" onclick="freshStart()">
+                Fresh Start (Delete Old & Create New)
+            </button>
         </div>
 
         <!-- Pending Posts Section -->
@@ -541,6 +544,36 @@
                     } catch (error) {
                         console.error('Error approving all:', error);
                         showToast('Failed to approve posts', 'error');
+                    }
+                }
+            );
+        }
+
+        // Fresh start - delete old posts and create new launch content
+        async function freshStart() {
+            showModal(
+                'Fresh Start',
+                'This will DELETE all existing posts and create 9 fresh launch posts. Are you sure?',
+                async () => {
+                    try {
+                        showToast('Cleaning up and creating fresh content...', 'info');
+
+                        const response = await fetch(`${API_BASE}/api/dashboard/fresh-start`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showToast(`Deleted ${data.deleted_count} old posts, created ${data.created_count} new posts!`, 'success');
+                            refreshPosts();
+                        } else {
+                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showToast('Failed to refresh content', 'error');
                     }
                 }
             );
