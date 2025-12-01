@@ -563,10 +563,60 @@ monitoring:
     - "Increased website traffic from Facebook"
 
 # =============================================================================
+# COMMENT AUTOMATION
+# =============================================================================
+# AI-powered automatic replies to Facebook comments
+comment_automation:
+  enabled: true
+  description: "Automatically analyze and reply to Facebook comments using Claude AI"
+
+  # Categories that trigger automatic replies
+  auto_reply_categories:
+    - "question"
+    - "positive"
+    - "engagement"
+
+  # Categories that get flagged for human review (no auto-reply)
+  flag_for_review:
+    - "negative"
+
+  # Categories to ignore (no reply, no flag)
+  ignore:
+    - "spam"
+
+  # Daily limits and timing
+  max_daily_replies: 50
+  description_max_daily: "Maximum number of auto-replies per day to appear human"
+
+  reply_delay_seconds: 30
+  description_delay: "Delay before posting reply to appear more natural"
+
+  # Processing schedule
+  check_interval_minutes: 15
+  description_check_interval: "How often to check for new comments"
+
+  # Reply generation settings
+  max_reply_length: 200
+  description_max_length: "Maximum characters for auto-generated replies"
+
+  use_emojis: true
+  max_emojis_per_reply: 2
+  description_emojis: "Include relevant emojis in replies for engagement"
+
+  # Sentiment analysis
+  sentiment_threshold_negative: -0.5
+  description_sentiment: "Comments below this score are flagged as negative"
+
+  # Notification settings
+  notify_on_flagged: true
+  notification_threshold: 5
+  description_notification: "Send notification when this many comments are flagged"
+
+# =============================================================================
 # NOTES FOR MANUAL EDITING
 # =============================================================================
 # This configuration is designed to be easily editable without coding knowledge
-# 
+#
 # TO MODIFY POSTING SCHEDULE:
 # - Change times in the posting_schedule section
 # - Adjust posts_per_day numbers
@@ -586,5 +636,12 @@ monitoring:
 # - Toggle page_posting and group_posting enabled/disabled
 # - Update hashtag lists
 # - Modify engagement_strategy settings
+#
+# TO CONFIGURE COMMENT AUTOMATION:
+# - Enable/disable with comment_automation.enabled
+# - Adjust auto_reply_categories to control which comments get replies
+# - Modify max_daily_replies to set daily limits
+# - Change reply_delay_seconds to control response timing
+# - Update check_interval_minutes for processing frequency
 #
 # Remember: After making changes, save the file and restart the automation system

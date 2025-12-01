@@ -125,6 +125,12 @@ class SocialMediaScheduler:
                 "trigger": CronTrigger(day_of_week="sat", hour=20, minute=0, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("weekly_report_generation", self.run_weekly_report),
             },
+            {
+                "id": "comment_processing_interval",
+                "name": "Facebook Comment Processing",
+                "trigger": IntervalTrigger(minutes=15, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("comment_processing_interval", self.run_comment_processing),
+            },
         ]
 
         for job in job_definitions:
@@ -837,6 +843,78 @@ class SocialMediaScheduler:
 
         except Exception as exc:  # pragma: no cover - unexpected errors
             log_error(f"Unexpected error during weekly report job: {exc}\n{traceback.format_exc()}")
+
+    def run_comment_processing(self) -> None:
+        """
+        Process Facebook comments every 15 minutes with AI-powered auto-replies.
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping comment processing job.")
+            return
+
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            log_warning("ANTHROPIC_API_KEY missing; comment processing job skipped.")
+            return
+
+        if not os.getenv("PAGE_ACCESS_TOKEN"):
+            log_warning("PAGE_ACCESS_TOKEN missing; comment processing job skipped.")
+            return
+
+        try:
+            from social_media.comment_manager import CommentManager
+            from facebook_poster import FacebookPoster
+        except ImportError as exc:
+            log_error(f"Comment manager or Facebook poster module unavailable: {exc}")
+            return
+
+        try:
+            # Initialize Facebook poster
+            page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
+            page_id = os.getenv("PAGE_ID")
+
+            if not page_id:
+                log_warning("PAGE_ID missing; comment processing job skipped.")
+                return
+
+            facebook_poster = FacebookPoster(page_access_token, page_id, self.supabase_client)
+
+            # Initialize comment manager
+            comment_manager = CommentManager(
+                self.supabase_client,
+                facebook_poster,
+                config=None  # Will load from config.yaml
+            )
+
+            # Process new comments
+            log_info("Starting comment processing cycle")
+            results = comment_manager.process_new_comments()
+
+            # Log results
+            total = results.get("total_comments", 0)
+            processed = results.get("processed", 0)
+            replied = results.get("replied", 0)
+            flagged = results.get("flagged", 0)
+            errors = results.get("errors", 0)
+
+            log_info(
+                f"Comment processing completed: {total} new comments, "
+                f"{processed} processed, {replied} replied, {flagged} flagged, {errors} errors"
+            )
+
+            # Send notification if there are flagged comments
+            if flagged > 0:
+                self._send_notification(
+                    "info",
+                    f"{flagged} comments flagged for review",
+                    {
+                        "flagged_count": flagged,
+                        "total_comments": total,
+                        "message": f"{flagged} comments require human review."
+                    }
+                )
+
+        except Exception as exc:  # pragma: no cover - unexpected errors
+            log_error(f"Unexpected error during comment processing job: {exc}\n{traceback.format_exc()}")
 
     def _save_weekly_report(
         self,
