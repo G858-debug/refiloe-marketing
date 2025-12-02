@@ -3225,7 +3225,7 @@ def api_approve_post(post_id):
     try:
         # Check if post exists first
         log_info(f"🔍 Checking if post {post_id} exists")
-        check_result = supabase_client.table('social_posts').select('id, status, platform, content').eq('id', post_id).execute()
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text').eq('id', post_id).execute()
 
         if not check_result.data:
             log_error(f"❌ Post {post_id} not found")
@@ -3308,7 +3308,7 @@ def api_reject_post(post_id):
 
         # Check if post exists first
         log_info(f"🔍 Checking if post {post_id} exists")
-        check_result = supabase_client.table('social_posts').select('id, status, platform, content').eq('id', post_id).execute()
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text').eq('id', post_id).execute()
 
         if not check_result.data:
             log_error(f"❌ Post {post_id} not found")
