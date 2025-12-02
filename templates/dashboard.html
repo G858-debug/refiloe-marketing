@@ -141,6 +141,8 @@
         .btn-secondary:hover { background: #d1d5db; }
         .btn-info { background: #3b82f6; color: white; }
         .btn-info:hover { background: #2563eb; }
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn-warning:hover { background: #d97706; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Posts List */
@@ -176,6 +178,8 @@
         .badge-carousel { background: #fef3c7; color: #b45309; }
         .badge-image { background: #dcfce7; color: #15803d; }
         .badge-pending { background: #fef3c7; color: #b45309; }
+        .badge-pending-media { background: #fef3c7; color: #b45309; }
+        .badge-media-approved { background: #dbeafe; color: #1d4ed8; }
         .badge-scheduled { background: #dbeafe; color: #1d4ed8; }
         .badge-published { background: #dcfce7; color: #15803d; }
         .badge-rejected { background: #fee2e2; color: #dc2626; }
@@ -633,6 +637,8 @@
         function getStatusBadge(status) {
             const badges = {
                 'pending_approval': 'badge-pending',
+                'pending_media_approval': 'badge-pending-media',
+                'media_approved': 'badge-media-approved',
                 'scheduled': 'badge-scheduled',
                 'published': 'badge-published',
                 'rejected': 'badge-rejected'
@@ -645,12 +651,36 @@
             const content = post.content_text || post.content || 'No content';
             const truncatedContent = content.length > 200 ? content.substring(0, 200) + '...' : content;
 
+            // Determine action buttons based on status
+            let actionButtons = '';
+
+            if (showApproveReject) {
+                if (post.status === 'pending_approval') {
+                    actionButtons = `
+                        <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
+                        <button class="btn btn-primary btn-sm" onclick="generateMedia('${post.id}')">Generate ${post.post_type === 'video' ? 'Video' : 'Image'}</button>
+                    `;
+                } else if (post.status === 'pending_media_approval') {
+                    actionButtons = `
+                        <a href="${post.video_url || '#'}" target="_blank" class="btn btn-secondary btn-sm">Preview</a>
+                        <button class="btn btn-success btn-sm" onclick="approveMedia('${post.id}')">Approve Media</button>
+                        <button class="btn btn-warning btn-sm" onclick="regenerateMedia('${post.id}')">Regenerate</button>
+                    `;
+                } else if (post.status === 'media_approved') {
+                    actionButtons = `
+                        <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
+                        <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">Approve for Posting</button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectPost('${post.id}')">Reject</button>
+                    `;
+                }
+            }
+
             return `
                 <div class="post-card" data-id="${post.id}">
                     <div class="post-header">
                         <div class="post-meta">
                             <span class="badge ${getTypeBadge(post.post_type)}">${post.post_type || 'post'}</span>
-                            <span class="badge ${getStatusBadge(post.status)}">${(post.status || 'pending').replace('_', ' ')}</span>
+                            <span class="badge ${getStatusBadge(post.status)}">${(post.status || 'pending').replace(/_/g, ' ')}</span>
                             ${post.content_theme ? `<span class="badge">${post.content_theme}</span>` : ''}
                         </div>
                     </div>
@@ -660,11 +690,7 @@
                     </div>
                     <div class="post-actions">
                         <a href="/dashboard/post/${post.id}" class="btn btn-secondary btn-sm">View Details</a>
-                        ${showApproveReject && post.status === 'pending_approval' ? `
-                            <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
-                            <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">Approve</button>
-                            <button class="btn btn-danger btn-sm" onclick="rejectPost('${post.id}')">Reject</button>
-                        ` : ''}
+                        ${actionButtons}
                     </div>
                 </div>
             `;
@@ -750,8 +776,12 @@
                     });
                 }
 
-                // Update stats
-                const pending = posts.filter(p => p.status === 'pending_approval');
+                // Update stats - include all pending statuses
+                const pending = posts.filter(p =>
+                    p.status === 'pending_approval' ||
+                    p.status === 'pending_media_approval' ||
+                    p.status === 'media_approved'
+                );
                 const scheduled = posts.filter(p => p.status === 'scheduled');
                 const published = posts.filter(p => p.status === 'published');
 
@@ -1052,6 +1082,73 @@
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Changes';
             }
+        }
+
+        // Generate media for a post
+        async function generateMedia(postId) {
+            showToast('Generating media...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Media generated! Please review.', 'success');
+                    refreshPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error generating media:', error);
+                showToast('Failed to generate media', 'error');
+            }
+        }
+
+        // Approve media for a post
+        async function approveMedia(postId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/approve-media/${postId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Media approved!', 'success');
+                    refreshPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error approving media:', error);
+                showToast('Failed to approve media', 'error');
+            }
+        }
+
+        // Regenerate media for a post
+        async function regenerateMedia(postId) {
+            showModal(
+                'Regenerate Media',
+                'This will delete the current video and let you generate a new one. Continue?',
+                async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/dashboard/regenerate-media/${postId}`, {
+                            method: 'POST'
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showToast('Ready to regenerate', 'success');
+                            refreshPosts();
+                        } else {
+                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error regenerating media:', error);
+                        showToast('Failed to reset media', 'error');
+                    }
+                }
+            );
         }
 
         // Load posts and check connection on page load

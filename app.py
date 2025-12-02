@@ -3453,6 +3453,132 @@ def api_edit_post(post_id):
         )
 
 
+@app.route('/api/dashboard/generate-media/<post_id>', methods=['POST'])
+def api_generate_media(post_id):
+    """API: Generate video or image for a post"""
+    log_info(f"📥 Request: /api/dashboard/generate-media/{post_id}")
+
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        # Get post details
+        post = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not post.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post_data = post.data[0]
+
+        # Parse generation metadata
+        metadata = json.loads(post_data.get('generation_prompt', '{}'))
+        post_type = post_data.get('post_type')
+
+        # Generate based on type
+        if post_type == 'video':
+            from social_media.video_generator import VideoGenerator
+            from database import SocialMediaDatabase
+
+            db = SocialMediaDatabase(supabase_client)
+            video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
+
+            # Use the standardized avatar ID
+            avatar_id = '5637676d31d54946b7585b012a3ce182'
+            script = metadata.get('video_script', '')
+
+            if not script:
+                return jsonify({'success': False, 'error': 'No video script found'}), 400
+
+            log_info(f"🎬 Generating video for post {post_id}")
+
+            # Generate video
+            result = video_gen.generate_video(
+                script=script,
+                avatar_id=avatar_id,
+                post_id=post_id
+            )
+
+            if result['success']:
+                # Update post status to pending_media_approval
+                supabase_client.table('social_posts').update({
+                    'status': 'pending_media_approval',
+                    'video_url': result.get('video_url'),
+                    'updated_at': datetime.now(SA_TZ).isoformat()
+                }).eq('id', post_id).execute()
+
+                log_info(f"✅ Video generated successfully for post {post_id}")
+                return jsonify({
+                    'success': True,
+                    'video_url': result.get('video_url'),
+                    'message': 'Video generated successfully'
+                })
+            else:
+                log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
+                return jsonify({'success': False, 'error': result.get('error')}), 500
+
+        elif post_type in ['image', 'carousel']:
+            # TODO: Implement image generation
+            return jsonify({'success': False, 'error': 'Image generation not yet implemented'}), 501
+
+        else:
+            return jsonify({'success': False, 'error': f'Unknown post type: {post_type}'}), 400
+
+    except Exception as e:
+        log_error(f"❌ Error generating media for {post_id}: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/approve-media/<post_id>', methods=['POST'])
+def api_approve_media(post_id):
+    """API: Approve generated media and move post to ready for final approval"""
+    log_info(f"📥 Request: /api/dashboard/approve-media/{post_id}")
+
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').update({
+            'status': 'media_approved',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        if result.data:
+            log_info(f"✅ Media approved for post {post_id}")
+            return jsonify({'success': True, 'message': 'Media approved'})
+        else:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+    except Exception as e:
+        log_error(f"❌ Error approving media for {post_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/regenerate-media/<post_id>', methods=['POST'])
+def api_regenerate_media(post_id):
+    """API: Regenerate media for a post"""
+    log_info(f"📥 Request: /api/dashboard/regenerate-media/{post_id}")
+
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        # Reset status back to pending_approval and clear video URL
+        supabase_client.table('social_posts').update({
+            'status': 'pending_approval',
+            'video_url': None,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        log_info(f"✅ Post {post_id} reset for regeneration")
+        return jsonify({'success': True, 'message': 'Ready to regenerate'})
+
+    except Exception as e:
+        log_error(f"❌ Error resetting media for {post_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/approve-all', methods=['POST'])
 def api_approve_all_posts():
     """API: Approve all pending posts"""
