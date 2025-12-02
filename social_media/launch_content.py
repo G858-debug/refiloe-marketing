@@ -39,6 +39,50 @@ class LaunchContentGenerator:
         """Initialize the launch content generator."""
         self.sa_tz = SA_TIMEZONE
 
+    def _create_social_caption(self, video_script: str, hashtags: list, cta: str) -> str:
+        """Create a social media caption that's different from the video script.
+
+        Adds hook, context, and formatting that works well for static posts.
+        """
+        # Extract first compelling line from script as hook
+        lines = [line.strip() for line in video_script.split('\n') if line.strip()]
+        hook = lines[0] if lines else video_script[:100]
+
+        # Create engaging caption with structure
+        caption_parts = []
+
+        # Add hook with emoji
+        if not any(emoji in hook for emoji in ['💪', '✨', '⏰', '🤔', '💭', '😤']):
+            hook = hook + " 💡"
+        caption_parts.append(hook)
+        caption_parts.append("")  # Blank line
+
+        # Add preview of what's in the video
+        caption_parts.append("In this video, I break down:")
+
+        # Extract key points from script (look for bullet points or numbered items)
+        key_points = []
+        for line in lines[1:]:
+            if line.startswith(('→', '-', '•', '✓')) or any(char.isdigit() and '. ' in line for char in line[:3]):
+                key_points.append(line)
+
+        if key_points:
+            caption_parts.extend(key_points[:3])  # Max 3 points
+        else:
+            # Generate summary points from script
+            caption_parts.append("→ The real challenge trainers face")
+            caption_parts.append("→ Why this matters for your business")
+            caption_parts.append("→ What you can do about it")
+
+        caption_parts.append("")  # Blank line
+        caption_parts.append(cta)
+        caption_parts.append("")  # Blank line
+
+        # Add hashtags
+        caption_parts.append(" ".join(hashtags))
+
+        return "\n".join(caption_parts)
+
     def generate_all_posts(self, start_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Generate all 9 launch posts with scheduled times.
 
@@ -89,29 +133,6 @@ class LaunchContentGenerator:
         """Day 1, Post 1 (08:00): Video 60s - 'Meet Refiloe'"""
         scheduled_time = start_date.replace(hour=8, minute=0)
 
-        content_text = """If you're a personal trainer drowning in admin... this page is for you. 💪
-
-Hey! I'm Refiloe.
-
-I've spent years studying what makes trainers successful - and what holds them back.
-
-Spoiler: It's rarely their training knowledge. It's usually the business side.
-
-The scheduling nightmares. The payment chasing. The endless WhatsApp messages.
-
-So I created this page to share everything I've learned about working smarter, not harder.
-
-Every week I'll share:
-→ Time-saving hacks that actually work
-→ Real talk about the trainer struggle
-→ Tips to grow your business without burning out
-
-If that sounds useful, give me a follow.
-
-Let's make the business side of training suck less. 💪
-
-#PersonalTrainer #FitnessCoach #TrainerLife #PTLife #FitnessBusiness #TrainerTips"""
-
         video_script = """Hey! I'm Refiloe.
 
 I've spent years studying what makes trainers successful - and what holds them back.
@@ -131,6 +152,15 @@ If that sounds useful, give me a follow.
 
 Let's make the business side of training suck less. 💪"""
 
+        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"]
+        call_to_action = "Follow for trainer tips that actually work"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 1,
             "post_number": 1,
@@ -141,11 +171,11 @@ Let's make the business side of training suck less. 💪"""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
-            "avatar_id_env": "HEYGEN_AVATAR_WARMSMILE_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"],
-            "call_to_action": "Follow for trainer tips that actually work",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "follow",
             "status": "pending_approval"
         }
@@ -217,24 +247,6 @@ Comment your number 👇 Let's see which one we all hate the most.
         """Day 1, Post 3 (18:00): Video 30s - Relatable Moment"""
         scheduled_time = start_date.replace(hour=18, minute=0)
 
-        content_text = """POV: Your 6am client at 5:55am... 😤
-
-*Phone buzzes*
-
-"Hey, so sorry, something came up, can we reschedule?"
-
-You're already at the gym.
-You've been up since 5.
-You turned down a lie-in for this.
-
-And now you've got a free hour you didn't plan for... and a gap in your income.
-
-Sound familiar?
-
-Drop a 😤 if you've lived this.
-
-#PersonalTrainer #TrainerLife #FitnessCoach #TrainerProblems #GymLife #FitPro"""
-
         video_script = """*Phone buzzes*
 
 'Hey, so sorry, something came up, can we reschedule?'
@@ -249,6 +261,15 @@ Sound familiar?
 
 Drop a 😤 if you've lived this."""
 
+        hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"]
+        call_to_action = "Drop a 😤 if this has happened to you"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 1,
             "post_number": 3,
@@ -259,11 +280,11 @@ Drop a 😤 if you've lived this."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"],
-            "call_to_action": "Drop a 😤 if this has happened to you",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "emoji_react",
             "status": "pending_approval"
         }
@@ -275,32 +296,6 @@ Drop a 😤 if you've lived this."""
     def _create_day2_post1(self, start_date: datetime) -> Dict[str, Any]:
         """Day 2, Post 1 (08:00): Video 60s - 'The 15 Hour Problem'"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=8, minute=0)
-
-        content_text = """The average personal trainer loses 15 hours every single week. Here's where it goes. ⏰
-
-I've talked to hundreds of trainers, and the pattern is always the same.
-
-Here's where your 15 hours disappear:
-
-📅 3 hours - Scheduling and rescheduling sessions
-💰 2 hours - Chasing payments and sending reminders
-📝 4 hours - Writing and adjusting training programs
-💬 3 hours - Replying to client messages and questions
-📊 3 hours - General admin, invoices, tracking
-
-That's 15 hours. Every. Single. Week.
-
-60 hours a month you could spend training clients.
-Or with your family.
-Or just... resting.
-
-Over the next few weeks, I'm going to share specific tips for each of these.
-
-But first - I'm curious. Which of these eats the most of YOUR time?
-
-Comment below. I read every single one. 👇
-
-#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #TrainerTips #TimeManagement #PTLife"""
 
         video_script = """I've talked to hundreds of trainers, and the pattern is always the same.
 
@@ -324,6 +319,15 @@ But first - I'm curious. Which of these eats the most of YOUR time?
 
 Comment below. I read every single one."""
 
+        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"]
+        call_to_action = "Comment which one steals the most of your time"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 2,
             "post_number": 4,
@@ -334,11 +338,11 @@ Comment below. I read every single one."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
-            "avatar_id_env": "HEYGEN_AVATAR_PROFESSIONAL_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"],
-            "call_to_action": "Comment which one steals the most of your time",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "comment",
             "status": "pending_approval"
         }
@@ -387,28 +391,6 @@ Tag a trainer who needs to hear this 👇
         """Day 2, Post 3 (18:00): Video 30s - Quick Tip #1"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=18, minute=0)
 
-        content_text = """Quick tip that'll save you 2 hours this week... ⚡
-
-Here's something most trainers don't do:
-
-Create a 'FAQ voice note library.'
-
-Record yourself answering the 10 questions clients ask most:
-→ What should I eat before training?
-→ How sore is too sore?
-→ Can I train if I'm sick?
-
-Save them in a folder.
-
-Next time someone asks?
-Forward the voice note. 10 seconds instead of 10 minutes.
-
-You're welcome. 😉
-
-Save this for later 📌
-
-#PersonalTrainer #FitnessCoach #TrainerTips #TrainerLife #FitnessBusiness #ProductivityTips"""
-
         video_script = """Here's something most trainers don't do:
 
 Create a 'FAQ voice note library.'
@@ -425,6 +407,15 @@ Forward the voice note. 10 seconds instead of 10 minutes.
 
 You're welcome. 😉"""
 
+        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"]
+        call_to_action = "Save this for later 📌"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 2,
             "post_number": 6,
@@ -435,11 +426,11 @@ You're welcome. 😉"""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"],
-            "call_to_action": "Save this for later 📌",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "save",
             "status": "pending_approval"
         }
@@ -451,28 +442,6 @@ You're welcome. 😉"""
     def _create_day3_post1(self, start_date: datetime) -> Dict[str, Any]:
         """Day 3, Post 1 (08:00): Video 45s - The Dream"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=8, minute=0)
-
-        content_text = """Imagine this for a second... ✨
-
-You wake up. No 5am alarm panic.
-
-Your schedule for the day is already set. No back-and-forth messages.
-
-Payments came in automatically. No awkward reminders sent.
-
-Your clients got their programs. Without you copy-pasting anything.
-
-You just... train people. The thing you actually love.
-
-This isn't fantasy. There are trainers living this right now.
-
-And over the coming weeks, I'm going to show you exactly how they do it.
-
-If you want in, make sure you're following.
-
-And drop a 🙋 if this sounds like the dream.
-
-#PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #WorkLifeBalance #TrainerSuccess"""
 
         video_script = """Close your eyes. Imagine this:
 
@@ -494,6 +463,15 @@ If you want in, make sure you're following.
 
 And drop a 🙋 if this sounds like the dream."""
 
+        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"]
+        call_to_action = "Drop a 🙋 if this is the dream"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 3,
             "post_number": 7,
@@ -504,11 +482,11 @@ And drop a 🙋 if this sounds like the dream."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 45,
-            "avatar_id_env": "HEYGEN_AVATAR_WARMSMILE_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"],
-            "call_to_action": "Drop a 🙋 if this is the dream",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "emoji_react",
             "status": "pending_approval"
         }
@@ -577,27 +555,6 @@ Comment 🏃, 📊, or 🧠 - be honest!
         """Day 3, Post 3 (18:00): Video 30s - Community Question"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=18, minute=0)
 
-        content_text = """Be honest with me for a second... 💭
-
-I want to make this page actually useful for you.
-
-So tell me:
-
-What's the ONE thing about running your training business that frustrates you most?
-
-Is it the scheduling chaos?
-The awkward money conversations?
-Clients who ghost?
-Something else?
-
-Drop it in the comments.
-
-I'll create content specifically to help with whatever you're struggling with most.
-
-This page is for YOU. So tell me what you need. 👇
-
-#PersonalTrainer #FitnessCoach #TrainerLife #TrainerCommunity #FitnessBusiness #FitPro"""
-
         video_script = """I want to make this page actually useful for you.
 
 So tell me:
@@ -615,6 +572,15 @@ I'll create content specifically to help with whatever you're struggling with mo
 
 This page is for YOU. So tell me what you need."""
 
+        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"]
+        call_to_action = "Comment your biggest frustration 👇"
+
+        content_text = self._create_social_caption(
+            video_script=video_script,
+            hashtags=hashtags,
+            cta=call_to_action
+        )
+
         return {
             "day": 3,
             "post_number": 9,
@@ -625,11 +591,11 @@ This page is for YOU. So tell me what you need."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "HEYGEN_AVATAR_CASUAL_CLOSEUP",
+            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
             "carousel_slides": None,
             "image_prompt": None,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"],
-            "call_to_action": "Comment your biggest frustration 👇",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "comment",
             "status": "pending_approval"
         }
@@ -737,12 +703,28 @@ def clear_launch_content(supabase_client) -> int:
     try:
         log_info("Clearing existing launch content...")
 
-        # Delete posts where generation_prompt contains "launch_content": true
-        result = supabase_client.table('social_posts').delete().like('generation_prompt', '%"launch_content": true%').execute()
+        # First, get all posts with launch_content flag
+        result = supabase_client.table('social_posts').select('id').like(
+            'generation_prompt', '%"launch_content": true%'
+        ).execute()
 
-        deleted_count = len(result.data) if result.data else 0
-        log_info(f"Deleted {deleted_count} launch content posts")
+        if not result.data:
+            log_info("No launch content posts found to delete")
+            return 0
 
+        post_ids = [post['id'] for post in result.data]
+        log_info(f"Found {len(post_ids)} launch content posts to delete")
+
+        # Delete each post by ID
+        deleted_count = 0
+        for post_id in post_ids:
+            try:
+                supabase_client.table('social_posts').delete().eq('id', post_id).execute()
+                deleted_count += 1
+            except Exception as e:
+                log_error(f"Failed to delete post {post_id}: {e}")
+
+        log_info(f"Deleted {deleted_count}/{len(post_ids)} launch content posts")
         return deleted_count
 
     except Exception as e:
