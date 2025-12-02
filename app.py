@@ -3295,11 +3295,16 @@ def api_reject_post(post_id):
         return api_error_response('Database client not available', 503)
 
     try:
-        # Get optional rejection reason from request
+        # Get optional rejection reason from request (use get_json with silent=True to avoid Content-Type errors)
         reason = None
-        if request.json and request.json.get('reason'):
-            reason = request.json['reason']
-            log_info(f"📝 Rejection reason provided: {reason}")
+        try:
+            json_data = request.get_json(silent=True)
+            if json_data:
+                reason = json_data.get('reason')
+                if reason:
+                    log_info(f"📝 Rejection reason provided: {reason}")
+        except Exception:
+            pass  # Ignore JSON parsing errors
 
         # Check if post exists first
         log_info(f"🔍 Checking if post {post_id} exists")
@@ -3345,6 +3350,101 @@ def api_reject_post(post_id):
 
     except Exception as e:
         log_error(f"❌ Error rejecting post {post_id}: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'post_id': post_id, 'traceback': traceback.format_exc()}
+        )
+
+
+@app.route('/api/dashboard/edit/<post_id>', methods=['POST'])
+def api_edit_post(post_id):
+    """API: Edit a pending post"""
+    log_info(f"📥 Request: /api/dashboard/edit/{post_id}")
+
+    # Validate post_id format (should be UUID)
+    try:
+        uuid.UUID(post_id)
+    except ValueError:
+        log_error(f"❌ Invalid post_id format: {post_id}")
+        return api_error_response(
+            'Invalid post ID format',
+            400,
+            {'post_id': post_id, 'expected': 'UUID'}
+        )
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response('Database not connected', 503)
+
+    if not supabase_client:
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
+
+    try:
+        # Get update data from request
+        update_data = request.get_json()
+        if not update_data:
+            log_error("❌ No data provided in request")
+            return api_error_response('No data provided', 400)
+
+        log_info(f"📝 Edit data received: {list(update_data.keys())}")
+
+        # Only allow editing pending posts
+        log_info(f"🔍 Checking if post {post_id} is pending approval")
+        post_check = supabase_client.table('social_posts').select('status').eq(
+            'id', post_id
+        ).execute()
+
+        if not post_check.data:
+            log_error(f"❌ Post {post_id} not found")
+            return api_error_response('Post not found', 404, {'post_id': post_id})
+
+        current_status = post_check.data[0]['status']
+        if current_status != 'pending_approval':
+            log_error(f"❌ Cannot edit post with status: {current_status}")
+            return api_error_response(
+                'Can only edit pending posts',
+                400,
+                {'post_id': post_id, 'current_status': current_status}
+            )
+
+        log_info(f"✅ Post {post_id} is pending approval, proceeding with update")
+
+        # Update the post
+        start_time = datetime.now()
+        update_payload = {
+            'title': update_data.get('title'),
+            'content_text': update_data.get('content_text'),
+            'generation_prompt': update_data.get('generation_prompt'),
+            'scheduled_time': update_data.get('scheduled_time'),
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        result = supabase_client.table('social_posts').update(update_payload).eq('id', post_id).execute()
+
+        update_time = (datetime.now() - start_time).total_seconds()
+
+        if result.data:
+            log_info(f"✅ Post {post_id} updated successfully in {update_time:.2f}s")
+            return jsonify({
+                'success': True,
+                'message': 'Post updated',
+                'post_id': post_id,
+                'update_time': update_time
+            })
+        else:
+            log_error(f"❌ Failed to update post {post_id}")
+            return api_error_response(
+                'Update failed',
+                500,
+                {'post_id': post_id}
+            )
+
+    except Exception as e:
+        log_error(f"❌ Error editing post {post_id}: {e}")
         log_error(traceback.format_exc())
         return api_error_response(
             str(e),
