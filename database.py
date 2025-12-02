@@ -8,10 +8,21 @@ from utils.logger import log_info, log_error
 
 class SocialMediaDatabase:
     """Database service for social media operations"""
-    
+
+    # Valid post statuses for the approval workflow
+    VALID_STATUSES = [
+        'pending_approval',       # Initial state after post creation
+        'pending_media_approval', # Media generated, awaiting approval
+        'media_approved',         # Media approved, awaiting final post approval
+        'scheduled',              # Post fully approved and scheduled
+        'published',              # Post has been published
+        'failed',                 # Publishing failed
+        'rejected'                # Post rejected, won't be published
+    ]
+
     def __init__(self, supabase_client):
         """Initialize the social media database service
-        
+
         Args:
             supabase_client: Supabase client instance
         """
@@ -20,19 +31,25 @@ class SocialMediaDatabase:
     
     def save_post(self, post_data: Dict) -> str:
         """Save a new post to the database
-        
+
         Args:
             post_data: Dictionary containing post information
-        
+
         Returns:
             str: Post UUID if successful, empty string if failed
         """
         try:
             # Generate UUID for the post
             post_id = str(uuid.uuid4())
-            
+
             log_info(f"Attempting to save post with ID: {post_id}")
-            
+
+            # Validate and set status
+            status = post_data.get('status', 'pending_approval')
+            if status not in self.VALID_STATUSES:
+                log_error(f"Invalid status '{status}', defaulting to 'pending_approval'")
+                status = 'pending_approval'
+
             # Prepare data for insertion - ONLY include columns that exist in the table
             db_data = {
                 'id': post_id,
@@ -45,7 +62,7 @@ class SocialMediaDatabase:
                 'image_ids': post_data.get('image_ids', []),
                 'scheduled_time': post_data.get('scheduled_time'),
                 'published_time': post_data.get('published_time'),
-                'status': post_data.get('status', 'draft'),
+                'status': status,
                 'facebook_post_id': post_data.get('facebook_post_id'),
                 'generation_prompt': post_data.get('generation_prompt'),
                 'week_number': post_data.get('week_number'),
