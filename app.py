@@ -57,28 +57,94 @@ SA_TZ = pytz.timezone('Africa/Johannesburg')
 
 
 def init_supabase():
-    """Initialize Supabase client"""
+    """Initialize Supabase client with connection verification"""
     global supabase_client
-    
+
     try:
         from utils.supabase_rest import SupabaseRestClient
-        
+
         url = app.config['SUPABASE_URL']
         key = app.config.get('SUPABASE_SERVICE_KEY') or app.config.get('SUPABASE_ANON_KEY')
-        
+
         if not url or not key:
             log_error("Supabase credentials not found in environment")
-            return False
-        
+            return False, "Missing credentials"
+
+        # Mask the key for logging
+        masked_key = f"{key[:8]}...{key[-4:]}" if key and len(key) > 12 else "***"
+        log_info(f"🔗 Connecting to Supabase URL: {url}")
+        log_info(f"🔑 Using key: {masked_key}")
+
+        # Create the client
         supabase_client = SupabaseRestClient(url, key)
-        log_info("✅ Supabase REST client initialized successfully")
-        return True
-        
+        log_info("✅ Supabase REST client instance created")
+
+        # Verify connection by testing a simple query
+        try:
+            log_info("🔍 Verifying connection by querying social_posts table...")
+            result = supabase_client.table('social_posts').select('id').limit(1).execute()
+            log_info(f"✅ Connection verified successfully - query returned {len(result.data) if hasattr(result, 'data') else 0} rows")
+            return True, None
+        except Exception as verify_error:
+            log_error(f"❌ Connection verification failed: {str(verify_error)}")
+            supabase_client = None
+            return False, f"Verification failed: {str(verify_error)}"
+
     except Exception as e:
-        log_error(f"Failed to initialize Supabase: {str(e)}")
+        log_error(f"❌ Failed to initialize Supabase: {str(e)}")
         import traceback
         log_error(f"Full traceback:\n{traceback.format_exc()}")
-        return False
+        supabase_client = None
+        return False, str(e)
+
+
+def verify_supabase_connection():
+    """Verify Supabase connection is working by testing a query.
+
+    Returns:
+        dict: {
+            'connected': bool,
+            'error': str or None,
+            'details': dict
+        }
+    """
+    if not supabase_client:
+        log_warning("⚠️  Supabase client not initialized")
+        return {
+            'connected': False,
+            'error': 'Client not initialized',
+            'details': {'url': app.config.get('SUPABASE_URL')}
+        }
+
+    try:
+        # Test query on social_posts table
+        log_info("🔍 Testing Supabase connection...")
+        result = supabase_client.table('social_posts').select('id').limit(1).execute()
+
+        # Check if query succeeded
+        row_count = len(result.data) if hasattr(result, 'data') else 0
+        log_info(f"✅ Connection test successful - query returned {row_count} rows")
+
+        return {
+            'connected': True,
+            'error': None,
+            'details': {
+                'test_query': 'success',
+                'url': app.config.get('SUPABASE_URL'),
+                'rows_returned': row_count,
+                'timestamp': datetime.now(SA_TZ).isoformat()
+            }
+        }
+    except Exception as e:
+        log_error(f"❌ Connection verification failed: {str(e)}")
+        return {
+            'connected': False,
+            'error': str(e),
+            'details': {
+                'url': app.config.get('SUPABASE_URL'),
+                'timestamp': datetime.now(SA_TZ).isoformat()
+            }
+        }
 
 
 def init_scheduler():
@@ -244,6 +310,13 @@ def health_check():
 @app.route('/api/status')
 def status():
     """Detailed status endpoint"""
+    # Determine Supabase status
+    supabase_status = 'disconnected'
+    if supabase_client and app.config.get('SUPABASE_CONNECTED', False):
+        supabase_status = 'connected'
+    elif supabase_client:
+        supabase_status = 'initialized_but_not_verified'
+
     status_info = {
         'service': 'refiloe-marketing',
         'version': '1.0.0',
@@ -251,7 +324,7 @@ def status():
         'environment': os.getenv('FLASK_ENV', 'production'),
         'components': {
             'flask': 'running',
-            'supabase': 'connected' if supabase_client else 'disconnected',
+            'supabase': supabase_status,
             'scheduler': 'running' if scheduler and scheduler.is_running() else 'stopped',
             'social_media': 'enabled' if app.config.get('ENABLE_SOCIAL_MEDIA') else 'disabled',
             'heygen': heygen_avatar_status,
@@ -261,15 +334,42 @@ def status():
             'log_level': app.config.get('LOG_LEVEL', 'INFO')
         }
     }
-    
+
     return jsonify(status_info), 200
+
+
+@app.route('/api/connection-status')
+def connection_status():
+    """Get detailed Supabase connection status"""
+    # Run a fresh verification check
+    verification_result = verify_supabase_connection()
+
+    # Update the stored values
+    app.config['SUPABASE_CONNECTED'] = verification_result['connected']
+    app.config['SUPABASE_ERROR'] = verification_result.get('error')
+    app.config['SUPABASE_LAST_CHECK'] = datetime.now(SA_TZ)
+
+    response = {
+        'connected': verification_result['connected'],
+        'error': verification_result.get('error'),
+        'last_check': app.config.get('SUPABASE_LAST_CHECK').isoformat() if app.config.get('SUPABASE_LAST_CHECK') else None,
+        'details': verification_result.get('details', {}),
+        'client_initialized': supabase_client is not None
+    }
+
+    status_code = 200 if verification_result['connected'] else 503
+    return jsonify(response), status_code
 
 
 @app.route('/health/content-pipeline')
 def content_pipeline_health():
     """Content pipeline health monitoring endpoint"""
-    if not supabase_client:
-        return jsonify({'error': 'Database not connected'}), 503
+    if not supabase_client or not app.config.get('SUPABASE_CONNECTED', False):
+        error_msg = app.config.get('SUPABASE_ERROR', 'Database not connected')
+        return jsonify({
+            'error': 'Database not connected',
+            'details': error_msg
+        }), 503
 
     try:
         from social_media.content_monitor import ContentPipelineMonitor
@@ -373,8 +473,12 @@ def scheduler_jobs():
 @app.route('/api/test-database')
 def test_database():
     """Test database connectivity and insertion"""
-    if not supabase_client:
-        return jsonify({'error': 'Database not connected'}), 503
+    if not supabase_client or not app.config.get('SUPABASE_CONNECTED', False):
+        error_msg = app.config.get('SUPABASE_ERROR', 'Database not connected')
+        return jsonify({
+            'error': 'Database not connected',
+            'details': error_msg
+        }), 503
 
     from social_media.database import SocialMediaDatabase
     db = SocialMediaDatabase(supabase_client)
@@ -696,8 +800,12 @@ def trigger_weekly_report():
 @app.route('/api/reports/latest')
 def get_latest_report():
     """Get the most recent weekly report"""
-    if not supabase_client:
-        return jsonify({'error': 'Database not connected'}), 503
+    if not supabase_client or not app.config.get('SUPABASE_CONNECTED', False):
+        error_msg = app.config.get('SUPABASE_ERROR', 'Database not connected')
+        return jsonify({
+            'error': 'Database not connected',
+            'details': error_msg
+        }), 503
 
     try:
         result = supabase_client.table('weekly_reports').select('*').order(
@@ -759,8 +867,12 @@ def preview_launch_content():
 @app.route('/api/launch-content/seed', methods=['POST'])
 def seed_launch_content_route():
     """Generate and save launch content to database"""
-    if not supabase_client:
-        return jsonify({'error': 'Supabase not initialized'}), 503
+    if not supabase_client or not app.config.get('SUPABASE_CONNECTED', False):
+        error_msg = app.config.get('SUPABASE_ERROR', 'Supabase not initialized')
+        return jsonify({
+            'error': 'Supabase not initialized',
+            'details': error_msg
+        }), 503
 
     try:
         from social_media.launch_content import seed_launch_content as seed_func
@@ -786,8 +898,12 @@ def seed_launch_content_route():
 @app.route('/api/launch-content/clear', methods=['POST'])
 def clear_launch_content_route():
     """Clear existing launch content (for regeneration)"""
-    if not supabase_client:
-        return jsonify({'error': 'Supabase not initialized'}), 503
+    if not supabase_client or not app.config.get('SUPABASE_CONNECTED', False):
+        error_msg = app.config.get('SUPABASE_ERROR', 'Supabase not initialized')
+        return jsonify({
+            'error': 'Supabase not initialized',
+            'details': error_msg
+        }), 503
 
     try:
         from social_media.launch_content import clear_launch_content
@@ -3173,8 +3289,27 @@ def initialize_app():
 
     # Initialize Supabase
     log_info("Initializing Supabase connection...")
-    if not init_supabase():
-        log_warning("⚠️  Supabase initialization failed - some features will be disabled")
+    success, error = init_supabase()
+
+    if success:
+        # Verify the connection
+        verification_result = verify_supabase_connection()
+        app.config['SUPABASE_CONNECTED'] = verification_result['connected']
+        app.config['SUPABASE_ERROR'] = verification_result.get('error')
+        app.config['SUPABASE_LAST_CHECK'] = datetime.now(SA_TZ)
+
+        if verification_result['connected']:
+            log_info(f"✅ Supabase connection verified and ready")
+            log_info(f"📊 Connection details: {verification_result['details']}")
+        else:
+            log_warning(f"⚠️  Supabase connection verification failed: {verification_result['error']}")
+            log_warning("⚠️  Some features will be disabled")
+    else:
+        app.config['SUPABASE_CONNECTED'] = False
+        app.config['SUPABASE_ERROR'] = error
+        app.config['SUPABASE_LAST_CHECK'] = datetime.now(SA_TZ)
+        log_warning(f"⚠️  Supabase initialization failed: {error}")
+        log_warning("⚠️  Some features will be disabled")
     
     # Initialize Scheduler
     if app.config.get('ENABLE_SOCIAL_MEDIA', True):
