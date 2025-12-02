@@ -10,6 +10,7 @@ import os
 import atexit
 import uuid
 import json
+import traceback
 from flask import Flask, jsonify, request, render_template
 from datetime import datetime, timedelta
 import pytz
@@ -3099,28 +3100,71 @@ def view_post_detail(post_id):
         return f"Error: {str(e)}", 500
 
 
+# =============================================================================
+# API Helper Functions
+# =============================================================================
+
+def api_error_response(error_msg, status_code=500, details=None):
+    """Standardized API error response."""
+    response = {
+        'success': False,
+        'error': error_msg,
+        'timestamp': datetime.now(SA_TZ).isoformat()
+    }
+    if details:
+        response['details'] = details
+    return jsonify(response), status_code
+
+
+# =============================================================================
+# Dashboard API Endpoints
+# =============================================================================
+
 @app.route('/api/dashboard/posts')
 def api_dashboard_posts():
     """API: Get all posts for dashboard"""
+    log_info("📥 Request: /api/dashboard/posts")
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response(
+            'Database not connected',
+            503,
+            {'reason': 'Supabase initialization failed'}
+        )
+
     if not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
 
     try:
+        start_time = datetime.now()
         result = supabase_client.table('social_posts').select('*').order(
             'scheduled_time', desc=False
         ).limit(100).execute()
 
+        query_time = (datetime.now() - start_time).total_seconds()
+        log_info(f"✅ Query completed in {query_time:.2f}s")
+
         posts = result.data if result.data else []
+        log_info(f"📊 Found {len(posts)} posts")
 
         return jsonify({
             'success': True,
             'posts': posts,
-            'count': len(posts)
+            'count': len(posts),
+            'query_time': query_time
         })
 
     except Exception as e:
-        log_error(f"Error fetching dashboard posts: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_error(f"❌ Error fetching dashboard posts: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'traceback': traceback.format_exc()}
+        )
 
 
 @app.route('/api/dashboard/seed-launch', methods=['POST'])
@@ -3156,73 +3200,221 @@ def api_seed_launch_content():
 @app.route('/api/dashboard/approve/<post_id>', methods=['POST'])
 def api_approve_post(post_id):
     """API: Approve a single post"""
+    log_info(f"📥 Request: /api/dashboard/approve/{post_id}")
+
+    # Validate post_id format (should be UUID)
+    try:
+        uuid.UUID(post_id)
+    except ValueError:
+        log_error(f"❌ Invalid post_id format: {post_id}")
+        return api_error_response(
+            'Invalid post ID format',
+            400,
+            {'post_id': post_id, 'expected': 'UUID'}
+        )
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response('Database not connected', 503)
+
     if not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
 
     try:
+        # Check if post exists first
+        log_info(f"🔍 Checking if post {post_id} exists")
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content').eq('id', post_id).execute()
+
+        if not check_result.data:
+            log_error(f"❌ Post {post_id} not found")
+            return api_error_response('Post not found', 404, {'post_id': post_id})
+
+        post_info = check_result.data[0]
+        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
+
+        # Update post to approved/scheduled status
+        start_time = datetime.now()
         result = supabase_client.table('social_posts').update({
             'status': 'scheduled',
             'updated_at': datetime.now(SA_TZ).isoformat()
         }).eq('id', post_id).execute()
 
+        update_time = (datetime.now() - start_time).total_seconds()
+
         if result.data:
-            log_info(f"Post {post_id} approved and scheduled")
-            return jsonify({'success': True, 'message': 'Post approved'})
+            log_info(f"✅ Post {post_id} approved and scheduled in {update_time:.2f}s")
+            return jsonify({
+                'success': True,
+                'message': 'Post approved',
+                'post_id': post_id,
+                'update_time': update_time
+            })
         else:
-            return jsonify({'success': False, 'error': 'Post not found'}), 404
+            log_error(f"❌ Failed to update post {post_id}")
+            return api_error_response(
+                'Failed to update post',
+                500,
+                {'post_id': post_id}
+            )
 
     except Exception as e:
-        log_error(f"Error approving post {post_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_error(f"❌ Error approving post {post_id}: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'post_id': post_id, 'traceback': traceback.format_exc()}
+        )
 
 
 @app.route('/api/dashboard/reject/<post_id>', methods=['POST'])
 def api_reject_post(post_id):
     """API: Reject a single post"""
+    log_info(f"📥 Request: /api/dashboard/reject/{post_id}")
+
+    # Validate post_id format (should be UUID)
+    try:
+        uuid.UUID(post_id)
+    except ValueError:
+        log_error(f"❌ Invalid post_id format: {post_id}")
+        return api_error_response(
+            'Invalid post ID format',
+            400,
+            {'post_id': post_id, 'expected': 'UUID'}
+        )
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response('Database not connected', 503)
+
     if not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
 
     try:
-        result = supabase_client.table('social_posts').update({
+        # Get optional rejection reason from request
+        reason = None
+        if request.json and request.json.get('reason'):
+            reason = request.json['reason']
+            log_info(f"📝 Rejection reason provided: {reason}")
+
+        # Check if post exists first
+        log_info(f"🔍 Checking if post {post_id} exists")
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content').eq('id', post_id).execute()
+
+        if not check_result.data:
+            log_error(f"❌ Post {post_id} not found")
+            return api_error_response('Post not found', 404, {'post_id': post_id})
+
+        post_info = check_result.data[0]
+        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
+
+        # Update post to rejected status
+        start_time = datetime.now()
+        update_data = {
             'status': 'rejected',
             'updated_at': datetime.now(SA_TZ).isoformat()
-        }).eq('id', post_id).execute()
+        }
+
+        result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        update_time = (datetime.now() - start_time).total_seconds()
 
         if result.data:
-            log_info(f"Post {post_id} rejected")
-            return jsonify({'success': True, 'message': 'Post rejected'})
+            reason_msg = f" with reason: {reason}" if reason else ""
+            log_info(f"✅ Post {post_id} rejected{reason_msg} in {update_time:.2f}s")
+            response_data = {
+                'success': True,
+                'message': 'Post rejected',
+                'post_id': post_id,
+                'update_time': update_time
+            }
+            if reason:
+                response_data['reason'] = reason
+            return jsonify(response_data)
         else:
-            return jsonify({'success': False, 'error': 'Post not found'}), 404
+            log_error(f"❌ Failed to update post {post_id}")
+            return api_error_response(
+                'Failed to update post',
+                500,
+                {'post_id': post_id}
+            )
 
     except Exception as e:
-        log_error(f"Error rejecting post {post_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_error(f"❌ Error rejecting post {post_id}: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'post_id': post_id, 'traceback': traceback.format_exc()}
+        )
 
 
 @app.route('/api/dashboard/approve-all', methods=['POST'])
 def api_approve_all_posts():
     """API: Approve all pending posts"""
+    log_info("📥 Request: /api/dashboard/approve-all")
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response('Database not connected', 503)
+
     if not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
 
     try:
+        # First, check if any pending posts exist
+        log_info("🔍 Checking for pending posts")
+        check_result = supabase_client.table('social_posts').select('id, platform, content').eq('status', 'pending_approval').execute()
+
+        posts_found = len(check_result.data) if check_result.data else 0
+        log_info(f"📊 Found {posts_found} pending posts")
+
+        if posts_found == 0:
+            log_info("ℹ️ No pending posts to approve")
+            return jsonify({
+                'success': True,
+                'approved_count': 0,
+                'posts_found': 0,
+                'message': 'No pending posts to approve'
+            })
+
+        # Update all pending posts to scheduled
+        start_time = datetime.now()
         result = supabase_client.table('social_posts').update({
             'status': 'scheduled',
             'updated_at': datetime.now(SA_TZ).isoformat()
         }).eq('status', 'pending_approval').execute()
 
+        update_time = (datetime.now() - start_time).total_seconds()
+
         approved_count = len(result.data) if result.data else 0
-        log_info(f"Approved {approved_count} posts")
+        log_info(f"✅ Approved {approved_count}/{posts_found} posts in {update_time:.2f}s")
+
+        if approved_count != posts_found:
+            log_warning(f"⚠️ Mismatch: Found {posts_found} posts but only approved {approved_count}")
 
         return jsonify({
             'success': True,
             'approved_count': approved_count,
+            'posts_found': posts_found,
+            'update_time': update_time,
             'message': f'Approved {approved_count} posts'
         })
 
     except Exception as e:
-        log_error(f"Error approving all posts: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_error(f"❌ Error approving all posts: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'traceback': traceback.format_exc()}
+        )
 
 
 @app.route('/api/dashboard/fresh-start', methods=['POST'])
