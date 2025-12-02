@@ -88,36 +88,40 @@ class SupabaseTable:
         return self
 
     def insert(self, data: Dict):
-        """Insert data."""
-        # Ensure data is a list for batch insert, or convert single dict to list
-        if isinstance(data, dict):
-            payload = [data]
-        else:
-            payload = data
-
-        result = self.client._request('POST', self.table_name, json=payload)
-        return ExecuteResult(result)
+        """Insert data - returns self for chaining."""
+        self._insert_data = data
+        return self
 
     def update(self, data: Dict):
-        """Update data (requires filters)."""
-        params = self._build_params()
-        result = self.client._request('PATCH', self.table_name, json=data, params=params)
-        return ExecuteResult(result)
+        """Update data - returns self for chaining."""
+        self._update_data = data
+        return self
 
     def delete(self):
-        """Delete data (requires filters for safety)."""
-        if not self._filters:
-            raise ValueError(
-                f"Delete operation on table '{self.table_name}' requires at least one filter for safety. "
-                "Use .eq(), .gte(), .lte() or other filters before calling .delete()"
-            )
-        params = self._build_params()
-        result = self.client._request('DELETE', self.table_name, params=params)
-        return ExecuteResult(result)
+        """Delete data - returns self for chaining."""
+        self._is_delete = True
+        return self
 
     def execute(self):
         """Execute query."""
         params = self._build_params()
+
+        # Check if this is an update operation
+        if hasattr(self, '_update_data'):
+            result = self.client._request('PATCH', self.table_name, json=self._update_data, params=params)
+            return ExecuteResult(result)
+
+        # Check if this is a delete operation
+        if hasattr(self, '_is_delete'):
+            result = self.client._request('DELETE', self.table_name, params=params)
+            return ExecuteResult(result)
+
+        # Check if this is an insert operation
+        if hasattr(self, '_insert_data'):
+            result = self.client._request('POST', self.table_name, json=self._insert_data, params=params)
+            return ExecuteResult(result)
+
+        # Default to SELECT
         result = self.client._request('GET', self.table_name, params=params)
         return ExecuteResult(result)
 
