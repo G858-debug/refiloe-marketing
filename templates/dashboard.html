@@ -20,7 +20,79 @@
         }
         .header h1 { font-size: 24px; margin-bottom: 5px; }
         .header p { opacity: 0.9; font-size: 14px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header-title { flex: 1; }
+        .header-controls { display: flex; gap: 15px; align-items: center; }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .status-dot.offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .status-dot.checking { background: #fbbf24; animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .debug-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        .debug-toggle input[type="checkbox"] {
+            cursor: pointer;
+        }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Error Banner */
+        .error-banner {
+            background: #fee2e2;
+            border: 2px solid #dc2626;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            animation: shake 0.5s;
+        }
+        .error-content h3 {
+            color: #dc2626;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .error-content p {
+            color: #991b1b;
+            margin-bottom: 15px;
+        }
+        .error-content pre {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 11px;
+            border: 1px solid #fca5a5;
+            color: #991b1b;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .error-banner .btn {
+            margin-right: 10px;
+            margin-top: 10px;
+        }
 
         /* Stats Cards */
         .stats {
@@ -179,12 +251,40 @@
             border-radius: 8px;
             margin-bottom: 10px;
             animation: slideIn 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            min-width: 250px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .toast.success { background: #22c55e; }
-        .toast.error { background: #ef4444; }
+        .toast.error {
+            background: #ef4444;
+            animation: slideIn 0.3s ease, shake 0.5s ease;
+        }
+        .toast.info { background: #3b82f6; }
+        .toast-dismiss {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 5px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .toast-dismiss:hover {
+            opacity: 1;
+        }
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
 
         /* Loading State */
@@ -219,11 +319,36 @@
 </head>
 <body>
     <div class="header">
-        <h1>Refiloe Content Dashboard</h1>
-        <p>Manage your social media content</p>
+        <div class="header-top">
+            <div class="header-title">
+                <h1>Refiloe Content Dashboard</h1>
+                <p>Manage your social media content</p>
+            </div>
+            <div class="header-controls">
+                <div class="connection-status">
+                    <span id="connection-indicator" class="status-dot checking" title="Checking connection..."></span>
+                    <span>Database</span>
+                </div>
+                <label class="debug-toggle">
+                    <input type="checkbox" id="debug-mode" onchange="toggleDebugMode()">
+                    <span>Debug</span>
+                </label>
+            </div>
+        </div>
     </div>
 
     <div class="container">
+        <!-- Error Banner -->
+        <div id="error-banner" class="error-banner" style="display: none;">
+            <div class="error-content">
+                <h3 id="error-title">Error</h3>
+                <p id="error-message"></p>
+                <pre id="error-details" style="display: none;"></pre>
+                <button onclick="hideErrorBanner()" class="btn btn-secondary btn-sm">Dismiss</button>
+                <button onclick="checkConnection()" class="btn btn-primary btn-sm">Check Connection</button>
+            </div>
+        </div>
+
         <!-- Stats -->
         <div class="stats">
             <div class="stat-card">
@@ -295,15 +420,97 @@
 
     <script>
         const API_BASE = '';
+        let debugMode = false;
 
         // Toast notifications
         function showToast(message, type = 'info') {
             const container = document.getElementById('toasts');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            toast.textContent = message;
+
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+            toast.appendChild(messageSpan);
+
+            // Add dismiss button for error toasts
+            if (type === 'error') {
+                const dismissBtn = document.createElement('button');
+                dismissBtn.className = 'toast-dismiss';
+                dismissBtn.innerHTML = '×';
+                dismissBtn.onclick = () => toast.remove();
+                toast.appendChild(dismissBtn);
+            }
+
             container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+
+            // Error toasts stay longer (10 seconds), others stay 4 seconds
+            const duration = type === 'error' ? 10000 : 4000;
+            setTimeout(() => toast.remove(), duration);
+        }
+
+        // Debug mode toggle
+        function toggleDebugMode() {
+            debugMode = document.getElementById('debug-mode').checked;
+            console.log('Debug mode:', debugMode ? 'ON' : 'OFF');
+            if (debugMode) {
+                showToast('Debug mode enabled - detailed errors will be shown', 'info');
+            }
+        }
+
+        // Error banner functions
+        function showErrorBanner(title, message, details) {
+            const banner = document.getElementById('error-banner');
+            document.getElementById('error-title').textContent = title;
+            document.getElementById('error-message').textContent = message;
+
+            const detailsEl = document.getElementById('error-details');
+            if (details && debugMode) {
+                detailsEl.textContent = JSON.stringify(details, null, 2);
+                detailsEl.style.display = 'block';
+            } else {
+                detailsEl.style.display = 'none';
+            }
+
+            banner.style.display = 'block';
+
+            // Scroll to top to show error
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function hideErrorBanner() {
+            document.getElementById('error-banner').style.display = 'none';
+        }
+
+        // Connection check function
+        async function checkConnection() {
+            const startTime = performance.now();
+            try {
+                const response = await fetch(`${API_BASE}/api/connection-status`);
+                const data = await response.json();
+                const responseTime = (performance.now() - startTime).toFixed(0);
+
+                const indicator = document.getElementById('connection-indicator');
+                if (data.connected) {
+                    indicator.className = 'status-dot online';
+                    indicator.title = `Database connected (${responseTime}ms)`;
+                    if (debugMode) {
+                        console.log('✅ Database connection OK', data);
+                        showToast(`Connection OK (${responseTime}ms)`, 'success');
+                    }
+                } else {
+                    indicator.className = 'status-dot offline';
+                    indicator.title = `Database disconnected: ${data.error}`;
+                    console.error('❌ Database connection failed:', data);
+                    showToast(`Connection failed: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                const responseTime = (performance.now() - startTime).toFixed(0);
+                console.error('❌ Connection check failed:', error);
+                const indicator = document.getElementById('connection-indicator');
+                indicator.className = 'status-dot offline';
+                indicator.title = `Cannot check connection: ${error.message}`;
+                showToast('Cannot check connection', 'error');
+            }
         }
 
         // Modal
@@ -388,17 +595,82 @@
 
         // Fetch and render posts
         async function refreshPosts() {
+            const startTime = performance.now();
             try {
+                showToast('Loading posts...', 'info');
+
+                // Clear previous errors
+                hideErrorBanner();
+
                 // Fetch all posts
+                if (debugMode) {
+                    console.log('🔄 Fetching posts from API...');
+                }
+
                 const response = await fetch(`${API_BASE}/api/dashboard/posts`);
+                const responseTime = (performance.now() - startTime).toFixed(0);
+
+                // Check if response is OK
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({
+                        error: `HTTP ${response.status}: ${response.statusText}`
+                    }));
+
+                    console.error('❌ API Error:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorData: errorData
+                    });
+
+                    if (response.status === 503) {
+                        showErrorBanner(
+                            'Database Connection Error',
+                            'The system cannot connect to the database. Please check Railway logs or contact support.',
+                            errorData.details || errorData
+                        );
+                        showToast('Database not connected (503)', 'error');
+                    } else if (response.status === 500) {
+                        showErrorBanner(
+                            'Server Error',
+                            errorData.error || 'An unexpected server error occurred',
+                            errorData.details || errorData
+                        );
+                        showToast(`Server error (500): ${errorData.error || 'Unknown'}`, 'error');
+                    } else {
+                        showErrorBanner(
+                            `HTTP ${response.status} Error`,
+                            errorData.error || response.statusText,
+                            errorData.details || errorData
+                        );
+                        showToast(`Failed to load: ${errorData.error || response.statusText}`, 'error');
+                    }
+
+                    return;
+                }
+
                 const data = await response.json();
 
                 if (!data.success) {
-                    showToast('Failed to load posts: ' + (data.error || 'Unknown error'), 'error');
+                    console.error('❌ Data Error:', data);
+                    showErrorBanner(
+                        'Data Error',
+                        data.error || 'Failed to load posts',
+                        data.details || data
+                    );
+                    showToast('Failed to load posts', 'error');
                     return;
                 }
 
                 const posts = data.posts || [];
+                const queryTime = data.query_time ? `${(data.query_time * 1000).toFixed(0)}ms` : `${responseTime}ms`;
+
+                if (debugMode) {
+                    console.log(`✅ Loaded ${posts.length} posts in ${queryTime}`, {
+                        responseTime: `${responseTime}ms`,
+                        queryTime: data.query_time,
+                        postsCount: posts.length
+                    });
+                }
 
                 // Update stats
                 const pending = posts.filter(p => p.status === 'pending_approval');
@@ -436,8 +708,23 @@
                 }
 
             } catch (error) {
-                console.error('Error fetching posts:', error);
-                showToast('Failed to load posts', 'error');
+                const responseTime = (performance.now() - startTime).toFixed(0);
+                console.error('❌ Network Error:', {
+                    error: error.message,
+                    stack: error.stack,
+                    responseTime: `${responseTime}ms`
+                });
+
+                showErrorBanner(
+                    'Network Error',
+                    'Cannot connect to the server. Please check your internet connection or Railway deployment.',
+                    {
+                        error: error.message,
+                        type: error.name,
+                        responseTime: `${responseTime}ms`
+                    }
+                );
+                showToast('Network error - cannot connect to server', 'error');
             }
         }
 
@@ -579,8 +866,12 @@
             );
         }
 
-        // Load posts on page load
-        document.addEventListener('DOMContentLoaded', refreshPosts);
+        // Load posts and check connection on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Dashboard initialized');
+            checkConnection();
+            refreshPosts();
+        });
     </script>
 </body>
 </html>
