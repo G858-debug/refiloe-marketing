@@ -750,9 +750,31 @@ def clear_launch_content(supabase_client) -> int:
         return 0
 
 
+def clear_all_test_posts(supabase_client) -> int:
+    """Delete all test posts and old content to start fresh."""
+
+    try:
+        # Delete posts with post_type='test'
+        result1 = supabase_client.table('social_posts').delete().eq('post_type', 'test').execute()
+        count1 = len(result1.data) if result1.data else 0
+
+        # Delete any posts from before December 2025 (old test data)
+        result2 = supabase_client.table('social_posts').delete().lt('created_at', '2025-12-01').execute()
+        count2 = len(result2.data) if result2.data else 0
+
+        total_deleted = count1 + count2
+        log_info(f"Deleted {total_deleted} old/test posts")
+        return total_deleted
+
+    except Exception as e:
+        log_error(f"Error clearing test posts: {e}")
+        return 0
+
+
 __all__ = [
     "LaunchContentGenerator",
     "get_launch_content_preview",
     "seed_launch_content",
-    "clear_launch_content"
+    "clear_launch_content",
+    "clear_all_test_posts"
 ]
