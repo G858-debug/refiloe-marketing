@@ -28,6 +28,13 @@ from .payment import (
     handle_set_payment_day_step,
 )
 
+from .assessment import (
+    handle_send_assessment,
+    handle_send_assessment_step,
+    handle_view_assessments,
+    handle_assessment_status,
+)
+
 __all__ = [
     # Booking commands
     'handle_book_session',
@@ -48,4 +55,9 @@ __all__ = [
     'handle_setup_payment_step',
     'handle_set_payment_day',
     'handle_set_payment_day_step',
+    # Assessment commands
+    'handle_send_assessment',
+    'handle_send_assessment_step',
+    'handle_view_assessments',
+    'handle_assessment_status',
 ]
