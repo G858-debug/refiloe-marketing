@@ -1,0 +1,31 @@
+{
+  "trainer_commands": {
+    "/book-session": {
+      "handler": "handle_book_session",
+      "description": "Book a training session with a client",
+      "category": "help_bookings"
+    },
+    "/view-bookings": {
+      "handler": "handle_view_bookings",
+      "description": "View your upcoming sessions",
+      "category": "help_bookings"
+    },
+    "/cancel-booking": {
+      "handler": "handle_cancel_booking",
+      "description": "Cancel a scheduled session",
+      "category": "help_bookings"
+    },
+    "/reschedule": {
+      "handler": "handle_reschedule",
+      "description": "Reschedule an existing session",
+      "category": "help_bookings"
+    }
+  },
+  "help_categories": {
+    "help_bookings": {
+      "title": "Session Booking",
+      "emoji": "calendar",
+      "order": 1
+    }
+  }
+}
