@@ -13,6 +13,13 @@ from .trainer import (
     handle_create_workout,
     handle_create_workout_step,
     handle_view_workouts,
+    handle_request_payment,
+    handle_request_payment_step,
+    handle_view_payments,
+    handle_setup_payment,
+    handle_setup_payment_step,
+    handle_set_payment_day,
+    handle_set_payment_day_step,
 )
 
 from .client import (
@@ -35,6 +42,14 @@ __all__ = [
     'handle_create_workout',
     'handle_create_workout_step',
     'handle_view_workouts',
+    # Payment commands
+    'handle_request_payment',
+    'handle_request_payment_step',
+    'handle_view_payments',
+    'handle_setup_payment',
+    'handle_setup_payment_step',
+    'handle_set_payment_day',
+    'handle_set_payment_day_step',
     # Client commands
     'handle_request_booking',
     'handle_my_sessions',

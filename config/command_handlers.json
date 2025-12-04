@@ -34,6 +34,26 @@
       "handler": "handle_view_workouts",
       "description": "View your workout library",
       "category": "help_workouts"
+    },
+    "/request-payment": {
+      "handler": "handle_request_payment",
+      "description": "Request payment from a client",
+      "category": "help_payments"
+    },
+    "/view-payments": {
+      "handler": "handle_view_payments",
+      "description": "View payment status and history",
+      "category": "help_payments"
+    },
+    "/setup-payment": {
+      "handler": "handle_setup_payment",
+      "description": "Configure payment settings",
+      "category": "help_payments"
+    },
+    "/set-payment-day": {
+      "handler": "handle_set_payment_day",
+      "description": "Set monthly payment reminder day",
+      "category": "help_payments"
     }
   },
   "help_categories": {
@@ -43,9 +63,14 @@
       "order": 1
     },
     "help_workouts": {
-      "title": "🏋️ Workouts",
+      "title": "Workouts",
       "emoji": "muscle",
       "order": 2
+    },
+    "help_payments": {
+      "title": "Payments",
+      "emoji": "money_with_wings",
+      "order": 3
     }
   }
 }
