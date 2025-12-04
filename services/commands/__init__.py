@@ -8,6 +8,11 @@ from .trainer import (
     handle_view_bookings,
     handle_cancel_booking,
     handle_reschedule,
+    handle_send_workout,
+    handle_send_workout_step,
+    handle_create_workout,
+    handle_create_workout_step,
+    handle_view_workouts,
 )
 
 from .client import (
@@ -24,6 +29,12 @@ __all__ = [
     'handle_view_bookings',
     'handle_cancel_booking',
     'handle_reschedule',
+    # Workout commands
+    'handle_send_workout',
+    'handle_send_workout_step',
+    'handle_create_workout',
+    'handle_create_workout_step',
+    'handle_view_workouts',
     # Client commands
     'handle_request_booking',
     'handle_my_sessions',
