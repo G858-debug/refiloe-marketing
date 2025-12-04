@@ -3,12 +3,21 @@ Workout Service for Refiloe WhatsApp Assistant
 Handles workout template management, exercise library, and workout history tracking
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import pytz
 import uuid
+import os
+import json
+import re
+import random
+import time
 
+from anthropic import Anthropic
 from utils.logger import log_info, log_error, log_warning
+
+# Maximum characters per WhatsApp message for workout
+MAX_WORKOUT_MESSAGE_LENGTH = 1600
 
 SA_TZ = pytz.timezone('Africa/Johannesburg')
 
@@ -634,6 +643,651 @@ class WorkoutService:
             lines.append("")
 
         return "\n".join(lines)
+
+    # =========================================================================
+    # AI-POWERED WORKOUT GENERATION
+    # =========================================================================
+
+    def _get_claude_client(self) -> Optional[Anthropic]:
+        """
+        Get or create Claude API client.
+
+        Returns:
+            Anthropic client instance or None
+        """
+        if not hasattr(self, '_claude_client'):
+            api_key = os.getenv('ANTHROPIC_API_KEY')
+            if not api_key:
+                log_error("ANTHROPIC_API_KEY environment variable is required")
+                return None
+            self._claude_client = Anthropic(api_key=api_key)
+        return self._claude_client
+
+    def _call_claude_with_retry(self, prompt: str, max_retries: int = 3) -> Optional[str]:
+        """
+        Call Claude API with retry logic.
+
+        Args:
+            prompt: The prompt to send
+            max_retries: Maximum number of retries
+
+        Returns:
+            Response text or None
+        """
+        client = self._get_claude_client()
+        if not client:
+            return None
+
+        for attempt in range(max_retries):
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=2000,
+                    temperature=0.7,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+
+                if response.content and len(response.content) > 0:
+                    return response.content[0].text
+
+            except Exception as e:
+                log_error(f"Claude API error (attempt {attempt + 1}): {str(e)}")
+                if attempt < max_retries - 1:
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    time.sleep(wait_time)
+
+        return None
+
+    def _find_client_by_name(self, trainer_id: str, name: str) -> Optional[Dict]:
+        """
+        Find a client by name (case-insensitive partial match).
+
+        Args:
+            trainer_id: Trainer's ID
+            name: Client name to search for
+
+        Returns:
+            Client dictionary or None
+        """
+        try:
+            result = self.db.db.table('clients').select(
+                'id, name, phone, gender, fitness_level, health_conditions, goals, notes'
+            ).eq('trainer_id', trainer_id).ilike('name', f'%{name}%').execute()
+
+            if result and hasattr(result, 'data') and result.data:
+                return result.data[0]
+            return None
+
+        except Exception as e:
+            log_error(f"Error finding client by name: {str(e)}")
+            return None
+
+    def _get_exercises_by_criteria(
+        self,
+        muscle_groups: List[str] = None,
+        categories: List[str] = None,
+        difficulty: str = None,
+        equipment: List[str] = None,
+        exclude_exercises: List[str] = None,
+        limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get exercises matching specific criteria.
+
+        Args:
+            muscle_groups: List of muscle groups to target
+            categories: List of categories (strength, cardio, etc.)
+            difficulty: Difficulty level filter
+            equipment: List of available equipment
+            exclude_exercises: Exercise names to exclude (for health conditions)
+            limit: Maximum exercises to return
+
+        Returns:
+            List of matching exercises
+        """
+        try:
+            result = self.db.db.table('exercises').select(
+                'id, name, description, category, muscle_group, equipment, '
+                'difficulty, gif_url_male, gif_url_female, instructions'
+            ).limit(limit).execute()
+
+            if not result or not hasattr(result, 'data'):
+                return []
+
+            exercises = result.data
+            filtered = []
+
+            for ex in exercises:
+                # Filter by muscle group
+                if muscle_groups:
+                    ex_muscle = (ex.get('muscle_group') or '').lower()
+                    if not any(mg.lower() in ex_muscle for mg in muscle_groups):
+                        continue
+
+                # Filter by category
+                if categories:
+                    ex_cat = (ex.get('category') or '').lower()
+                    if not any(cat.lower() in ex_cat for cat in categories):
+                        continue
+
+                # Filter by difficulty
+                if difficulty:
+                    ex_diff = (ex.get('difficulty') or '').lower()
+                    if difficulty.lower() not in ex_diff:
+                        continue
+
+                # Exclude certain exercises (for health conditions)
+                if exclude_exercises:
+                    ex_name = (ex.get('name') or '').lower()
+                    if any(excl.lower() in ex_name for excl in exclude_exercises):
+                        continue
+
+                filtered.append(ex)
+
+            return filtered
+
+        except Exception as e:
+            log_error(f"Error getting exercises by criteria: {str(e)}")
+            return []
+
+    def _parse_workout_type(self, prompt: str) -> Dict[str, Any]:
+        """
+        Parse the workout type from natural language.
+
+        Args:
+            prompt: Natural language prompt
+
+        Returns:
+            Dictionary with workout parameters
+        """
+        prompt_lower = prompt.lower()
+        result = {
+            'muscle_groups': [],
+            'categories': [],
+            'workout_name': 'Custom Workout'
+        }
+
+        # Common workout types
+        workout_mappings = {
+            'leg': {'muscle_groups': ['legs', 'quadriceps', 'hamstrings', 'glutes', 'calves'], 'name': 'Leg Day'},
+            'chest': {'muscle_groups': ['chest', 'pectorals'], 'name': 'Chest Workout'},
+            'back': {'muscle_groups': ['back', 'lats', 'traps'], 'name': 'Back Workout'},
+            'arm': {'muscle_groups': ['biceps', 'triceps', 'arms', 'forearms'], 'name': 'Arms Workout'},
+            'shoulder': {'muscle_groups': ['shoulders', 'deltoids'], 'name': 'Shoulder Workout'},
+            'core': {'muscle_groups': ['core', 'abs', 'abdominals', 'obliques'], 'name': 'Core Workout'},
+            'full body': {'muscle_groups': [], 'categories': ['strength'], 'name': 'Full Body Workout'},
+            'upper body': {'muscle_groups': ['chest', 'back', 'shoulders', 'arms', 'biceps', 'triceps'], 'name': 'Upper Body'},
+            'lower body': {'muscle_groups': ['legs', 'glutes', 'quadriceps', 'hamstrings', 'calves'], 'name': 'Lower Body'},
+            'hiit': {'categories': ['hiit', 'cardio'], 'name': 'HIIT Workout'},
+            'cardio': {'categories': ['cardio'], 'name': 'Cardio Session'},
+            'strength': {'categories': ['strength'], 'name': 'Strength Training'},
+            'stretch': {'categories': ['flexibility', 'stretching'], 'name': 'Stretching Session'},
+            'warm up': {'categories': ['warmup', 'flexibility'], 'name': 'Warm Up'},
+            'cool down': {'categories': ['cooldown', 'flexibility'], 'name': 'Cool Down'},
+        }
+
+        for keyword, mapping in workout_mappings.items():
+            if keyword in prompt_lower:
+                result['muscle_groups'].extend(mapping.get('muscle_groups', []))
+                result['categories'].extend(mapping.get('categories', []))
+                result['workout_name'] = mapping['name']
+                break
+
+        return result
+
+    def _get_exercises_to_avoid(self, health_conditions: str) -> List[str]:
+        """
+        Get list of exercise types to avoid based on health conditions.
+
+        Args:
+            health_conditions: Client's health conditions string
+
+        Returns:
+            List of exercise keywords to avoid
+        """
+        if not health_conditions:
+            return []
+
+        conditions_lower = health_conditions.lower()
+        avoid = []
+
+        # Condition-based exercise restrictions
+        condition_restrictions = {
+            'knee': ['squat', 'lunge', 'jump', 'running', 'leg press'],
+            'back': ['deadlift', 'bent over', 'good morning', 'heavy lift'],
+            'shoulder': ['overhead press', 'military press', 'lateral raise', 'shoulder press'],
+            'wrist': ['push up', 'plank', 'burpee'],
+            'ankle': ['jump', 'running', 'box jump', 'skipping'],
+            'neck': ['shoulder shrug', 'neck'],
+            'hip': ['squat', 'lunge', 'deadlift', 'hip thrust'],
+            'pregnant': ['crunch', 'sit up', 'plank', 'heavy', 'jump', 'lying on back'],
+            'heart': ['hiit', 'high intensity', 'heavy', 'sprint'],
+            'asthma': ['hiit', 'high intensity', 'sprint'],
+        }
+
+        for condition, restrictions in condition_restrictions.items():
+            if condition in conditions_lower:
+                avoid.extend(restrictions)
+
+        return list(set(avoid))
+
+    def generate_workout_from_prompt(
+        self,
+        trainer_id: str,
+        prompt: str,
+        client_phone: str = None
+    ) -> Union[str, List[str]]:
+        """
+        Generate a workout from natural language prompt using AI.
+
+        Accepts prompts like:
+        - "Create a leg day workout for Sarah"
+        - "Give me a HIIT workout for John"
+        - "Upper body strength for Maria"
+
+        Args:
+            trainer_id: Trainer's ID
+            prompt: Natural language workout request
+            client_phone: Optional client phone (if known)
+
+        Returns:
+            Formatted workout message(s) ready for WhatsApp.
+            Returns a list if message needs to be split for length.
+        """
+        log_info(f"Generating workout from prompt: {prompt}")
+
+        # Extract client name from prompt
+        client_info = None
+        client_name = self._extract_client_name(prompt)
+
+        if client_name:
+            client_info = self._find_client_by_name(trainer_id, client_name)
+            if client_info:
+                log_info(f"Found client: {client_info.get('name')}")
+        elif client_phone:
+            client_info = self.get_client_info(trainer_id, client_phone)
+
+        # Get client details
+        client_gender = client_info.get('gender', 'male') if client_info else 'male'
+        fitness_level = client_info.get('fitness_level', 'intermediate') if client_info else 'intermediate'
+        health_conditions = client_info.get('health_conditions', '') if client_info else ''
+        client_goals = client_info.get('goals', '') if client_info else ''
+        client_display_name = client_info.get('name', 'Client') if client_info else 'Client'
+
+        # Get exercises to avoid based on health conditions
+        exercises_to_avoid = self._get_exercises_to_avoid(health_conditions)
+
+        # Parse workout type from prompt
+        workout_params = self._parse_workout_type(prompt)
+
+        # Fetch available exercises from database
+        available_exercises = self._get_exercises_by_criteria(
+            muscle_groups=workout_params.get('muscle_groups'),
+            categories=workout_params.get('categories'),
+            difficulty=fitness_level,
+            exclude_exercises=exercises_to_avoid,
+            limit=100
+        )
+
+        if not available_exercises:
+            # Fallback: get all exercises
+            available_exercises = self.get_exercises(limit=50)
+
+        if not available_exercises:
+            return "❌ No exercises available in the library. Please add exercises first."
+
+        # Build AI prompt for workout generation
+        ai_prompt = self._build_workout_generation_prompt(
+            user_prompt=prompt,
+            client_name=client_display_name,
+            fitness_level=fitness_level,
+            health_conditions=health_conditions,
+            client_goals=client_goals,
+            available_exercises=available_exercises,
+            workout_name=workout_params.get('workout_name', 'Custom Workout')
+        )
+
+        # Call Claude to generate workout
+        ai_response = self._call_claude_with_retry(ai_prompt)
+
+        if not ai_response:
+            # Fallback: generate a simple workout without AI
+            return self._generate_fallback_workout(
+                available_exercises,
+                workout_params,
+                client_display_name,
+                client_gender
+            )
+
+        # Parse AI response and create workout
+        workout_data = self._parse_ai_workout_response(
+            ai_response,
+            available_exercises,
+            workout_params.get('workout_name', 'Custom Workout'),
+            client_display_name
+        )
+
+        # Format the workout message
+        formatted_message = self.format_workout_message(workout_data, client_gender)
+
+        # Split if exceeds WhatsApp limit
+        return self._split_workout_message(formatted_message)
+
+    def _extract_client_name(self, prompt: str) -> Optional[str]:
+        """
+        Extract client name from natural language prompt.
+
+        Args:
+            prompt: The user's prompt
+
+        Returns:
+            Extracted client name or None
+        """
+        # Common patterns for client names
+        patterns = [
+            r'for\s+([A-Z][a-z]+)',  # "for Sarah"
+            r'to\s+([A-Z][a-z]+)',   # "to John"
+            r"([A-Z][a-z]+)'s\s+workout",  # "Sarah's workout"
+            r'workout\s+for\s+([A-Z][a-z]+)',  # "workout for Maria"
+            r'send\s+(?:to\s+)?([A-Z][a-z]+)',  # "send to Alex"
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, prompt)
+            if match:
+                return match.group(1)
+
+        return None
+
+    def _build_workout_generation_prompt(
+        self,
+        user_prompt: str,
+        client_name: str,
+        fitness_level: str,
+        health_conditions: str,
+        client_goals: str,
+        available_exercises: List[Dict],
+        workout_name: str
+    ) -> str:
+        """
+        Build the prompt for Claude to generate workout.
+
+        Args:
+            user_prompt: Original user request
+            client_name: Client's name
+            fitness_level: Client's experience level
+            health_conditions: Any health concerns
+            client_goals: Client's fitness goals
+            available_exercises: List of available exercises
+            workout_name: Type of workout
+
+        Returns:
+            Formatted prompt for Claude
+        """
+        # Create exercise list summary
+        exercise_list = "\n".join([
+            f"- {ex['name']} (muscle: {ex.get('muscle_group', 'N/A')}, "
+            f"difficulty: {ex.get('difficulty', 'N/A')})"
+            for ex in available_exercises[:30]  # Limit to avoid token overflow
+        ])
+
+        health_note = ""
+        if health_conditions:
+            health_note = f"\n⚠️ IMPORTANT: Client has the following health conditions: {health_conditions}\nAvoid exercises that could aggravate these conditions."
+
+        goals_note = ""
+        if client_goals:
+            goals_note = f"\nClient's goals: {client_goals}"
+
+        return f"""You are a professional fitness trainer creating a personalized workout.
+
+User request: "{user_prompt}"
+
+Client Information:
+- Name: {client_name}
+- Fitness Level: {fitness_level}
+- Workout Type: {workout_name}{health_note}{goals_note}
+
+Available exercises from our library:
+{exercise_list}
+
+Create a workout with 4-6 exercises from the list above. For each exercise, specify:
+1. Exercise name (MUST match exactly from the list)
+2. Sets (2-4)
+3. Reps (8-15) or duration in seconds for timed exercises
+4. Rest period (30-90 seconds)
+
+IMPORTANT: Only use exercises from the provided list. Match names exactly.
+
+Respond in this exact JSON format only, no other text:
+{{
+    "workout_name": "Name for this workout",
+    "description": "Brief 1-sentence description",
+    "duration_minutes": 30,
+    "difficulty": "{fitness_level}",
+    "exercises": [
+        {{
+            "name": "Exercise Name (exact match from list)",
+            "sets": 3,
+            "reps": 12,
+            "rest_seconds": 60
+        }}
+    ]
+}}"""
+
+    def _parse_ai_workout_response(
+        self,
+        ai_response: str,
+        available_exercises: List[Dict],
+        default_name: str,
+        client_name: str
+    ) -> Dict:
+        """
+        Parse Claude's workout response into structured data.
+
+        Args:
+            ai_response: Raw AI response
+            available_exercises: Available exercises for matching
+            default_name: Default workout name
+            client_name: Client's name
+
+        Returns:
+            Structured workout dictionary
+        """
+        try:
+            # Extract JSON from response
+            json_match = re.search(r'\{[\s\S]*\}', ai_response)
+            if not json_match:
+                raise ValueError("No JSON found in response")
+
+            workout_json = json.loads(json_match.group())
+
+            # Create exercise lookup by name (case-insensitive)
+            exercise_lookup = {
+                ex['name'].lower(): ex for ex in available_exercises
+            }
+
+            # Enrich exercises with database info
+            enriched_exercises = []
+            for ex in workout_json.get('exercises', []):
+                ex_name = ex.get('name', '').lower()
+
+                # Find matching exercise in database
+                db_exercise = exercise_lookup.get(ex_name)
+                if not db_exercise:
+                    # Try partial match
+                    for db_name, db_ex in exercise_lookup.items():
+                        if ex_name in db_name or db_name in ex_name:
+                            db_exercise = db_ex
+                            break
+
+                if db_exercise:
+                    enriched_ex = {
+                        'name': db_exercise['name'],
+                        'sets': ex.get('sets', 3),
+                        'reps': ex.get('reps'),
+                        'duration_seconds': ex.get('duration_seconds'),
+                        'rest_seconds': ex.get('rest_seconds', 60),
+                        'instructions': db_exercise.get('instructions', ''),
+                        'gif_url_male': db_exercise.get('gif_url_male'),
+                        'gif_url_female': db_exercise.get('gif_url_female')
+                    }
+                    enriched_exercises.append(enriched_ex)
+
+            return {
+                'name': f"{workout_json.get('workout_name', default_name)} - {client_name}",
+                'description': workout_json.get('description', ''),
+                'duration_minutes': workout_json.get('duration_minutes', 30),
+                'difficulty': workout_json.get('difficulty', 'intermediate'),
+                'exercises': enriched_exercises
+            }
+
+        except Exception as e:
+            log_error(f"Error parsing AI workout response: {str(e)}")
+            # Return fallback structure
+            return self._generate_fallback_workout_data(
+                available_exercises, default_name, client_name
+            )
+
+    def _generate_fallback_workout_data(
+        self,
+        available_exercises: List[Dict],
+        workout_name: str,
+        client_name: str
+    ) -> Dict:
+        """
+        Generate fallback workout data when AI fails.
+
+        Args:
+            available_exercises: List of available exercises
+            workout_name: Name for the workout
+            client_name: Client's name
+
+        Returns:
+            Workout data dictionary
+        """
+        # Select 4-5 random exercises
+        selected = random.sample(
+            available_exercises,
+            min(5, len(available_exercises))
+        )
+
+        exercises = []
+        for ex in selected:
+            exercises.append({
+                'name': ex['name'],
+                'sets': 3,
+                'reps': 12,
+                'rest_seconds': 60,
+                'instructions': ex.get('instructions', ''),
+                'gif_url_male': ex.get('gif_url_male'),
+                'gif_url_female': ex.get('gif_url_female')
+            })
+
+        return {
+            'name': f"{workout_name} - {client_name}",
+            'description': 'A customized workout just for you!',
+            'duration_minutes': 30,
+            'difficulty': 'intermediate',
+            'exercises': exercises
+        }
+
+    def _generate_fallback_workout(
+        self,
+        available_exercises: List[Dict],
+        workout_params: Dict,
+        client_name: str,
+        client_gender: str
+    ) -> Union[str, List[str]]:
+        """
+        Generate a simple workout without AI as fallback.
+
+        Args:
+            available_exercises: List of available exercises
+            workout_params: Parsed workout parameters
+            client_name: Client's name
+            client_gender: Client's gender for GIF URLs
+
+        Returns:
+            Formatted workout message(s)
+        """
+        workout_data = self._generate_fallback_workout_data(
+            available_exercises,
+            workout_params.get('workout_name', 'Custom Workout'),
+            client_name
+        )
+
+        formatted_message = self.format_workout_message(workout_data, client_gender)
+        return self._split_workout_message(formatted_message)
+
+    def _split_workout_message(
+        self,
+        message: str,
+        max_length: int = MAX_WORKOUT_MESSAGE_LENGTH
+    ) -> Union[str, List[str]]:
+        """
+        Split workout message if it exceeds WhatsApp character limit.
+
+        Args:
+            message: The full workout message
+            max_length: Maximum characters per message
+
+        Returns:
+            Single message string or list of message parts
+        """
+        if len(message) <= max_length:
+            return message
+
+        # Split by exercises
+        lines = message.split('\n')
+        messages = []
+        current_message = []
+        current_length = 0
+
+        # Keep header in first message
+        header_lines = []
+        exercise_started = False
+
+        for line in lines:
+            if '📋 *Exercises:*' in line:
+                exercise_started = True
+
+            if not exercise_started:
+                header_lines.append(line)
+            else:
+                # Check if adding this line would exceed limit
+                line_length = len(line) + 1  # +1 for newline
+
+                if current_length + line_length > max_length - 50:  # Leave buffer
+                    if current_message:
+                        messages.append('\n'.join(current_message))
+                    current_message = [line]
+                    current_length = line_length
+                else:
+                    current_message.append(line)
+                    current_length += line_length
+
+        # Add remaining lines
+        if current_message:
+            messages.append('\n'.join(current_message))
+
+        if not messages:
+            return message
+
+        # Add header to first message
+        header = '\n'.join(header_lines)
+        if messages:
+            messages[0] = header + '\n' + messages[0]
+
+        # Add part numbers if multiple messages
+        if len(messages) > 1:
+            for i, msg in enumerate(messages):
+                messages[i] = f"📋 *Part {i + 1}/{len(messages)}*\n\n" + msg
+
+        return messages if len(messages) > 1 else messages[0]
 
 
 # Singleton instance
