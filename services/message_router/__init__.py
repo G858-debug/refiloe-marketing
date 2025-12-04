@@ -8,7 +8,14 @@ from services.message_router.handlers.tasks.booking_task_handler import (
     get_booking_task_handler
 )
 
+from services.message_router.handlers.commands.trainer_commands import (
+    TrainerCommandRouter,
+    get_trainer_command_router
+)
+
 __all__ = [
     'BookingTaskHandler',
-    'get_booking_task_handler'
+    'get_booking_task_handler',
+    'TrainerCommandRouter',
+    'get_trainer_command_router',
 ]
