@@ -20,6 +20,10 @@ from .trainer import (
     handle_setup_payment_step,
     handle_set_payment_day,
     handle_set_payment_day_step,
+    handle_send_assessment,
+    handle_send_assessment_step,
+    handle_view_assessments,
+    handle_assessment_status,
 )
 
 from .client import (
@@ -50,6 +54,11 @@ __all__ = [
     'handle_setup_payment_step',
     'handle_set_payment_day',
     'handle_set_payment_day_step',
+    # Assessment commands
+    'handle_send_assessment',
+    'handle_send_assessment_step',
+    'handle_view_assessments',
+    'handle_assessment_status',
     # Client commands
     'handle_request_booking',
     'handle_my_sessions',

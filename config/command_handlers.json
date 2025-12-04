@@ -54,6 +54,21 @@
       "handler": "handle_set_payment_day",
       "description": "Set monthly payment reminder day",
       "category": "help_payments"
+    },
+    "/send-assessment": {
+      "handler": "handle_send_assessment",
+      "description": "Send fitness assessment to a client",
+      "category": "help_assessments"
+    },
+    "/view-assessments": {
+      "handler": "handle_view_assessments",
+      "description": "View client assessments",
+      "category": "help_assessments"
+    },
+    "/assessment-status": {
+      "handler": "handle_assessment_status",
+      "description": "Check pending assessments",
+      "category": "help_assessments"
     }
   },
   "help_categories": {
@@ -71,6 +86,11 @@
       "title": "Payments",
       "emoji": "money_with_wings",
       "order": 3
+    },
+    "help_assessments": {
+      "title": "📋 Assessments",
+      "emoji": "clipboard",
+      "order": 4
     }
   }
 }
