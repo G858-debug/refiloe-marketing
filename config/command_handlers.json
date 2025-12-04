@@ -19,6 +19,21 @@
       "handler": "handle_reschedule",
       "description": "Reschedule an existing session",
       "category": "help_bookings"
+    },
+    "/send-workout": {
+      "handler": "handle_send_workout",
+      "description": "Send a workout to a client",
+      "category": "help_workouts"
+    },
+    "/create-workout": {
+      "handler": "handle_create_workout",
+      "description": "Create a new workout template",
+      "category": "help_workouts"
+    },
+    "/view-workouts": {
+      "handler": "handle_view_workouts",
+      "description": "View your workout library",
+      "category": "help_workouts"
     }
   },
   "help_categories": {
@@ -26,6 +41,11 @@
       "title": "Session Booking",
       "emoji": "calendar",
       "order": 1
+    },
+    "help_workouts": {
+      "title": "🏋️ Workouts",
+      "emoji": "muscle",
+      "order": 2
     }
   }
 }
