@@ -358,6 +358,290 @@ class ContentGenerator(_LegacyContentGenerator):
         return self._format_rand(amount, include_decimals)
 
     # ------------------------------------------------------------------
+    # Carousel content generation
+    # ------------------------------------------------------------------
+    def generate_carousel_content(
+        self,
+        topic: str,
+        num_slides: int = 5,
+    ) -> Dict[str, Any]:
+        """Generate structured carousel content for educational/how-to posts.
+
+        Creates a complete carousel structure with cover slide, content slides,
+        and CTA slide optimized for personal trainers about admin automation.
+
+        Args:
+            topic: The main topic for the carousel (e.g., "Client Onboarding").
+            num_slides: Total number of slides (default 5, minimum 3).
+
+        Returns:
+            Dict[str, Any]: Structured carousel content with cover, content_slides,
+                           cta_slide, caption, and hashtags.
+        """
+        import json
+        import re
+
+        log_info(
+            "Generating carousel content | topic=%s num_slides=%d",
+            topic,
+            num_slides,
+        )
+
+        # Ensure minimum slides
+        num_slides = max(3, num_slides)
+        num_content_slides = num_slides - 2  # Exclude cover and CTA
+
+        # Build the carousel-specific prompt
+        prompt = self._build_carousel_prompt(topic, num_content_slides)
+
+        # Call Claude API
+        response = self._call_claude_with_retry(prompt)
+
+        if not response:
+            log_warning("Failed to get carousel content from Claude API")
+            return {}
+
+        # Parse and validate the response
+        carousel_data = self._parse_carousel_response(response, topic, num_content_slides)
+
+        if carousel_data:
+            log_info(
+                "Successfully generated carousel content | topic=%s slides=%d",
+                topic,
+                num_slides,
+            )
+        else:
+            log_warning("Failed to parse carousel response | topic=%s", topic)
+
+        return carousel_data
+
+    def _build_carousel_prompt(self, topic: str, num_content_slides: int) -> str:
+        """Build the Claude prompt for carousel content generation.
+
+        Args:
+            topic: The carousel topic.
+            num_content_slides: Number of content slides (excluding cover and CTA).
+
+        Returns:
+            str: Formatted prompt for Claude.
+        """
+        # Get AI influencer settings
+        ai_settings = self.config.get("ai_influencer_settings", {})
+        personality = ai_settings.get("personality_traits", [])
+
+        prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating educational carousel content for personal trainers about admin automation.
+
+TOPIC: {topic}
+
+TARGET AUDIENCE: Personal trainers who want to automate their admin tasks and save time.
+
+CAROUSEL STRUCTURE:
+You need to create content for a {num_content_slides + 2}-slide carousel:
+1. COVER SLIDE: Attention-grabbing title
+2. CONTENT SLIDES: {num_content_slides} educational steps
+3. CTA SLIDE: Call-to-action to drive engagement
+
+CHARACTER LIMITS (STRICT - content MUST fit within these limits):
+- Cover title: Maximum 60 characters
+- Content slide title: Maximum 40 characters
+- Content slide bullets: Maximum 80 characters each, 3-5 bullets per slide
+- CTA headline: Maximum 50 characters
+- CTA text: Maximum 30 characters
+- CTA subtext: Maximum 60 characters
+
+CONTENT STYLE:
+- Educational, how-to format
+- Practical, actionable steps
+- Focus on admin automation for trainers
+- South African context where relevant (use Rand for pricing)
+- Personality: {', '.join(personality)}
+
+CAPTION REQUIREMENTS:
+- 150-250 words
+- Hook in first line
+- Summarize the carousel value
+- Include a question or CTA at the end
+
+OUTPUT FORMAT (JSON):
+{{
+    "cover": {{
+        "title": "How to Automate Client Onboarding"
+    }},
+    "content_slides": [
+        {{
+            "step_number": 1,
+            "title": "Set Up Your System",
+            "bullets": [
+                "Create your WhatsApp Business account",
+                "Set up automated greeting messages",
+                "Configure payment integration"
+            ]
+        }}
+    ],
+    "cta_slide": {{
+        "headline": "Ready to Save Time?",
+        "cta_text": "Try Refiloe Free",
+        "subtext": "Join 300+ SA trainers automating their admin"
+    }},
+    "caption": "Full Instagram caption for the carousel post...",
+    "hashtags": ["#personaltrainer", "#fitnessadmin", "#trainertools"]
+}}
+
+IMPORTANT:
+- Generate exactly {num_content_slides} content slides
+- Each content slide must have step_number (1 to {num_content_slides})
+- All text MUST respect character limits
+- Make content specific, actionable, and valuable
+- Use numbers and specific examples where possible
+- Hashtags should be relevant to fitness business and admin automation
+
+Generate the carousel content now:"""
+
+        return prompt
+
+    def _parse_carousel_response(
+        self,
+        response: str,
+        topic: str,
+        num_content_slides: int,
+    ) -> Dict[str, Any]:
+        """Parse and validate carousel content from Claude response.
+
+        Args:
+            response: Raw response from Claude.
+            topic: The carousel topic.
+            num_content_slides: Expected number of content slides.
+
+        Returns:
+            Dict[str, Any]: Validated carousel data or empty dict on failure.
+        """
+        import json
+        import re
+
+        try:
+            # Extract JSON from response
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if not json_match:
+                log_warning("No JSON found in carousel response")
+                return {}
+
+            json_str = json_match.group()
+            data = json.loads(json_str)
+
+            # Validate and enforce character limits
+            validated = self._validate_carousel_content(data, num_content_slides)
+
+            if validated:
+                # Add metadata
+                from datetime import datetime
+
+                validated["metadata"] = {
+                    "topic": topic,
+                    "total_slides": num_content_slides + 2,
+                    "content_slides_count": len(validated.get("content_slides", [])),
+                    "generated_at": datetime.now(self.sa_tz).isoformat(),
+                    "ai_generated": True,
+                    "model_used": self.model,
+                }
+
+            return validated
+
+        except json.JSONDecodeError as e:
+            log_warning("JSON decode error in carousel response: %s", str(e))
+            return {}
+        except Exception as e:
+            log_warning("Error parsing carousel response: %s", str(e))
+            return {}
+
+    def _validate_carousel_content(
+        self,
+        data: Dict[str, Any],
+        num_content_slides: int,
+    ) -> Dict[str, Any]:
+        """Validate and truncate carousel content to fit character limits.
+
+        Args:
+            data: Raw parsed carousel data.
+            num_content_slides: Expected number of content slides.
+
+        Returns:
+            Dict[str, Any]: Validated carousel data with enforced limits.
+        """
+        validated: Dict[str, Any] = {}
+
+        # Validate cover slide
+        cover = data.get("cover", {})
+        cover_title = str(cover.get("title", ""))[:60]
+        validated["cover"] = {"title": cover_title}
+
+        # Validate content slides
+        content_slides = data.get("content_slides", [])
+        validated_slides = []
+
+        for i, slide in enumerate(content_slides[:num_content_slides]):
+            step_number = slide.get("step_number", i + 1)
+            title = str(slide.get("title", f"Step {step_number}"))[:40]
+
+            # Validate bullets (3-5 per slide, 80 chars each)
+            raw_bullets = slide.get("bullets", [])
+            bullets = []
+            for bullet in raw_bullets[:5]:
+                truncated_bullet = str(bullet)[:80]
+                bullets.append(truncated_bullet)
+
+            # Ensure minimum 3 bullets
+            while len(bullets) < 3:
+                bullets.append("More details coming soon")
+
+            validated_slides.append({
+                "step_number": step_number,
+                "title": title,
+                "bullets": bullets,
+            })
+
+        # Ensure we have the expected number of content slides
+        while len(validated_slides) < num_content_slides:
+            validated_slides.append({
+                "step_number": len(validated_slides) + 1,
+                "title": f"Step {len(validated_slides) + 1}",
+                "bullets": [
+                    "Action item one",
+                    "Action item two",
+                    "Action item three",
+                ],
+            })
+
+        validated["content_slides"] = validated_slides
+
+        # Validate CTA slide
+        cta = data.get("cta_slide", {})
+        validated["cta_slide"] = {
+            "headline": str(cta.get("headline", "Ready to Get Started?"))[:50],
+            "cta_text": str(cta.get("cta_text", "Try It Free"))[:30],
+            "subtext": str(cta.get("subtext", "Join trainers automating their admin"))[:60],
+        }
+
+        # Validate caption
+        caption = str(data.get("caption", ""))
+        if not caption:
+            caption = f"Learn how to master {validated['cover']['title'].lower()}. Swipe through for actionable tips!"
+        validated["caption"] = caption
+
+        # Validate hashtags
+        hashtags = data.get("hashtags", [])
+        if not hashtags or not isinstance(hashtags, list):
+            hashtags = [
+                "#personaltrainer",
+                "#fitnessadmin",
+                "#trainertools",
+                "#fitnessbusiness",
+                "#adminautomation",
+            ]
+        validated["hashtags"] = [str(h) for h in hashtags[:10]]
+
+        return validated
+
+    # ------------------------------------------------------------------
     # Preview utilities
     # ------------------------------------------------------------------
     def preview_avatar_selection(
