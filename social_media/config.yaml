@@ -227,3 +227,73 @@ brand_voice:
     - "results-focused"
     - "community-driven"
     - "innovation-minded"
+
+# Carousel Template Configurations
+carousel_templates:
+  # Branding Specifications
+  branding:
+    background_color: "#F5E6D3"  # beige
+    text_color_primary: "#8B7355"  # dark brown
+    text_color_secondary: "#FFFFFF"  # white for contrast
+    accent_color: "#D4A574"  # medium beige for borders/highlights
+
+  # Educational/How-To Template
+  templates:
+    educational_howto:
+      template_name: "educational_howto"
+      min_slides: 4
+      max_slides: 7
+      slide_structure:
+        slide_1: "cover"  # avatar + title
+        slides_2_to_n-1: "content_steps"  # numbered steps with bullet points
+        slide_n: "cta"  # call-to-action final slide
+      content_format:
+        title_max_chars: 60
+        bullet_points_per_slide:
+          min: 3
+          max: 5
+        bullet_max_chars: 80
+
+  # Typography Settings
+  typography:
+    font_family: "Arial"
+    font_sizes:
+      cover_title: 48
+      content_title: 42
+      body_text: 32
+      slide_number: 24
+      cta_headline: 48
+      cta_text: 40
+
+  # Layout Dimensions
+  layout:
+    slide_width: 1080
+    slide_height: 1080
+    padding: 60
+    avatar_size: 400
+    icon_size: 200
+
+# Content Templates for AI Generation
+content_templates:
+  carousel_topics:
+    # Educational topics for personal trainers about admin automation
+    admin_automation:
+      - topic: "5 Time-Saving Admin Hacks Every PT Needs"
+        description: "Cover scheduling, invoicing, client tracking, communication templates, and progress photo organization"
+        target_slides: 6
+
+      - topic: "How to Automate Your Client Onboarding Process"
+        description: "Step-by-step guide covering welcome emails, intake forms, waivers, payment setup, and first session prep"
+        target_slides: 7
+
+      - topic: "Stop Chasing Payments: Automated Billing for PTs"
+        description: "Setting up recurring payments, invoice reminders, late payment handling, and financial tracking"
+        target_slides: 5
+
+      - topic: "The 30-Minute Weekly Admin Routine That Replaced My 10-Hour Workweek"
+        description: "Batch scheduling, template responses, automated check-ins, and systems for progress tracking"
+        target_slides: 6
+
+      - topic: "From Chaos to Calm: Organizing Your Training Business with Free Tools"
+        description: "Using Google Suite, Calendly, and free CRM tools to streamline client management and communication"
+        target_slides: 7
