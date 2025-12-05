@@ -44,6 +44,11 @@ try:
 except ImportError:
     from video_generator import VideoGenerator
 
+try:
+    from .carousel_template_generator import CarouselTemplateGenerator
+except ImportError:
+    from carousel_template_generator import CarouselTemplateGenerator
+
 
 class ContentPipeline:
     """High-level orchestrator for cross-modal social media content.
@@ -98,6 +103,7 @@ class ContentPipeline:
         self.video_generator = video_generator or self._init_video_generator(
             self.config_path, supabase_client
         )
+        self.carousel_generator = self._init_carousel_generator(self.config_path)
 
         self.cost_tracker = self._initialise_cost_tracker()
         self.cost_log: List[Dict[str, Any]] = []
@@ -110,7 +116,8 @@ class ContentPipeline:
         log_info(
             f"ContentPipeline initialised with text={bool(self.content_generator)}, "
             f"image={bool(self.image_generator)}, "
-            f"video={bool(self.video_generator)}"
+            f"video={bool(self.video_generator)}, "
+            f"carousel={bool(self.carousel_generator)}"
         )
 
     # ---------------------------------------------------------------------
@@ -648,9 +655,163 @@ class ContentPipeline:
             log_warning("Image generator unavailable; skipping visual generation")
             return []
 
+        # Handle carousel type with carousel_generator
+        if template["type"] == "carousel" and self.carousel_generator:
+            return self._generate_carousel_assets(template, text_payload)
+
         prompts = self._build_image_prompts(template, text_payload)
         images = self._batch_image_generation(prompts, template)
         return images
+
+    def _generate_carousel_assets(
+        self, template: Dict[str, Any], text_payload: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Generate carousel slides using carousel_generator.
+
+        Args:
+            template: Template configuration for the carousel.
+            text_payload: Text content including caption with carousel data.
+
+        Returns:
+            List of dictionaries containing slide image paths and metadata.
+        """
+        # Generate avatar image for slide 1
+        avatar_path = None
+        if self.image_generator:
+            persona_marker = template.get("persona_marker", "Refiloe")
+            avatar_prompt = f"{persona_marker} professional portrait, friendly smile, studio lighting"
+            avatar_style = template.get("visual_style", "professional_beige")
+
+            try:
+                avatar_result = self.image_generator.generate_influencer_image(
+                    avatar_prompt, avatar_style
+                )
+                if isinstance(avatar_result, dict) and avatar_result.get("image_url"):
+                    avatar_path = avatar_result.get("local_path") or avatar_result.get("image_url")
+                    self._record_cost("flux", 1, {
+                        "template": template["name"],
+                        "purpose": "carousel_avatar",
+                    })
+            except Exception as exc:
+                log_warning(f"Failed to generate carousel avatar: {exc}")
+
+        # Generate carousel content using carousel_generator
+        carousel_data = self._generate_carousel_content(template, text_payload, avatar_path)
+        slide_paths = self.carousel_generator.create_carousel(carousel_data)
+
+        # Convert slide paths to asset dictionaries
+        assets: List[Dict[str, Any]] = []
+        for idx, path in enumerate(slide_paths):
+            assets.append({
+                "image_url": path,
+                "local_path": path,
+                "slide_number": idx + 1,
+                "type": "carousel_slide",
+                "source_prompt": f"carousel_slide_{idx + 1}",
+                "style": template.get("visual_style", "professional_beige"),
+            })
+
+        log_info(f"Generated {len(assets)} carousel slides for template={template['name']}")
+        return assets
+
+    def _generate_carousel_content(
+        self,
+        template: Dict[str, Any],
+        text_payload: Dict[str, Any],
+        avatar_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Structure carousel data for the carousel_generator.
+
+        Args:
+            template: Template configuration for the carousel.
+            text_payload: Text content including caption with carousel data.
+            avatar_path: Optional path to avatar image for cover slide.
+
+        Returns:
+            Dictionary structured for carousel_generator.create_carousel().
+        """
+        caption = text_payload.get("caption", {})
+        slides_count = template.get("slides_count") or template.get("slides", 5)
+
+        # Extract title from caption
+        title = caption.get("title") or caption.get("hook") or "Tips for Success"
+
+        # Parse content into steps/bullets
+        key_points = (
+            caption.get("key_points")
+            or caption.get("carousel_slides")
+            or caption.get("tips")
+            or []
+        )
+
+        # Generate default steps if no key points available
+        if not key_points:
+            content_text = caption.get("content", "")
+            # Try to extract bullet points from content
+            if "\n" in content_text:
+                key_points = [
+                    line.strip().lstrip("•-*").strip()
+                    for line in content_text.split("\n")
+                    if line.strip() and not line.strip().startswith("#")
+                ][:slides_count - 2]  # Reserve space for cover and CTA
+
+            # Fallback default steps
+            if not key_points:
+                key_points = [
+                    "Identify your most time-consuming tasks",
+                    "Set up automation workflows",
+                    "Track your productivity gains",
+                ]
+
+        # Build slides structure
+        slides: List[Dict[str, Any]] = []
+
+        # Slide 1: COVER with avatar and title
+        slides.append({
+            "type": "COVER",
+            "avatar_path": avatar_path or "",
+            "title": title,
+        })
+
+        # Content slides (slides 2 to n-1)
+        for idx, point in enumerate(key_points[:slides_count - 2]):
+            step_num = idx + 1
+
+            # Parse point into title and bullets if structured
+            if isinstance(point, dict):
+                step_title = point.get("title", f"Step {step_num}")
+                bullets = point.get("bullets", [point.get("content", "")])
+            elif ": " in str(point):
+                parts = str(point).split(": ", 1)
+                step_title = f"Step {step_num}: {parts[0]}"
+                bullets = [parts[1]] if len(parts) > 1 else [parts[0]]
+            else:
+                step_title = f"Step {step_num}"
+                bullets = [str(point)]
+
+            # Ensure we have 3-5 bullets per slide
+            while len(bullets) < 3:
+                bullets.append("")
+
+            slides.append({
+                "type": "CONTENT",
+                "step_title": step_title,
+                "bullets": bullets[:5],
+            })
+
+        # Final slide: CTA
+        cta_headline = caption.get("cta_headline") or "Ready to Transform Your Workflow?"
+        cta_text = caption.get("cta_text") or caption.get("call_to_action") or "Follow for More Tips!"
+        cta_subtext = caption.get("cta_subtext") or "Save this post and share with a fellow trainer"
+
+        slides.append({
+            "type": "CTA",
+            "headline": cta_headline,
+            "cta_text": cta_text,
+            "subtext": cta_subtext,
+        })
+
+        return {"slides": slides}
 
     def _generate_video_assets(
         self, template: Dict[str, Any], text_payload: Dict[str, Any]
@@ -942,6 +1103,17 @@ class ContentPipeline:
                 "needs_caption": True,
                 "persona_marker": name,
             },
+            "educational_carousel": {
+                "name": "educational_carousel",
+                "type": "carousel",
+                "format": "carousel_style",
+                "theme": "admin_automation_tips",
+                "needs_caption": True,
+                "needs_images": True,
+                "slides_count": 5,
+                "visual_style": "professional_beige",
+                "persona_marker": name,
+            },
             "mixed_media_post": {
                 "name": "mixed_media_post",
                 "type": "mixed",
@@ -1120,6 +1292,43 @@ class ContentPipeline:
         metadata: Dict[str, Any],
     ) -> Dict[str, Any]:
         asset_id = metadata.get("asset_id") or os.urandom(6).hex()
+
+        # Handle carousel type with multiple image URLs
+        if post_type == "carousel" and visual_assets:
+            # Extract all slide paths for media_urls (comma-separated or JSON array)
+            media_urls = [
+                asset.get("image_url") or asset.get("local_path")
+                for asset in visual_assets
+                if isinstance(asset, dict) and (asset.get("image_url") or asset.get("local_path"))
+            ]
+            slide_count = len(media_urls)
+
+            combined = {
+                "id": asset_id,
+                "type": "carousel",
+                "post_type": "carousel",
+                "template": template["name"],
+                "content": {
+                    "caption": text_payload.get("caption"),
+                    "script": text_payload.get("script"),
+                },
+                "assets": {
+                    "images": visual_assets,
+                    "video": video_assets,
+                },
+                # Store media_urls as JSON array for database storage
+                "media_urls": media_urls,
+                "media_urls_json": ",".join(media_urls) if media_urls else "",
+                "metadata": {
+                    "generated_at": datetime.now(self.sa_tz).isoformat(),
+                    "persona": self.character_profile.get("name", "Refiloe"),
+                    "slide_count": slide_count,
+                    "post_type": "carousel",
+                    **metadata,
+                },
+            }
+            return combined
+
         combined = {
             "id": asset_id,
             "type": post_type,
@@ -1187,6 +1396,15 @@ class ContentPipeline:
             return VideoGenerator(config_path, supabase_client)
         except Exception as exc:
             log_warning(f"VideoGenerator unavailable: {exc}")
+            return None
+
+    def _init_carousel_generator(
+        self, config_path: str
+    ) -> Optional[CarouselTemplateGenerator]:
+        try:
+            return CarouselTemplateGenerator(config_path)
+        except Exception as exc:
+            log_warning(f"CarouselTemplateGenerator unavailable: {exc}")
             return None
 
     def _resolve_launch_date(self) -> date:
