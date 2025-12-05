@@ -1,6 +1,7 @@
 """Social Media Database Service - Handles all social media related database operations"""
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
+import json
 import pytz
 import uuid
 from utils.logger import log_info, log_error
@@ -28,7 +29,71 @@ class SocialMediaDatabase:
         """
         self.db = supabase_client
         self.sa_tz = pytz.timezone('Africa/Johannesburg')
-    
+
+    # ============================================
+    # MEDIA URL SERIALIZATION HELPERS
+    # ============================================
+
+    def _serialize_media_urls(self, media_urls: Union[str, List[str], None]) -> Optional[str]:
+        """Serialize media URLs for database storage.
+
+        Handles both single URLs and lists of URLs (for carousel posts).
+        Lists are converted to JSON strings for storage in text fields.
+
+        Args:
+            media_urls: Single URL string, list of URL strings, or None
+
+        Returns:
+            Serialized string suitable for database storage, or None
+        """
+        if media_urls is None:
+            return None
+        if isinstance(media_urls, list):
+            # Convert list to JSON string for carousel posts
+            return json.dumps(media_urls)
+        # Single URL - return as-is
+        return media_urls
+
+    def _deserialize_media_urls(self, media_url_string: Optional[str]) -> Union[str, List[str], None]:
+        """Deserialize media URL string from database.
+
+        Detects JSON array strings and parses them back to lists.
+        Single URLs are returned as-is.
+
+        Args:
+            media_url_string: Stored media URL string (may be JSON array)
+
+        Returns:
+            Single URL string, list of URLs for carousels, or None
+        """
+        if media_url_string is None:
+            return None
+        if not media_url_string:
+            return None
+        # Check if it's a JSON array (starts with '[')
+        if media_url_string.startswith('['):
+            try:
+                return json.loads(media_url_string)
+            except json.JSONDecodeError:
+                # If parsing fails, return as single URL
+                log_error(f"Failed to parse media_url as JSON array: {media_url_string[:100]}")
+                return media_url_string
+        # Single URL - return as-is
+        return media_url_string
+
+    def _deserialize_post_media(self, post: Dict) -> Dict:
+        """Deserialize media URLs in a post record.
+
+        Args:
+            post: Post dictionary from database
+
+        Returns:
+            Post dictionary with deserialized media_url field
+        """
+        if post and 'media_url' in post:
+            post['media_url'] = self._deserialize_media_urls(post.get('media_url'))
+        return post
+
     def save_post(self, post_data: Dict) -> str:
         """Save a new post to the database
 
@@ -70,6 +135,10 @@ class SocialMediaDatabase:
                 'video_duration': post_data.get('video_duration', 0),
                 'video_type': post_data.get('video_type'),
                 'thumbnail_url': post_data.get('thumbnail_url'),
+                # Serialize media_urls for carousel posts (list -> JSON string)
+                'media_url': self._serialize_media_urls(
+                    post_data.get('media_urls') or post_data.get('media_url')
+                ),
                 'completion_rate': post_data.get('completion_rate', 0),
                 'avg_watch_time': post_data.get('avg_watch_time', 0),
                 'has_captions': post_data.get('has_captions', True),
@@ -147,15 +216,16 @@ class SocialMediaDatabase:
             
             if result.data:
                 log_info(f"Found {len(result.data)} scheduled posts for {date.date()}")
-                return result.data
+                # Deserialize media_url for carousel posts
+                return [self._deserialize_post_media(post) for post in result.data]
             else:
                 log_info(f"No scheduled posts found for {date.date()}")
                 return []
-                
+
         except Exception as e:
             log_error(f"Error getting scheduled posts: {str(e)}")
             return []
-    
+
     def mark_post_published(self, post_id: str, facebook_post_id: str) -> bool:
         """Update post status to published and save Facebook post ID
         
@@ -442,15 +512,16 @@ class SocialMediaDatabase:
             
             if result.data:
                 log_info(f"Retrieved {len(result.data)} posts for trainer {trainer_id}")
-                return result.data
+                # Deserialize media_url for carousel posts
+                return [self._deserialize_post_media(post) for post in result.data]
             else:
                 log_info(f"No posts found for trainer {trainer_id}")
                 return []
-                
+
         except Exception as e:
             log_error(f"Error getting trainer posts: {str(e)}")
             return []
-    
+
     def update_post_status(self, post_id: str, status: str) -> bool:
         """Update the status of a post
         
@@ -481,7 +552,82 @@ class SocialMediaDatabase:
         except Exception as e:
             log_error(f"Error updating post status: {str(e)}")
             return False
-    
+
+    def get_post(self, post_id: str) -> Optional[Dict]:
+        """Fetch a single post by ID with deserialized media URLs.
+
+        Args:
+            post_id: UUID of the post
+
+        Returns:
+            Optional[Dict]: Post data if found (with media_url deserialized), None otherwise
+        """
+        try:
+            result = self.db.table('social_posts').select('*').eq(
+                'id', post_id
+            ).single().execute()
+
+            if result.data:
+                log_info(f"Retrieved post with ID: {post_id}")
+                # Deserialize media_url for carousel posts
+                return self._deserialize_post_media(result.data)
+            else:
+                log_info(f"No post found with ID: {post_id}")
+                return None
+
+        except Exception as e:
+            log_error(f"Error getting post by ID: {str(e)}")
+            return None
+
+    def list_posts(
+        self,
+        status: Optional[str] = None,
+        post_type: Optional[str] = None,
+        platform: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Dict]:
+        """List posts with optional filters and deserialized media URLs.
+
+        Args:
+            status: Optional status filter (pending_approval, scheduled, published, etc.)
+            post_type: Optional post type filter (single_image, carousel, video, etc.)
+            platform: Optional platform filter (facebook, instagram, etc.)
+            limit: Maximum number of posts to return (default: 50)
+            offset: Number of posts to skip for pagination (default: 0)
+
+        Returns:
+            List[Dict]: List of posts with deserialized media_url fields
+        """
+        try:
+            # Build query
+            query = self.db.table('social_posts').select('*')
+
+            # Apply optional filters
+            if status:
+                query = query.eq('status', status)
+            if post_type:
+                query = query.eq('post_type', post_type)
+            if platform:
+                query = query.eq('platform', platform)
+
+            # Apply pagination and ordering
+            result = query.order(
+                'created_at', desc=True
+            ).range(offset, offset + limit - 1).execute()
+
+            if result.data:
+                log_info(f"Retrieved {len(result.data)} posts")
+                # Deserialize media_url for each post (handles carousel posts)
+                return [self._deserialize_post_media(post) for post in result.data]
+            else:
+                log_info("No posts found matching criteria")
+                return []
+
+        except Exception as e:
+            log_error(f"Error listing posts: {str(e)}")
+            return []
+
     # ============================================
     # PERFORMANCE TRACKING METHODS
     # ============================================
