@@ -598,8 +598,8 @@ def debug_schema():
                 'platform': 'test',
                 'status': 'test'
             }
-            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
-            result = supabase_client.table('social_posts').insert(test_data)
+            # Insert into database and execute
+            result = supabase_client.table('social_posts').insert(test_data).execute()
             if result.data:
                 columns = list(result.data[0].keys())
             else:

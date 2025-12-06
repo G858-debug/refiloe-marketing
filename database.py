@@ -152,12 +152,12 @@ class SocialMediaDatabase:
             db_data = {k: v for k, v in db_data.items() if v is not None}
             
             log_info(f"Inserting data: {db_data}")
-            
-            # Insert into database - insert already returns ExecuteResult
-            result = self.db.table('social_posts').insert(db_data)
-            
+
+            # Insert into database and execute
+            result = self.db.table('social_posts').insert(db_data).execute()
+
             log_info(f"Insert result: {result}")
-            
+
             # Check if insertion was successful
             if result and hasattr(result, 'data') and result.data:
                 log_info(f"Post saved successfully with ID: {post_id}")
@@ -293,8 +293,8 @@ class SocialMediaDatabase:
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
 
-            # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
-            result = self.db.table('social_images').insert(db_data)
+            # Insert into database and execute
+            result = self.db.table('social_images').insert(db_data).execute()
 
             if result.data:
                 log_info(f"Image saved successfully with ID: {image_id}")
@@ -1194,8 +1194,8 @@ class SocialMediaDatabase:
 
             log_info(f"Inserting weekly report data: {db_data}")
 
-            # Insert into database
-            result = self.db.table('weekly_reports').insert(db_data)
+            # Insert into database and execute
+            result = self.db.table('weekly_reports').insert(db_data).execute()
 
             # Check if insertion was successful
             if result and hasattr(result, 'data') and result.data:
