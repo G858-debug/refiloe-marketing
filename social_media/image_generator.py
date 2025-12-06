@@ -357,22 +357,23 @@ class ImageGenerator:
                     'character_reference_url': self.character_reference_url,
                 }
 
-                image_data = {
-                    'image_url': image_url,
-                    'storage_path': storage_path,
-                    'image_type': 'influencer_photo',
-                    'file_size': 0,
-                    'dimensions': {'width': 1024, 'height': 1024},
-                    'alt_text': f"AI generated influencer image: {prompt}",
-                    'metadata': image_metadata
-                }
-
-                db_image_id = self.db.save_image(image_data)
+                # NOTE: Skipping save_image() - we save directly to social_posts.image_url instead
+                # This avoids the social_images table which has incorrect schema
+                # image_data = {
+                #     'image_url': image_url,
+                #     'storage_path': storage_path,
+                #     'image_type': 'influencer_photo',
+                #     'file_size': 0,
+                #     'dimensions': {'width': 1024, 'height': 1024},
+                #     'alt_text': f"AI generated influencer image: {prompt}",
+                #     'metadata': image_metadata
+                # }
+                # db_image_id = self.db.save_image(image_data)
 
                 result.update({
                     'storage_path': storage_path,
                     'image_id': image_id,
-                    'db_image_id': db_image_id,
+                    # 'db_image_id': db_image_id,  # No longer saving to social_images
                 })
 
             self._set_cache_entry(prompt_signature, result)
