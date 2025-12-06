@@ -338,13 +338,6 @@ class ImageGenerator:
             }
 
             if persist:
-                filename = f"influencer_{uuid.uuid4().hex[:8]}_{style}.png"
-                storage_path = self.download_and_upload(image_url, filename)
-
-                if not storage_path:
-                    log_error("Failed to upload image to storage")
-                    return {"error": "Image upload failed"}
-
                 image_id = str(uuid.uuid4())
                 image_metadata = {
                     'style': style,
@@ -361,7 +354,6 @@ class ImageGenerator:
                 # This avoids the social_images table which has incorrect schema
                 # image_data = {
                 #     'image_url': image_url,
-                #     'storage_path': storage_path,
                 #     'image_type': 'influencer_photo',
                 #     'file_size': 0,
                 #     'dimensions': {'width': 1024, 'height': 1024},
@@ -371,7 +363,6 @@ class ImageGenerator:
                 # db_image_id = self.db.save_image(image_data)
 
                 result.update({
-                    'storage_path': storage_path,
                     'image_id': image_id,
                     # 'db_image_id': db_image_id,  # No longer saving to social_images
                 })
@@ -510,11 +501,9 @@ class ImageGenerator:
     ) -> Dict[str, Any]:
         metadata = existing.get('metadata') or {}
         image_url = existing.get('image_url') or metadata.get('image_url')
-        storage_path = existing.get('storage_path') or metadata.get('storage_path')
 
         hydrated = {
             'image_url': image_url,
-            'storage_path': storage_path,
             'image_id': existing.get('id') or metadata.get('image_id'),
             'db_image_id': existing.get('id'),
             'style': metadata.get('style', style),
@@ -539,8 +528,6 @@ class ImageGenerator:
         if isinstance(image_source, dict):
             if 'image_url' in image_source:
                 return self._download_image_bytes(image_source['image_url'])
-            if 'storage_path' in image_source:
-                return self._resolve_image_bytes(image_source['storage_path'])
 
         if isinstance(image_source, str):
             if image_source.startswith('http://') or image_source.startswith('https://'):
