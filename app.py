@@ -3205,7 +3205,7 @@ def api_seed_launch_content():
 
 @app.route('/api/dashboard/approve/<post_id>', methods=['POST'])
 def api_approve_post(post_id):
-    """API: Approve a single post"""
+    """API: Approve post content (Stage 1 approval)"""
     log_info(f"📥 Request: /api/dashboard/approve/{post_id}")
 
     # Validate post_id format (should be UUID)
@@ -3240,20 +3240,20 @@ def api_approve_post(post_id):
         post_info = check_result.data[0]
         log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
 
-        # Update post to approved/scheduled status
+        # Update status to 'approved' (content approved, ready for media generation)
         start_time = datetime.now()
         result = supabase_client.table('social_posts').update({
-            'status': 'scheduled',
+            'status': 'approved',
             'updated_at': datetime.now(SA_TZ).isoformat()
         }).eq('id', post_id).execute()
 
         update_time = (datetime.now() - start_time).total_seconds()
 
         if result.data:
-            log_info(f"✅ Post {post_id} approved and scheduled in {update_time:.2f}s")
+            log_info(f"✅ Post {post_id} content approved (Stage 1) in {update_time:.2f}s")
             return jsonify({
                 'success': True,
-                'message': 'Post approved',
+                'message': 'Content approved. Generate media next.',
                 'post_id': post_id,
                 'update_time': update_time
             })
@@ -3267,6 +3267,93 @@ def api_approve_post(post_id):
 
     except Exception as e:
         log_error(f"❌ Error approving post {post_id}: {e}")
+        log_error(traceback.format_exc())
+        return api_error_response(
+            str(e),
+            500,
+            {'post_id': post_id, 'traceback': traceback.format_exc()}
+        )
+
+
+@app.route('/api/dashboard/approve-media/<post_id>', methods=['POST'])
+def api_approve_media(post_id):
+    """API: Approve generated media (Stage 2 approval)"""
+    log_info(f"📥 Request: /api/dashboard/approve-media/{post_id}")
+
+    # Validate post_id format (should be UUID)
+    try:
+        uuid.UUID(post_id)
+    except ValueError:
+        log_error(f"❌ Invalid post_id format: {post_id}")
+        return api_error_response(
+            'Invalid post ID format',
+            400,
+            {'post_id': post_id, 'expected': 'UUID'}
+        )
+
+    # Check Supabase connection
+    if not app.config.get('SUPABASE_CONNECTED'):
+        log_error("❌ Supabase not connected")
+        return api_error_response('Database not connected', 503)
+
+    if not supabase_client:
+        log_error("❌ Supabase client is None")
+        return api_error_response('Database client not available', 503)
+
+    try:
+        # Check if post exists and has media
+        log_info(f"🔍 Checking if post {post_id} exists and has media")
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            log_error(f"❌ Post {post_id} not found")
+            return api_error_response('Post not found', 404, {'post_id': post_id})
+
+        post = result.data[0]
+        log_info(f"✅ Post found - Type: {post.get('post_type')}, Status: {post.get('status')}")
+
+        # Verify media exists
+        has_media = False
+        if post.get('post_type') == 'video' and post.get('video_url'):
+            has_media = True
+        elif post.get('post_type') in ['image', 'carousel'] and post.get('media_url'):
+            has_media = True
+
+        if not has_media:
+            log_error(f"❌ Post {post_id} has no media generated yet")
+            return api_error_response(
+                'No media generated yet',
+                400,
+                {'post_id': post_id, 'post_type': post.get('post_type')}
+            )
+
+        # Update status to 'scheduled' (ready for automated posting)
+        start_time = datetime.now()
+        update_result = supabase_client.table('social_posts').update({
+            'status': 'scheduled',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        update_time = (datetime.now() - start_time).total_seconds()
+
+        if update_result.data:
+            log_info(f"✅ Post {post_id} media approved (Stage 2) - ready for posting in {update_time:.2f}s")
+            return jsonify({
+                'success': True,
+                'message': 'Media approved! Post scheduled for publishing.',
+                'post_id': post_id,
+                'update_time': update_time
+            })
+        else:
+            log_error(f"❌ Failed to update post {post_id}")
+            return api_error_response(
+                'Failed to update status',
+                500,
+                {'post_id': post_id}
+            )
+
+    except Exception as e:
+        log_error(f"❌ Error approving media for post {post_id}: {e}")
         log_error(traceback.format_exc())
         return api_error_response(
             str(e),
