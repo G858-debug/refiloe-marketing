@@ -1039,8 +1039,8 @@
             card.className = 'post-card';
 
             // Get post type - check multiple possible field names
-            const postType = post.post_type || post.type || post.format || post.post_format || 'post';
-            console.log(`Creating card for post ${post.id}: type="${postType}" (post_type: ${post.post_type}, format: ${post.post_format})`);
+            const postType = post.post_type || post.type || post.format || 'post';
+            console.log(`Creating card for post ${post.id}: type="${postType}" (post_type: ${post.post_type}, format: ${post.format})`);
 
             // Media preview section (shown inline if media exists)
             const mediaPreview = getMediaPreview(post);
