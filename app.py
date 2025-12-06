@@ -3520,11 +3520,49 @@ def api_generate_media(post_id):
                 return jsonify({'success': False, 'error': result.get('error')}), 500
 
         elif post_type in ['image', 'carousel']:
-            # TODO: Implement image generation
-            return jsonify({'success': False, 'error': 'Image generation not yet implemented'}), 501
+            from social_media.image_generator import ImageGenerator
+
+            image_gen = ImageGenerator('social_media/config.yaml', supabase_client)
+
+            # Get caption/theme from metadata
+            caption = post_data.get('content_text', '')
+            theme = metadata.get('theme', 'professional_trainer')
+
+            if not caption:
+                return jsonify({'success': False, 'error': 'No caption found for image'}), 400
+
+            log_info(f"🎨 Generating image for post {post_id}")
+
+            # Generate image based on caption
+            prompt = f"Professional personal trainer, {theme}, {caption[:100]}"
+
+            result = image_gen.generate_influencer_image(
+                prompt=prompt,
+                style='professional',
+                setting='gym_environment'
+            )
+
+            if result and result.get('image_url'):
+                # Update post status to pending_media_approval
+                supabase_client.table('social_posts').update({
+                    'status': 'pending_media_approval',
+                    'media_url': result.get('image_url'),
+                    'storage_path': result.get('storage_path'),
+                    'updated_at': datetime.now(SA_TZ).isoformat()
+                }).eq('id', post_id).execute()
+
+                log_info(f"✅ Image generated successfully for post {post_id}")
+                return jsonify({
+                    'success': True,
+                    'image_url': result.get('image_url'),
+                    'message': 'Image generated successfully'
+                })
+            else:
+                log_error(f"❌ Image generation failed for post {post_id}")
+                return jsonify({'success': False, 'error': 'Image generation failed'}), 500
 
         else:
-            return jsonify({'success': False, 'error': f'Unknown post type: {post_type}'}), 400
+            return jsonify({'success': False, 'error': f'Unsupported post type: {post_type}'}), 400
 
     except Exception as e:
         log_error(f"❌ Error generating media for {post_id}: {e}")
