@@ -2579,10 +2579,6 @@ def looks_gallery():
         # Apply date filters
         if date_from:
             query = query.gte('created_at', date_from)
-        if date_to:
-            # Add one day to include the entire end date
-            date_to_dt = datetime.fromisoformat(date_to) + timedelta(days=1)
-            query = query.lt('created_at', date_to_dt.isoformat())
 
         # Order by created_at DESC
         query = query.order('created_at', desc=True)
@@ -2590,6 +2586,16 @@ def looks_gallery():
         # Execute query
         result = query.execute()
         looks = result.data if result and hasattr(result, 'data') else []
+
+        # Filter in Python for date_to (since .lt() is not supported)
+        if date_to and looks:
+            # Add one day to include the entire end date
+            date_to_dt = datetime.fromisoformat(date_to) + timedelta(days=1)
+            date_to_iso = date_to_dt.isoformat()
+            looks = [
+                look for look in looks
+                if look.get('created_at', '') < date_to_iso
+            ]
 
         # Get unique look types for filter dropdown
         all_looks_result = supabase_client.table('avatar_looks').select('look_type').execute()
