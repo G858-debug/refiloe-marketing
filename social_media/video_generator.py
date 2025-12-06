@@ -1494,3 +1494,45 @@ class VideoGenerator:
             f"Timed out waiting for HeyGen video {video_id} to complete"
         )
 
+    def check_video_status(self, video_id: str) -> Dict[str, Any]:
+        """
+        Check the status of a HeyGen video without polling/waiting.
+
+        Args:
+            video_id: The HeyGen video ID to check
+
+        Returns:
+            Dict with status, video_url, and error fields
+        """
+        status_url = "https://api.heygen.com/v1/video_status.get"
+        params = {"video_id": video_id}
+        headers = {
+            "X-API-KEY": self.api_key,
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = requests.get(
+                status_url,
+                headers=headers,
+                params=params,
+                timeout=30,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            data = payload.get("data") or payload
+
+            return {
+                'status': data.get('status'),
+                'video_url': data.get('video_url'),
+                'error': data.get('error'),
+                'duration': data.get('duration')
+            }
+        except Exception as exc:
+            log_error(f"Error checking video status for {video_id}: {exc}")
+            return {
+                'status': 'error',
+                'video_url': None,
+                'error': str(exc)
+            }
+
