@@ -3151,7 +3151,7 @@ def api_error_response(error_msg, status_code=500, details=None):
 
 @app.route('/api/dashboard/posts')
 def api_dashboard_posts():
-    """API: Get all posts for dashboard"""
+    """API: Get all posts for dashboard - show all active posts"""
     log_info("📥 Request: /api/dashboard/posts")
 
     # Check Supabase connection
@@ -3168,22 +3168,19 @@ def api_dashboard_posts():
         return api_error_response('Database client not available', 503)
 
     try:
-        start_time = datetime.now()
-        result = supabase_client.table('social_posts').select('*').order(
-            'scheduled_time', desc=False
-        ).limit(100).execute()
+        # Get posts with any of these statuses (all active, non-published posts)
+        active_statuses = ['pending_approval', 'approved', 'pending_media_approval', 'scheduled']
 
-        query_time = (datetime.now() - start_time).total_seconds()
-        log_info(f"✅ Query completed in {query_time:.2f}s")
+        # Query for all active posts
+        result = supabase_client.table('social_posts').select('*').in_('status', active_statuses).order('scheduled_time', desc=False).execute()
 
         posts = result.data if result.data else []
-        log_info(f"📊 Found {len(posts)} posts")
+        log_info(f"📊 Found {len(posts)} active posts")
 
         return jsonify({
             'success': True,
             'posts': posts,
-            'count': len(posts),
-            'query_time': query_time
+            'count': len(posts)
         })
 
     except Exception as e:
