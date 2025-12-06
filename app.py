@@ -33,9 +33,6 @@ from social_media.looks_generator import LooksGenerator, REFILOE_LOOKS
 
 load_dotenv()
 
-# Create dashboard blueprint
-dashboard_bp = Blueprint('dashboard', __name__)
-
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -1314,7 +1311,6 @@ def reset_to_approved(post_id):
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
 app.register_blueprint(analytics_bp, url_prefix='/analytics')
-app.register_blueprint(dashboard_bp)
 
 
 # ------------------------------------------------------------------------------
