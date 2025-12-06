@@ -508,6 +508,118 @@
             font-size: 16px;
         }
 
+        .media-preview-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .media-preview-section.no-media-yet {
+            background: #fff8e1;
+            border-color: #ffe0b2;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .media-label {
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #333;
+        }
+
+        .fullscreen-btn {
+            padding: 4px 12px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .fullscreen-btn:hover {
+            background: #1976D2;
+        }
+
+        .media-preview-video {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .media-preview-image {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+
+        .media-preview-image:hover {
+            opacity: 0.95;
+        }
+
+        .post-caption {
+            margin: 15px 0;
+            padding: 12px;
+            background: #fff;
+            border-left: 3px solid #4CAF50;
+            border-radius: 4px;
+        }
+
+        .post-caption strong {
+            color: #2E7D32;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .post-caption p {
+            margin: 0;
+            color: #333;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .carousel-preview {
+            display: grid;
+            gap: 10px;
+        }
+
+        .carousel-slide {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .slide-number {
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .slide-content {
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .media-indicator {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .media-indicator.no-media {
+            background: #FFEBEE;
+            color: #C62828;
+            border: 1px solid #FFCDD2;
+        }
+
         /* Responsive */
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -914,48 +1026,105 @@
             const card = document.createElement('div');
             card.className = 'post-card';
 
-            // Media indicators
-            const mediaIndicators = getMediaIndicators(post);
+            // Media preview section (shown inline if media exists)
+            const mediaPreview = getMediaPreview(post);
 
             // Status badge
             const statusBadge = getStatusBadge(status);
 
-            // Truncate content
-            const contentPreview = post.content_text ?
-                (post.content_text.length > 200 ? post.content_text.substring(0, 200) + '...' : post.content_text) :
-                'No caption';
+            // Caption text
+            const captionText = post.content_text || 'No caption';
 
             // Format date
             const scheduledDate = post.scheduled_time ? new Date(post.scheduled_time).toLocaleString('en-ZA', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : 'Not scheduled';
 
-            // Determine post type with fallback
-            const postType = post.post_type || post.post_format || 'post';
-            const postTypeDisplay = postType.charAt(0).toUpperCase() + postType.slice(1);
-
             card.innerHTML = `
                 <div class="post-header">
-                    <span class="post-type ${postType}">${postTypeDisplay}</span>
+                    <span class="post-type ${post.post_format}">${post.post_format || 'unknown'}</span>
                     ${statusBadge}
                 </div>
 
-                ${mediaIndicators}
+                ${mediaPreview}
 
-                ${post.title ? `<h4 class="post-title">${post.title}</h4>` : ''}
-
-                <p class="post-content">${contentPreview}</p>
+                <div class="post-caption">
+                    <strong>Caption:</strong>
+                    <p>${captionText}</p>
+                </div>
 
                 <div class="post-meta">
                     <span class="scheduled-time">📅 ${scheduledDate}</span>
-                    ${post.content_theme ? `<span class="post-theme">🏷️ ${post.content_theme.replace(/_/g, ' ')}</span>` : ''}
-                    ${post.platform ? `<span class="post-platform">📱 ${post.platform}</span>` : ''}
                 </div>
 
                 ${getActionButtons(post, status)}
             `;
 
             return card;
+        }
+
+        function getMediaPreview(post) {
+            let preview = '';
+
+            // Video preview
+            if (post.video_url) {
+                preview = `
+                    <div class="media-preview-section">
+                        <div class="media-label">
+                            🎥 Video Preview
+                            <button onclick="window.open('${post.video_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
+                        </div>
+                        <video controls class="media-preview-video" style="width:100%; max-height:400px; background:#000; border-radius:8px;">
+                            <source src="${post.video_url}" type="video/mp4">
+                        </video>
+                    </div>
+                `;
+            }
+
+            // Image preview
+            if (post.image_url) {
+                preview = `
+                    <div class="media-preview-section">
+                        <div class="media-label">
+                            🖼️ Image Preview
+                            <button onclick="window.open('${post.image_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
+                        </div>
+                        <img src="${post.image_url}" class="media-preview-image" alt="Generated image" style="width:100%; max-height:500px; object-fit:contain; border-radius:8px; background:#f5f5f5;">
+                    </div>
+                `;
+            }
+
+            // Carousel preview
+            if (post.carousel_slides && post.carousel_slides.length > 0) {
+                const slidesHtml = post.carousel_slides.map((slide, idx) => `
+                    <div class="carousel-slide">
+                        <div class="slide-number">Slide ${idx + 1}</div>
+                        <div class="slide-content">${slide.text || slide.description || 'No content'}</div>
+                    </div>
+                `).join('');
+
+                preview = `
+                    <div class="media-preview-section">
+                        <div class="media-label">
+                            📊 Carousel Preview (${post.carousel_slides.length} slides)
+                        </div>
+                        <div class="carousel-preview">
+                            ${slidesHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // No media yet
+            if (!post.video_url && !post.image_url && (!post.carousel_slides || post.carousel_slides.length === 0)) {
+                preview = `
+                    <div class="media-preview-section no-media-yet">
+                        <span class="media-indicator no-media">❌ No Media Generated Yet</span>
+                    </div>
+                `;
+            }
+
+            return preview;
         }
 
         function getMediaIndicators(post) {
@@ -1359,6 +1528,13 @@
             console.log('🚀 Dashboard initialized');
             checkConnection();
             loadPosts();
+        });
+
+        // Make preview images clickable
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('media-preview-image')) {
+                window.open(e.target.src, '_blank');
+            }
         });
     </script>
 </body>
