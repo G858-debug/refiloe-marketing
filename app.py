@@ -3652,6 +3652,7 @@ def api_generate_media(post_id):
                 return jsonify({'success': False, 'error': 'No video script found'}), 400
 
             log_info(f"🎬 Generating video for post {post_id}")
+            log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
                 # Generate video
@@ -3664,75 +3665,97 @@ def api_generate_media(post_id):
                     metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
                 )
 
+                # CRITICAL: Log the full HeyGen response
+                log_info(f"📹 HeyGen response received: {result}")
+
                 # HeyGen accepted the request - check for video_id
                 video_id = result.get('video_id')
                 video_url = result.get('video_url')
 
-                if video_id:
-                    log_info(f"✅ HeyGen accepted video request: video_id={video_id}")
+                log_info(f"📹 Video ID from HeyGen: {video_id}")
+                log_info(f"📹 Video URL from HeyGen: {video_url}")
 
-                    if video_url:
-                        # Video completed immediately (rare but possible)
-                        # Get existing generation_prompt
-                        post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
-                        existing_prompt = {}
-                        if post_result.data:
-                            try:
-                                existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
-                            except:
-                                existing_prompt = {}
-
-                        # Add HeyGen video_id to generation_prompt
-                        existing_prompt['heygen_video_id'] = video_id
-
-                        # Update post status to pending_media_approval
-                        supabase_client.table('social_posts').update({
-                            'status': 'pending_media_approval',
-                            'video_id': video_id,
-                            'video_url': video_url,
-                            'generation_prompt': json.dumps(existing_prompt),
-                            'media_generation_completed_at': datetime.now(timezone.utc).isoformat(),
-                            'updated_at': datetime.now(SA_TZ).isoformat()
-                        }).eq('id', post_id).execute()
-
-                        log_info(f"✅ Video generated successfully for post {post_id}")
-                        return jsonify({
-                            'success': True,
-                            'video_url': video_url,
-                            'message': 'Video generated successfully'
-                        })
-                    else:
-                        # CRITICAL: Save video_id to database so we can fetch it later
-                        log_info(f"💾 Saving video_id {video_id} to database for post {post_id}")
-
-                        update_result = supabase_client.table('social_posts').update({
-                            'video_id': video_id,
-                            'status': 'generating',
-                            'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
-                            'updated_at': datetime.now(timezone.utc).isoformat()
-                        }).eq('id', post_id).execute()
-
-                        if update_result.data:
-                            log_info(f"✅ Video ID saved: {video_id} for post {post_id}")
-                            log_info(f"📊 Post status updated to 'generating' - fetch job will retrieve video URL later")
-                        else:
-                            log_error(f"❌ Failed to save video_id to database for post {post_id}")
-
-                        # Return success immediately - fetch job will get the video later
-                        return jsonify({
-                            'message': 'Video generation started',
-                            'video_id': video_id,
-                            'status': 'generating'
-                        }), 200
-                else:
-                    log_error(f"❌ No video_id returned from HeyGen for post {post_id}")
-                    log_error(f"❌ HeyGen response: {result}")
+                # Validate that we got a video_id
+                if not video_id:
+                    log_error(f"❌ No video_id in HeyGen response for post {post_id}")
+                    log_error(f"❌ Full HeyGen response: {result}")
                     # Reset status so user can retry
                     supabase_client.table('social_posts').update({
                         'status': 'approved',
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': result.get('error')}), 500
+                    return jsonify({'success': False, 'error': 'HeyGen did not return a video_id'}), 500
+
+                # At this point, we know video_id exists
+                log_info(f"✅ HeyGen accepted video request: video_id={video_id}")
+
+                if video_url:
+                    # Video completed immediately (rare but possible)
+                    log_info(f"🎉 Video completed immediately with URL: {video_url}")
+
+                    # Get existing generation_prompt
+                    post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
+                    existing_prompt = {}
+                    if post_result.data:
+                        try:
+                            existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
+                        except:
+                            existing_prompt = {}
+
+                    # Add HeyGen video_id to generation_prompt
+                    existing_prompt['heygen_video_id'] = video_id
+
+                    # Save video_id and URL to database
+                    log_info(f"💾 Saving video_id {video_id} and URL to database for post {post_id}")
+
+                    # Update post status to pending_media_approval
+                    supabase_client.table('social_posts').update({
+                        'status': 'pending_media_approval',
+                        'video_id': video_id,
+                        'video_url': video_url,
+                        'generation_prompt': json.dumps(existing_prompt),
+                        'media_generation_completed_at': datetime.now(timezone.utc).isoformat(),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Video generated successfully for post {post_id}")
+                    return jsonify({
+                        'success': True,
+                        'video_url': video_url,
+                        'message': 'Video generated successfully'
+                    })
+                else:
+                    # Normal case: HeyGen accepted but video is still processing
+                    # CRITICAL: Save video_id to database so we can fetch it later
+                    log_info(f"💾 Video still processing. Saving video_id {video_id} to database for post {post_id}")
+
+                    update_result = supabase_client.table('social_posts').update({
+                        'video_id': video_id,
+                        'status': 'generating',
+                        'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    if update_result.data:
+                        log_info(f"✅ Video ID saved successfully: {video_id} for post {post_id}")
+                        log_info(f"📊 Post status updated to 'generating' - fetch job will retrieve video URL later")
+                    else:
+                        log_error(f"❌ Failed to save video_id to database for post {post_id}")
+                        log_error(f"❌ Update result: {update_result}")
+                        # Return error since we couldn't save the video_id
+                        return jsonify({
+                            'success': False,
+                            'error': 'Failed to save video_id to database'
+                        }), 500
+
+                    # Return success immediately - fetch job will get the video later
+                    return jsonify({
+                        'success': True,
+                        'message': 'Video generation started',
+                        'video_id': video_id,
+                        'status': 'generating'
+                    }), 200
+
             except Exception as e:
                 log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
                 # Reset status so user can retry
