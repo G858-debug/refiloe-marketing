@@ -1004,6 +1004,42 @@ class VideoGenerator:
 
         return {}
 
+    def _prepare_script_for_narration(self, script_text: str) -> str:
+        """Prepare script text for HeyGen narration by replacing words with phonetic pronunciations.
+
+        This ensures proper pronunciation of names and terms in AI-generated voice narration.
+        Maintains original spelling in all other contexts (captions, display text, etc.).
+
+        Args:
+            script_text: Original script text
+
+        Returns:
+            str: Script with phonetic substitutions for narration
+        """
+        import re
+
+        # Phonetic pronunciation mappings for HeyGen voice narration
+        pronunciation_map = {
+            # Name pronunciations
+            'Refiloe': 'Reh FILL weh',
+            'Refiloe\'s': 'Reh FILL weh\'s',
+        }
+
+        narration_script = script_text
+
+        # Replace each term with its phonetic pronunciation
+        for original, phonetic in pronunciation_map.items():
+            # Use word boundary matching to avoid partial replacements
+            pattern = r'\b' + re.escape(original) + r'\b'
+            narration_script = re.sub(pattern, phonetic, narration_script, flags=re.IGNORECASE)
+
+        # Log if substitutions were made (for debugging)
+        if narration_script != script_text:
+            substitutions_made = sum(1 for orig in pronunciation_map.keys() if orig.lower() in script_text.lower())
+            log_info(f"Applied {substitutions_made} pronunciation substitution(s) for HeyGen narration")
+
+        return narration_script
+
     def _build_style_presets(self) -> Dict[str, Dict[str, Any]]:
         defaults = {
             "educational": {
