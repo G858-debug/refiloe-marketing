@@ -422,13 +422,16 @@ class VideoGenerator:
         if len(script) > 5000:
             raise ValueError("Script exceeds 5000 character limit")
 
+        # Prepare script for proper pronunciation in narration
+        narration_script = self._prepare_script_for_narration(script)
+
         # Use provided voice or default
         resolved_voice_id = voice_id or self.default_voice_id
         if not resolved_voice_id:
             raise ValueError("No voice_id provided and no default voice configured")
 
         log_info("Starting Avatar IV video generation")
-        log_info(f"Script length: {len(script)} characters")
+        log_info(f"Script length: {len(narration_script)} characters")
         log_info(f"Voice: {resolved_voice_id}")
         log_info(f"Aspect ratio: {aspect_ratio}")
         if custom_motion_prompt:
@@ -436,7 +439,7 @@ class VideoGenerator:
 
         # Build Avatar IV API payload
         payload = {
-            "script": script,
+            "script": narration_script,
             "voice_id": resolved_voice_id,
             "aspect_ratio": aspect_ratio,
         }
