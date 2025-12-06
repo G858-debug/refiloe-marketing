@@ -995,10 +995,35 @@
                 // Update stats
                 updateStats(data.posts);
 
-                // Auto-refresh if any posts are generating
+                // Gentle refresh - only check for updates, not reload entire page
                 if (postsByStatus.generating.length > 0) {
-                    console.log('⏳ Posts generating, will refresh in 15 seconds');
-                    setTimeout(() => location.reload(), 15000);
+                    console.log('⏳ Posts generating, will check for updates in 20 seconds');
+
+                    setTimeout(async function() {
+                        console.log('🔄 Checking for generation updates...');
+
+                        try {
+                            const response = await fetch('/api/dashboard/posts');
+                            const data = await response.json();
+
+                            // Check if any posts are still generating
+                            const stillGenerating = data.posts.some(p => p.status === 'generating');
+
+                            if (!stillGenerating) {
+                                // All done generating - reload once to show final state
+                                console.log('✅ Generation complete, refreshing...');
+                                location.reload();
+                            } else {
+                                console.log('⏳ Still generating, will check again in 20 seconds...');
+                                // Continue gentle checking
+                                setTimeout(() => location.reload(), 20000);
+                            }
+                        } catch (err) {
+                            console.error('Error checking status:', err);
+                            // Fallback to reload on error
+                            location.reload();
+                        }
+                    }, 20000);
                 }
 
             } catch (error) {
@@ -1042,7 +1067,7 @@
 
             card.innerHTML = `
                 <div class="post-header">
-                    <span class="post-type ${post.post_format}">${post.post_format || 'unknown'}</span>
+                    <span class="post-type ${post.post_type || post.post_format}">${post.post_type || post.post_format || 'post'}</span>
                     ${statusBadge}
                 </div>
 
@@ -1094,25 +1119,37 @@
                 `;
             }
 
-            // Carousel preview
-            if (post.carousel_slides && post.carousel_slides.length > 0) {
-                const slidesHtml = post.carousel_slides.map((slide, idx) => `
-                    <div class="carousel-slide">
-                        <div class="slide-number">Slide ${idx + 1}</div>
-                        <div class="slide-content">${slide.text || slide.description || 'No content'}</div>
-                    </div>
-                `).join('');
+            // Carousel preview - check both carousel_slides array and post_type
+            if ((post.carousel_slides && post.carousel_slides.length > 0) || post.post_type === 'carousel') {
+                const slides = post.carousel_slides || [];
 
-                preview = `
-                    <div class="media-preview-section">
-                        <div class="media-label">
-                            📊 Carousel Preview (${post.carousel_slides.length} slides)
+                if (slides.length === 0) {
+                    // Carousel post but no slides generated yet
+                    preview = `
+                        <div class="media-preview-section no-media-yet">
+                            <span class="media-indicator no-media">📊 Carousel Post - No slides generated yet</span>
                         </div>
-                        <div class="carousel-preview">
-                            ${slidesHtml}
+                    `;
+                } else {
+                    // Show carousel slides
+                    const slidesHtml = slides.map((slide, idx) => `
+                        <div class="carousel-slide">
+                            <div class="slide-number">Slide ${idx + 1}</div>
+                            <div class="slide-content">${slide.text || slide.description || 'No content'}</div>
                         </div>
-                    </div>
-                `;
+                    `).join('');
+
+                    preview = `
+                        <div class="media-preview-section">
+                            <div class="media-label">
+                                📊 Carousel Preview (${slides.length} slides)
+                            </div>
+                            <div class="carousel-preview">
+                                ${slidesHtml}
+                            </div>
+                        </div>
+                    `;
+                }
             }
 
             // No media yet
