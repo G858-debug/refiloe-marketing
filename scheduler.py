@@ -946,17 +946,25 @@ class SocialMediaScheduler:
         try:
             today_start = datetime.now(self.sa_tz).replace(hour=0, minute=0, second=0, microsecond=0)
             today_end = today_start + timedelta(days=1)
-            
+
+            # Get all video posts
             result = self.supabase_client.table('social_posts').select('*').eq(
                 'format', 'video'
-            ).gte(
-                'scheduled_time', today_start.isoformat()
-            ).lt(
-                'scheduled_time', today_end.isoformat()
             ).execute()
-            
-            return result.data or []
-            
+
+            # Filter in Python for posts scheduled for today
+            if result.data:
+                today_start_iso = today_start.isoformat()
+                today_end_iso = today_end.isoformat()
+                todays_videos = [
+                    video for video in result.data
+                    if video.get('scheduled_time', '') >= today_start_iso
+                    and video.get('scheduled_time', '') < today_end_iso
+                ]
+                return todays_videos
+
+            return []
+
         except Exception as e:
             log_error(f"Error getting today's scheduled videos: {str(e)}")
             return []

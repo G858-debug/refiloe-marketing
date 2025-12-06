@@ -741,11 +741,28 @@ def clear_all_test_posts(supabase_client) -> int:
         count1 = len(result1.data) if result1.data else 0
 
         # Delete any posts from before December 2025 (old test data)
-        result2 = supabase_client.table('social_posts').delete().lt('created_at', '2025-12-01').execute()
-        count2 = len(result2.data) if result2.data else 0
+        # Get all posts first
+        all_posts_result = supabase_client.table('social_posts').select('*').execute()
+
+        count2 = 0
+        if all_posts_result.data:
+            # Filter in Python for posts created before December 1, 2025
+            cutoff_date = '2025-12-01'
+            old_post_ids = [
+                post['id'] for post in all_posts_result.data
+                if post.get('created_at', '') < cutoff_date
+            ]
+
+            # Delete each old post
+            for post_id in old_post_ids:
+                try:
+                    supabase_client.table('social_posts').delete().eq('id', post_id).execute()
+                    count2 += 1
+                except Exception as e:
+                    log_error(f"Failed to delete post {post_id}: {e}")
 
         total_deleted = count1 + count2
-        log_info(f"Deleted {total_deleted} old/test posts")
+        log_info(f"Deleted {total_deleted} old/test posts ({count1} test posts + {count2} old posts)")
         return total_deleted
 
     except Exception as e:
