@@ -643,8 +643,13 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
     # Initialize database
     db = SocialMediaDatabase(supabase_client)
 
-    # Save each post
+    # Save each post with comprehensive error handling
     created_ids = []
+    failed_posts = []
+    total_posts = len(posts)
+
+    log_info(f"💾 Saving {total_posts} posts to database...")
+
     for idx, post in enumerate(posts, 1):
         try:
             # Prepare post data for database
@@ -675,19 +680,48 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
                 "generation_prompt": json.dumps(metadata)  # Store metadata as JSON
             }
 
+            # Attempt to save the post
             post_id = db.save_post(post_data)
 
             if post_id:
                 created_ids.append(post_id)
-                log_info(f"✓ Saved post {idx}/9: Day {post['day']}, Post {post['post_number']} - {post['content_theme']} (ID: {post_id})")
+                log_info(f"✅ Saved post {idx}/{total_posts}: Day {post['day']}, Post {post['post_number']} - {post['content_theme']} (ID: {post_id})")
             else:
-                log_error(f"✗ Failed to save post {idx}/9: Day {post['day']}, Post {post['post_number']}")
+                failed_posts.append({
+                    'index': idx,
+                    'day': post['day'],
+                    'post_number': post['post_number'],
+                    'theme': post['content_theme'],
+                    'error': 'save_post returned empty ID'
+                })
+                log_error(f"❌ Failed to save post {idx}/{total_posts}: Day {post['day']}, Post {post['post_number']} - save_post returned empty ID")
 
         except Exception as e:
-            log_error(f"Error saving post {idx}/9: {str(e)}")
+            failed_posts.append({
+                'index': idx,
+                'day': post.get('day', 'unknown'),
+                'post_number': post.get('post_number', 'unknown'),
+                'theme': post.get('content_theme', 'unknown'),
+                'error': str(e)
+            })
+            log_error(f"❌ Exception saving post {idx}/{total_posts}: {str(e)}")
+            import traceback
+            log_error(f"Traceback: {traceback.format_exc()}")
             continue
 
-    log_info(f"VALUE-FIRST launch content seeding complete. Created {len(created_ids)}/{len(posts)} posts")
+    # Summary logging
+    success_count = len(created_ids)
+    fail_count = len(failed_posts)
+
+    if success_count == total_posts:
+        log_info(f"✅ VALUE-FIRST launch content seeding complete: {success_count}/{total_posts} posts created successfully")
+    elif success_count > 0:
+        log_warning(f"⚠️  VALUE-FIRST launch content seeding partial success: {success_count}/{total_posts} posts created, {fail_count} failed")
+        log_warning(f"Failed posts: {failed_posts}")
+    else:
+        log_error(f"❌ VALUE-FIRST launch content seeding failed: 0/{total_posts} posts created")
+        log_error(f"All posts failed: {failed_posts}")
+
     return created_ids
 
 
@@ -733,40 +767,77 @@ def clear_launch_content(supabase_client) -> int:
 
 
 def clear_all_test_posts(supabase_client) -> int:
-    """Delete all test posts and old content to start fresh."""
+    """Delete all test posts and old content to start fresh with comprehensive error handling."""
 
     try:
+        log_info("🗑️  Starting deletion of old/test posts...")
+
         # Delete posts with post_type='test'
-        result1 = supabase_client.table('social_posts').delete().eq('post_type', 'test').execute()
-        count1 = len(result1.data) if result1.data else 0
+        log_info("Deleting posts with post_type='test'...")
+        try:
+            result1 = supabase_client.table('social_posts').delete().eq('post_type', 'test').execute()
+            count1 = len(result1.data) if result1.data else 0
+            if count1 > 0:
+                log_info(f"✅ Deleted {count1} test posts")
+            else:
+                log_info("ℹ️  No test posts found to delete")
+        except Exception as e:
+            log_error(f"❌ Error deleting test posts: {e}")
+            count1 = 0
 
         # Delete any posts from before December 2025 (old test data)
         # Get all posts first
-        all_posts_result = supabase_client.table('social_posts').select('*').execute()
+        log_info("Checking for posts created before December 1, 2025...")
+        try:
+            all_posts_result = supabase_client.table('social_posts').select('*').execute()
 
-        count2 = 0
-        if all_posts_result.data:
-            # Filter in Python for posts created before December 1, 2025
-            cutoff_date = '2025-12-01'
-            old_post_ids = [
-                post['id'] for post in all_posts_result.data
-                if post.get('created_at', '') < cutoff_date
-            ]
+            count2 = 0
+            failed_deletes = 0
+            if all_posts_result.data:
+                # Filter in Python for posts created before December 1, 2025
+                cutoff_date = '2025-12-01'
+                old_post_ids = [
+                    post['id'] for post in all_posts_result.data
+                    if post.get('created_at', '') < cutoff_date
+                ]
 
-            # Delete each old post
-            for post_id in old_post_ids:
-                try:
-                    supabase_client.table('social_posts').delete().eq('id', post_id).execute()
-                    count2 += 1
-                except Exception as e:
-                    log_error(f"Failed to delete post {post_id}: {e}")
+                if old_post_ids:
+                    log_info(f"Found {len(old_post_ids)} old posts to delete...")
+                    # Delete each old post
+                    for idx, post_id in enumerate(old_post_ids, 1):
+                        try:
+                            supabase_client.table('social_posts').delete().eq('id', post_id).execute()
+                            count2 += 1
+                            if idx % 10 == 0:  # Log progress every 10 posts
+                                log_info(f"  Progress: {idx}/{len(old_post_ids)} old posts deleted...")
+                        except Exception as e:
+                            failed_deletes += 1
+                            log_error(f"❌ Failed to delete post {post_id}: {e}")
+
+                    if count2 > 0:
+                        log_info(f"✅ Deleted {count2} old posts")
+                    if failed_deletes > 0:
+                        log_warning(f"⚠️  Failed to delete {failed_deletes} old posts")
+                else:
+                    log_info("ℹ️  No old posts found to delete")
+            else:
+                log_info("ℹ️  No posts found in database")
+        except Exception as e:
+            log_error(f"❌ Error deleting old posts: {e}")
+            count2 = 0
 
         total_deleted = count1 + count2
-        log_info(f"Deleted {total_deleted} old/test posts ({count1} test posts + {count2} old posts)")
+        if total_deleted > 0:
+            log_info(f"✅ Total deleted: {total_deleted} posts ({count1} test posts + {count2} old posts)")
+        else:
+            log_info("ℹ️  No posts needed to be deleted")
+
         return total_deleted
 
     except Exception as e:
-        log_error(f"Error clearing test posts: {e}")
+        log_error(f"❌ Error clearing test posts: {e}")
+        import traceback
+        log_error(f"Traceback: {traceback.format_exc()}")
         return 0
 
 
