@@ -97,12 +97,12 @@ class SocialMediaScheduler:
             # 1. Are video posts
             # 2. Have no video_url
             # 3. Were created in last 24 hours (avoid old posts)
-            # 4. Status is pending_approval
+            # 4. Status is generating (video is in progress)
 
             cutoff_time = (datetime.now(SA_TIMEZONE) - timedelta(hours=24)).isoformat()
 
-            # Get all video posts from last 24 hours with pending_approval status
-            result = self.supabase_client.table('social_posts').select('*').eq('post_type', 'video').eq('status', 'pending_approval').gte('created_at', cutoff_time).execute()
+            # Get all video posts from last 24 hours with generating status
+            result = self.supabase_client.table('social_posts').select('*').eq('post_type', 'video').eq('status', 'generating').gte('created_at', cutoff_time).execute()
 
             # Filter in Python for null video_url (Supabase REST client doesn't support is_ method)
             orphaned_posts = [post for post in result.data if not post.get('video_url')] if result.data else []
@@ -146,9 +146,10 @@ class SocialMediaScheduler:
                         video_url = video_data.get('data', {}).get('video_url')
 
                         if video_status == 'completed' and video_url:
-                            # Update database
+                            # Update database - set status to pending_media_approval when video is ready
                             self.supabase_client.table('social_posts').update({
                                 'video_url': video_url,
+                                'status': 'pending_media_approval',
                                 'updated_at': datetime.now(SA_TIMEZONE).isoformat()
                             }).eq('id', post['id']).execute()
 

@@ -145,8 +145,17 @@ class ImageGenerator:
             style = (style or "professional").lower()
             setting = (setting or self._infer_setting_from_style(style)).lower()
 
+            # Check if character reference exists - prioritize for consistency
             base_prompt = self.config.get('image_generation', {}).get('base_prompt')
-            character_core = base_prompt if base_prompt else self._character_profile['core_traits']
+
+            if self.character_reference_url:
+                # Use character reference URL as part of description for consistency
+                log_info(f"Using character reference for consistency: {self.character_reference_url[:50]}...")
+                character_core = base_prompt if base_prompt else self._character_profile['core_traits']
+            else:
+                # Use default character description
+                log_info("No character reference found, using default description")
+                character_core = base_prompt if base_prompt else self._character_profile['core_traits']
 
             style_modifiers = self._get_style_modifiers(style)
             setting_modifiers = self._get_setting_modifiers(setting)
@@ -413,12 +422,37 @@ class ImageGenerator:
             self.character_reference_url = reference_image
             self._character_reference_bytes = image_bytes
 
+            # Save character reference to config file for persistence
+            self._save_character_reference_to_config(reference_image)
+
             log_info("Character reference updated successfully")
             return True
 
         except Exception as e:
             log_error(f"Failed to set character reference: {str(e)}")
             return False
+
+    def _save_character_reference_to_config(self, image_url: str) -> None:
+        """Save character reference to config file so it persists across restarts.
+
+        Args:
+            image_url: URL of the character reference image
+        """
+        try:
+            config_path = 'social_media/config.yaml'
+
+            # Update config in memory
+            if 'image_generation' not in self.config:
+                self.config['image_generation'] = {}
+            self.config['image_generation']['character_reference'] = image_url
+
+            # Save to file
+            with open(config_path, 'w') as f:
+                yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+
+            log_info(f"Character reference saved to {config_path}: {image_url[:50]}...")
+        except Exception as e:
+            log_error(f"Failed to save character reference to config: {str(e)}")
 
     def generate_consistent_character(
         self,

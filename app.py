@@ -3618,8 +3618,14 @@ def api_generate_media(post_id):
             db = SocialMediaDatabase(supabase_client)
             video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
 
-            # Use the standardized avatar ID
-            avatar_id = '5637676d31d54946b7585b012a3ce182'
+            # Get avatar from post config or use default
+            # Priority: metadata avatar_id_env > default avatar
+            avatar_id = metadata.get('avatar_id_env')
+            if not avatar_id:
+                # Use default avatar (can be configured via env var or hardcoded)
+                avatar_id = os.getenv('HEYGEN_AVATAR_DEFAULT', '5637676d31d54946b7585b012a3ce182')
+
+            log_info(f"Using avatar {avatar_id} for video generation")
             script = metadata.get('video_script', '')
 
             if not script:
@@ -3638,7 +3644,7 @@ def api_generate_media(post_id):
                     metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
                 )
 
-                if result and result.get('video_url'):
+                if result and result.get('video_id'):
                     # Get existing generation_prompt
                     post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
                     existing_prompt = {}
@@ -3648,23 +3654,40 @@ def api_generate_media(post_id):
                         except:
                             existing_prompt = {}
 
-                    # Add HeyGen video_id to generation_prompt
+                    # Add HeyGen video_id to generation_prompt for tracking
                     existing_prompt['heygen_video_id'] = result.get('video_id')
 
-                    # Update post status to pending_media_approval
-                    supabase_client.table('social_posts').update({
-                        'status': 'pending_media_approval',
-                        'video_url': result.get('video_url'),
-                        'generation_prompt': json.dumps(existing_prompt),
-                        'updated_at': datetime.now(SA_TZ).isoformat()
-                    }).eq('id', post_id).execute()
+                    # Check if video is complete
+                    if result.get('video_url'):
+                        # Video completed - update with video_url
+                        supabase_client.table('social_posts').update({
+                            'status': 'pending_media_approval',
+                            'video_url': result.get('video_url'),
+                            'generation_prompt': json.dumps(existing_prompt),
+                            'updated_at': datetime.now(SA_TZ).isoformat()
+                        }).eq('id', post_id).execute()
 
-                    log_info(f"✅ Video generated successfully for post {post_id}")
-                    return jsonify({
-                        'success': True,
-                        'video_url': result.get('video_url'),
-                        'message': 'Video generated successfully'
-                    })
+                        log_info(f"✅ Video generated successfully for post {post_id}")
+                        return jsonify({
+                            'success': True,
+                            'video_url': result.get('video_url'),
+                            'message': 'Video generated successfully'
+                        })
+                    else:
+                        # Video still processing - store video_id and let scheduler fetch it
+                        supabase_client.table('social_posts').update({
+                            'status': 'generating',
+                            'generation_prompt': json.dumps(existing_prompt),
+                            'updated_at': datetime.now(SA_TZ).isoformat()
+                        }).eq('id', post_id).execute()
+
+                        log_info(f"⏳ Video generation started for post {post_id}, video_id: {result.get('video_id')}")
+                        return jsonify({
+                            'success': True,
+                            'message': 'Video generation started - will be ready shortly',
+                            'video_id': result.get('video_id'),
+                            'status': 'generating'
+                        })
                 else:
                     log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
                     # Reset status so user can retry
@@ -3672,7 +3695,7 @@ def api_generate_media(post_id):
                         'status': 'approved',
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': result.get('error')}), 500
+                    return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
             except Exception as e:
                 log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
                 # Reset status so user can retry
