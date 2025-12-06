@@ -3655,7 +3655,6 @@ def api_generate_media(post_id):
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
                         'video_url': result.get('video_url'),
-                        'storage_path': result.get('storage_path'),
                         'generation_prompt': json.dumps(existing_prompt),
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
@@ -3712,7 +3711,6 @@ def api_generate_media(post_id):
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
                         'image_url': result.get('image_url'),
-                        'storage_path': result.get('storage_path'),
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
