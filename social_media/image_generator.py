@@ -829,27 +829,29 @@ class ImageGenerator:
     
     def check_existing_image(self, prompt_hash: str) -> Optional[Dict]:
         """Check if a similar image already exists to avoid regeneration
-        
+
         Args:
             prompt_hash: Hash of the prompt to check for
-            
+
         Returns:
             Optional[Dict]: Existing image data if found, None otherwise
         """
         try:
-            # Query database for existing images with similar prompt hash
+            # Try to query database for existing images with similar prompt hash
+            # Use prompt_hash column directly instead of metadata JSONB query
             result = self.db.db.table('social_images').select('*').eq(
-                'metadata->>prompt_hash', prompt_hash
+                'prompt_hash', prompt_hash
             ).execute()
-            
+
             if result.data:
                 log_info(f"Found existing image for prompt hash: {prompt_hash}")
                 return result.data[0]
-            
+
             return None
-            
+
         except Exception as e:
-            log_error(f"Error checking existing image: {str(e)}")
+            # If prompt_hash column doesn't exist or other DB error, skip cache check
+            log_warning(f"Unable to check existing image (table/column may not exist): {str(e)}")
             return None
     
     def get_generation_stats(self) -> Dict:

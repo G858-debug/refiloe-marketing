@@ -1293,7 +1293,8 @@ class VideoGenerator:
             return total
 
         except Exception as exc:  # pylint: disable=broad-except
-            log_warning(f"Unable to fetch HeyGen usage from Supabase: {exc}")
+            log_warning(f"Unable to fetch HeyGen usage (table may not exist): {str(exc)}")
+            # Continue without usage tracking
             return 0
 
     def _record_usage(
@@ -1323,7 +1324,8 @@ class VideoGenerator:
             self.supabase_client.table(self.usage_table).insert(record)
             log_debug(f"Recorded HeyGen usage for video {video_id}")
         except Exception as exc:  # pylint: disable=broad-except
-            log_warning(f"Failed to record HeyGen usage: {exc}")
+            log_warning(f"Failed to record HeyGen usage (table may not exist): {str(exc)}")
+            # Continue without usage tracking
 
     def _store_video_record(
         self,
