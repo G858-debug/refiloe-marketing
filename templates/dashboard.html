@@ -485,6 +485,11 @@
             color: #15803d;
         }
 
+        .post-type.post {
+            background: #E8F5E9;
+            color: #1B5E20;
+        }
+
         .loading-message {
             text-align: center;
             padding: 20px;
@@ -956,6 +961,13 @@
                 console.log('📊 Received data:', data);
                 console.log('📊 Posts count:', data.posts ? data.posts.length : 0);
 
+                // DEBUG: Log first post to see its structure
+                if (data.posts && data.posts.length > 0) {
+                    console.log('🔍 First post structure:', data.posts[0]);
+                    console.log('🔍 Post type field:', data.posts[0].post_type);
+                    console.log('🔍 Post format field:', data.posts[0].post_format);
+                }
+
                 if (!data.posts || data.posts.length === 0) {
                     console.warn('⚠️ No posts returned from API');
                     showNoPostsMessage();
@@ -1026,6 +1038,10 @@
             const card = document.createElement('div');
             card.className = 'post-card';
 
+            // Get post type - check multiple possible field names
+            const postType = post.post_type || post.type || post.format || post.post_format || 'post';
+            console.log(`Creating card for post ${post.id}: type="${postType}" (post_type: ${post.post_type}, format: ${post.post_format})`);
+
             // Media preview section (shown inline if media exists)
             const mediaPreview = getMediaPreview(post);
 
@@ -1042,7 +1058,7 @@
 
             card.innerHTML = `
                 <div class="post-header">
-                    <span class="post-type ${post.post_format}">${post.post_format || 'unknown'}</span>
+                    <span class="post-type ${postType}">${postType}</span>
                     ${statusBadge}
                 </div>
 
