@@ -6,6 +6,7 @@ import json
 import os
 import re
 import time
+import traceback
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -1504,12 +1505,17 @@ class VideoGenerator:
         Returns:
             Dict with status, video_url, and error fields
         """
+        log_info(f"Checking status for HeyGen video: {video_id}")
+
         status_url = "https://api.heygen.com/v1/video_status.get"
         params = {"video_id": video_id}
         headers = {
             "X-API-KEY": self.api_key,
             "Content-Type": "application/json",
         }
+
+        log_info(f"Making request to: {status_url}")
+        log_info(f"Params: {params}")
 
         try:
             response = requests.get(
@@ -1518,6 +1524,10 @@ class VideoGenerator:
                 params=params,
                 timeout=30,
             )
+
+            log_info(f"Response status: {response.status_code}")
+            log_info(f"Response body: {response.text}")
+
             response.raise_for_status()
             payload = response.json()
             data = payload.get("data") or payload
@@ -1530,6 +1540,7 @@ class VideoGenerator:
             }
         except Exception as exc:
             log_error(f"Error checking video status for {video_id}: {exc}")
+            log_error(f"Traceback: {traceback.format_exc()}")
             return {
                 'status': 'error',
                 'video_url': None,
