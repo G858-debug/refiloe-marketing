@@ -3149,7 +3149,7 @@ def api_error_response(error_msg, status_code=500, details=None):
 # Dashboard API Endpoints
 # =============================================================================
 
-@app.route('/api/dashboard/posts')
+@app.route('/api/dashboard/posts', methods=['GET'])
 def api_dashboard_posts():
     """API: Get all posts for dashboard - show all active posts"""
     log_info("📥 Request: /api/dashboard/posts")
@@ -3168,20 +3168,36 @@ def api_dashboard_posts():
         return api_error_response('Database client not available', 503)
 
     try:
-        # Get posts with any of these statuses (all active, non-published posts)
+        # Active statuses to show
         active_statuses = ['pending_approval', 'approved', 'pending_media_approval', 'scheduled']
 
-        # Query for all active posts
-        result = supabase_client.table('social_posts').select('*').in_('status', active_statuses).order('scheduled_time', desc=False).execute()
+        # Get ALL posts (SupabaseRestClient doesn't support .in_() filtering)
+        result = supabase_client.table('social_posts').select('*').execute()
 
-        posts = result.data if result.data else []
-        log_info(f"📊 Found {len(posts)} active posts")
+        if result.data:
+            # Filter in Python for active statuses
+            active_posts = [
+                post for post in result.data
+                if post.get('status') in active_statuses
+            ]
 
-        return jsonify({
-            'success': True,
-            'posts': posts,
-            'count': len(posts)
-        })
+            # Sort by scheduled_time
+            active_posts.sort(key=lambda x: x.get('scheduled_time', ''))
+
+            log_info(f"📊 Found {len(active_posts)} active posts (out of {len(result.data)} total)")
+
+            return jsonify({
+                'success': True,
+                'posts': active_posts,
+                'count': len(active_posts)
+            })
+        else:
+            log_info("ℹ️  No posts found")
+            return jsonify({
+                'success': True,
+                'posts': [],
+                'count': 0
+            })
 
     except Exception as e:
         log_error(f"❌ Error fetching dashboard posts: {e}")
