@@ -520,11 +520,31 @@ class VideoGenerator:
         content_type: Optional[str],
         metadata: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Assemble avatar candidates honoring primary and fallback rules."""
+        """Assemble avatar candidates honoring primary and fallback rules.
+
+        Priority order:
+        1. HEYGEN_AVATAR_DEFAULT environment variable (always preferred when set)
+        2. Requested avatar_id parameter
+        3. Post config / dynamic selection
+        4. Other fallbacks
+        """
 
         candidates: List[Dict[str, Any]] = []
         selection_context: Optional[Dict[str, Any]] = None
 
+        # Priority 1: Always prefer HEYGEN_AVATAR_DEFAULT if set
+        env_avatar = os.getenv('HEYGEN_AVATAR_DEFAULT')
+        if env_avatar:
+            candidates.append(
+                {
+                    "avatar_id": env_avatar,
+                    "reason": "environment_default_avatar",
+                    "source": "env_default",
+                }
+            )
+            log_info(f"Using environment default avatar: {env_avatar}")
+
+        # Priority 2: Caller-provided avatar
         if requested_avatar_id:
             candidates.append(
                 {
@@ -533,8 +553,9 @@ class VideoGenerator:
                     "source": "caller",
                 }
             )
+            log_info(f"Adding caller-provided avatar: {requested_avatar_id}")
 
-        # Try new avatar selector first (if available)
+        # Priority 3: Try new avatar selector (if available) - post config
         if self.avatar_selector is not None:
             try:
                 selector_result = self.avatar_selector.select_avatar(
@@ -553,6 +574,7 @@ class VideoGenerator:
                             }
                         )
                         selection_context = selector_result
+                        log_info(f"Adding avatar from selector: {selector_result['avatar_id']}")
             except Exception as exc:  # pylint: disable=broad-except
                 log_warning(f"Avatar selector failed: {exc}")
 
@@ -601,14 +623,16 @@ class VideoGenerator:
             except Exception as exc:  # pylint: disable=broad-except
                 log_warning(f"Unexpected error during avatar mapping selection: {exc}")
 
+        # Additional fallback: HEYGEN_AVATAR_ID (legacy env var)
         if not candidates and self.default_avatar_id:
             candidates.append(
                 {
                     "avatar_id": self.default_avatar_id,
-                    "reason": "default_avatar_configured",
-                    "source": "default",
+                    "reason": "legacy_default_avatar_configured",
+                    "source": "legacy_default",
                 }
             )
+            log_info(f"Using legacy default avatar: {self.default_avatar_id}")
 
         group_avatar = self._resolve_named_avatar("GROUP")
         if group_avatar:
@@ -629,6 +653,18 @@ class VideoGenerator:
                     "source": "fallback_closeup",
                 }
             )
+
+        # Final hardcoded fallback if no candidates found
+        if not candidates:
+            fallback_avatar_id = '5637676d31d54946b7585b012a3ce182'
+            candidates.append(
+                {
+                    "avatar_id": fallback_avatar_id,
+                    "reason": "hardcoded_fallback",
+                    "source": "fallback_hardcoded",
+                }
+            )
+            log_info(f"Using hardcoded fallback avatar: {fallback_avatar_id}")
 
         deduped: List[Dict[str, Any]] = []
         seen_ids: set[str] = set()
