@@ -658,7 +658,7 @@
                 // Stage 1: Content Approval (for pending_approval posts)
                 if (post.status === 'pending_approval') {
                     actionButtons = `
-                        <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">
+                        <button class="btn btn-secondary btn-sm" onclick="editPost('${post.id}')">
                             Edit
                         </button>
                         <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">
