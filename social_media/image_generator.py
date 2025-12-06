@@ -631,19 +631,38 @@ class ImageGenerator:
                             "strength": self._img2img_strength,
                         })
 
-                output = self.client.run(model_identifier, input=input_payload)
+                prediction = self.client.run(model_identifier, input=input_payload)
 
+                # Detailed logging for debugging
+                log_info(f"🔍 Replicate prediction status: completed")
+                log_info(f"🔍 Replicate prediction output type: {type(prediction)}")
+                log_info(f"🔍 Replicate prediction output value: {prediction}")
+
+                if not prediction:
+                    log_warning(f"Empty output from FLUX.1 (attempt {attempt + 1})")
+                    # Log the full prediction object
+                    log_error(f"Full prediction object: output={prediction}")
+                    continue
+
+                # Handle list output from FLUX.1
                 image_url: Optional[str] = None
-                if isinstance(output, list) and output:
-                    image_url = output[0]
-                elif isinstance(output, dict):
-                    image_url = output.get('image') or output.get('output', [None])[0]
+                if isinstance(prediction, list):
+                    if len(prediction) == 0:
+                        log_error(f"Replicate returned empty list")
+                        continue
+                    # Get first item from list
+                    image_url = prediction[0] if isinstance(prediction[0], str) else prediction[0].get('url')
+                elif isinstance(prediction, dict):
+                    image_url = prediction.get('image') or prediction.get('output', [None])[0]
+                else:
+                    # Output is a string URL
+                    image_url = prediction
 
                 if image_url:
-                    log_info(f"Image generated successfully via FLUX.1: {image_url}")
+                    log_info(f"✅ Generated image URL: {image_url}")
                     return image_url
 
-                log_warning(f"Empty output from FLUX.1 (attempt {attempt + 1})")
+                log_warning(f"Could not extract image URL from FLUX.1 output (attempt {attempt + 1})")
 
             except Exception as e:
                 log_error(f"Error generating image with FLUX.1 (attempt {attempt + 1}): {str(e)}")
@@ -829,27 +848,28 @@ class ImageGenerator:
     
     def check_existing_image(self, prompt_hash: str) -> Optional[Dict]:
         """Check if a similar image already exists to avoid regeneration
-        
+
         Args:
             prompt_hash: Hash of the prompt to check for
-            
+
         Returns:
             Optional[Dict]: Existing image data if found, None otherwise
         """
         try:
-            # Query database for existing images with similar prompt hash
+            # Try to check cache (may fail if column doesn't exist)
             result = self.db.db.table('social_images').select('*').eq(
-                'metadata->>prompt_hash', prompt_hash
+                'prompt_hash', prompt_hash
             ).execute()
-            
-            if result.data:
-                log_info(f"Found existing image for prompt hash: {prompt_hash}")
+
+            if result.data and len(result.data) > 0:
+                log_info(f"Found existing image in cache")
                 return result.data[0]
-            
+
             return None
-            
+
         except Exception as e:
-            log_error(f"Error checking existing image: {str(e)}")
+            log_warning(f"Unable to check image cache (table/column may not exist): {str(e)}")
+            # Continue without cache check
             return None
     
     def get_generation_stats(self) -> Dict:
