@@ -262,9 +262,15 @@
                     <input type="text" id="edit-title" value="{{ post.title or '' }}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
                 </div>
                 <div class="form-group" style="margin-bottom: 15px;">
-                    <label for="edit-caption" style="display: block; margin-bottom: 5px; font-weight: 600;">Caption</label>
+                    <label for="edit-caption" style="display: block; margin-bottom: 5px; font-weight: 600;">Caption (what appears on social media)</label>
                     <textarea id="edit-caption" rows="8" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">{{ post.content_text or post.content or '' }}</textarea>
                 </div>
+                {% if post.post_type == 'video' %}
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="edit-script" style="display: block; margin-bottom: 5px; font-weight: 600;">Video Script (what Refiloe says)</label>
+                    <textarea id="edit-script" rows="8" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">{{ post.video_script or '' }}</textarea>
+                </div>
+                {% endif %}
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="edit-scheduled-time" style="display: block; margin-bottom: 5px; font-weight: 600;">Scheduled Time</label>
                     <input type="datetime-local" id="edit-scheduled-time" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -360,11 +366,28 @@
 
         async function saveEdit(postId) {
             const scheduledTimeInput = document.getElementById('edit-scheduled-time').value;
+
+            // Build update data
             const updateData = {
                 title: document.getElementById('edit-title').value,
                 content_text: document.getElementById('edit-caption').value,
                 scheduled_time: scheduledTimeInput ? new Date(scheduledTimeInput).toISOString() : null
             };
+
+            // Include video script if this is a video post
+            const scriptField = document.getElementById('edit-script');
+            if (scriptField) {
+                // Get existing generation_prompt and update video_script
+                const existingPrompt = '{{ post.generation_prompt | default("{}") | e }}';
+                try {
+                    const metadata = JSON.parse(existingPrompt || '{}');
+                    metadata.video_script = scriptField.value;
+                    updateData.generation_prompt = JSON.stringify(metadata);
+                } catch (e) {
+                    // If parsing fails, create new metadata with just video_script
+                    updateData.generation_prompt = JSON.stringify({ video_script: scriptField.value });
+                }
+            }
 
             try {
                 const response = await fetch(`/api/dashboard/edit/${postId}`, {
