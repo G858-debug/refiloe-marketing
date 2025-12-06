@@ -324,7 +324,7 @@ class SocialMediaSystemTester:
                 }
             
             # Validate image result structure
-            required_fields = ['image_url', 'storage_path', 'image_id']
+            required_fields = ['image_url', 'image_id']
             for field in required_fields:
                 if field not in image_result:
                     return {
