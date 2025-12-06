@@ -11,7 +11,7 @@ import atexit
 import uuid
 import json
 import traceback
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta
 import pytz
 
@@ -32,6 +32,9 @@ from social_media.looks_generator import LooksGenerator, REFILOE_LOOKS
 
 
 load_dotenv()
+
+# Create dashboard blueprint
+dashboard_bp = Blueprint('dashboard', __name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -1288,6 +1291,7 @@ def generate_video_form():
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
 app.register_blueprint(analytics_bp, url_prefix='/analytics')
+app.register_blueprint(dashboard_bp)
 
 
 # ------------------------------------------------------------------------------
@@ -3360,6 +3364,29 @@ def api_approve_media(post_id):
             500,
             {'post_id': post_id, 'traceback': traceback.format_exc()}
         )
+
+
+@dashboard_bp.route('/api/dashboard/posts/<post_id>/reset-to-approved', methods=['POST'])
+def reset_to_approved(post_id):
+    """Reset post to approved status for media regeneration"""
+    try:
+        # Clear media URLs and reset to approved
+        result = supabase_client.table('social_posts').update({
+            'status': 'approved',
+            'video_url': None,
+            'media_url': None,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        if result.data:
+            log_info(f"🔄 Post {post_id} reset to approved for media regeneration")
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+    except Exception as e:
+        log_error(f"❌ Error resetting post: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/dashboard/reject/<post_id>', methods=['POST'])
