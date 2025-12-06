@@ -659,6 +659,7 @@
                     actionButtons = `
                         <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
                         <button class="btn btn-primary btn-sm" onclick="generateMedia('${post.id}')">Generate ${post.post_type === 'video' ? 'Video' : 'Image'}</button>
+                        ${post.post_type === 'video' && !post.video_url ? '<button class="btn btn-warning btn-sm" onclick="fetchVideo(\'' + post.id + '\')">🔄 Fetch Video</button>' : ''}
                     `;
                 } else if (post.status === 'pending_media_approval') {
                     actionButtons = `
@@ -1149,6 +1150,39 @@
                     }
                 }
             );
+        }
+
+        // Fetch video for a post stuck without video_url
+        function fetchVideo(postId) {
+            if (!confirm('Fetch video from HeyGen for this post?')) return;
+
+            const button = event.target;
+            button.disabled = true;
+            button.textContent = '⏳ Fetching...';
+
+            fetch(`${API_BASE}/api/dashboard/fetch-video/${postId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Video fetched successfully!');
+                    location.reload();
+                } else if (data.retry) {
+                    alert('⏳ Video still processing. Try again in a minute.');
+                    button.disabled = false;
+                    button.textContent = '🔄 Fetch Video';
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                    button.disabled = false;
+                    button.textContent = '🔄 Fetch Video';
+                }
+            })
+            .catch(error => {
+                alert(`❌ Error: ${error.message}`);
+                button.disabled = false;
+                button.textContent = '🔄 Fetch Video';
+            });
         }
 
         // Load posts and check connection on page load
