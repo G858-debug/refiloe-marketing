@@ -655,24 +655,51 @@
             let actionButtons = '';
 
             if (showApproveReject) {
+                // Stage 1: Content Approval (for pending_approval posts)
                 if (post.status === 'pending_approval') {
                     actionButtons = `
-                        <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
-                        <button class="btn btn-primary btn-sm" onclick="generateMedia('${post.id}')">Generate ${post.post_type === 'video' ? 'Video' : 'Image'}</button>
-                    `;
-                } else if (post.status === 'pending_media_approval') {
-                    actionButtons = `
-                        <a href="${post.video_url || '#'}" target="_blank" class="btn btn-secondary btn-sm">Preview</a>
-                        <button class="btn btn-success btn-sm" onclick="approveMedia('${post.id}')">Approve Media</button>
-                        <button class="btn btn-warning btn-sm" onclick="regenerateMedia('${post.id}')">Regenerate</button>
-                    `;
-                } else if (post.status === 'media_approved') {
-                    actionButtons = `
-                        <button class="btn btn-info btn-sm" onclick="editPost('${post.id}')">Edit</button>
-                        <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">Approve for Posting</button>
-                        <button class="btn btn-danger btn-sm" onclick="rejectPost('${post.id}')">Reject</button>
+                        <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">
+                            ✅ Approve Content (Stage 1)
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectPost('${post.id}')">
+                            ❌ Reject
+                        </button>
                     `;
                 }
+                // Media Generation (for approved posts without media)
+                else if (post.status === 'approved') {
+                    actionButtons = `
+                        <div style="margin-bottom: 10px;">
+                            <span class="badge" style="background: #dcfce7; color: #15803d;">✅ Content Approved</span>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="generateMedia('${post.id}')">
+                            🎬 Generate Media
+                        </button>
+                    `;
+                }
+                // Stage 2: Media Approval (for posts with generated media)
+                else if (post.status === 'pending_media_approval') {
+                    actionButtons = `
+                        <div style="margin-bottom: 10px;">
+                            <span class="badge" style="background: #dbeafe; color: #1d4ed8;">🎬 Media Generated - Review Required</span>
+                        </div>
+                        <button class="btn btn-success btn-sm" onclick="approveMedia('${post.id}')">
+                            ✅ Approve Media (Stage 2)
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="regenerateMedia('${post.id}')">
+                            🔄 Regenerate Media
+                        </button>
+                    `;
+                }
+            }
+
+            // Scheduled (ready for posting)
+            if (post.status === 'scheduled' && showApproveReject) {
+                actionButtons = `
+                    <div style="margin-bottom: 10px;">
+                        <span class="badge" style="background: #f3e8ff; color: #7c3aed;">📅 Scheduled for ${formatDate(post.scheduled_time)}</span>
+                    </div>
+                ` + actionButtons;
             }
 
             return `
@@ -875,7 +902,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('Post approved!', 'success');
+                    showToast('✅ Content approved! Generate media next.', 'success');
                     refreshPosts();
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
@@ -1107,6 +1134,8 @@
 
         // Approve media for a post
         async function approveMedia(postId) {
+            if (!confirm('Approve this media? Post will be scheduled for publishing.')) return;
+
             try {
                 const response = await fetch(`${API_BASE}/api/dashboard/approve-media/${postId}`, {
                     method: 'POST'
@@ -1114,41 +1143,38 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('Media approved!', 'success');
+                    showToast('✅ Media approved! Post scheduled for publishing.', 'success');
                     refreshPosts();
                 } else {
-                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
                 console.error('Error approving media:', error);
-                showToast('Failed to approve media', 'error');
+                showToast('❌ Error: ' + error.message, 'error');
             }
         }
 
         // Regenerate media for a post
         async function regenerateMedia(postId) {
-            showModal(
-                'Regenerate Media',
-                'This will delete the current video and let you generate a new one. Continue?',
-                async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/dashboard/regenerate-media/${postId}`, {
-                            method: 'POST'
-                        });
-                        const data = await response.json();
+            if (!confirm('Regenerate media for this post?')) return;
 
-                        if (data.success) {
-                            showToast('Ready to regenerate', 'success');
-                            refreshPosts();
-                        } else {
-                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error regenerating media:', error);
-                        showToast('Failed to reset media', 'error');
-                    }
+            try {
+                // Reset to approved status so media can be regenerated
+                const response = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Post reset. Click "Generate Media" to create new media.', 'success');
+                    refreshPosts();
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), 'error');
                 }
-            );
+            } catch (error) {
+                console.error('Error regenerating media:', error);
+                showToast('❌ Error: ' + error.message, 'error');
+            }
         }
 
         // Load posts and check connection on page load
