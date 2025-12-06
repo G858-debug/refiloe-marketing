@@ -3620,6 +3620,97 @@ def api_regenerate_media(post_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/fetch-video/<post_id>', methods=['POST'])
+def fetch_heygen_video(post_id):
+    """Fetch a HeyGen video for a post that timed out during generation"""
+    try:
+        log_info(f"📥 Fetching HeyGen video for post {post_id}")
+
+        # Get post data
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post_data = result.data[0]
+
+        # Check if video_url already exists
+        if post_data.get('video_url'):
+            log_warning(f"Post {post_id} already has video_url: {post_data['video_url']}")
+            return jsonify({'success': True, 'message': 'Video already exists', 'video_url': post_data['video_url']})
+
+        # Parse generation_prompt to find HeyGen video_id
+        generation_prompt = post_data.get('generation_prompt')
+        if not generation_prompt:
+            return jsonify({'success': False, 'error': 'No generation_prompt found'}), 400
+
+        try:
+            prompt_data = json.loads(generation_prompt) if isinstance(generation_prompt, str) else generation_prompt
+        except:
+            prompt_data = {}
+
+        heygen_video_id = prompt_data.get('heygen_video_id')
+
+        if not heygen_video_id:
+            return jsonify({'success': False, 'error': 'No HeyGen video_id found in generation_prompt'}), 400
+
+        # Fetch video from HeyGen
+        heygen_api_key = os.getenv('HEYGEN_API_KEY')
+        if not heygen_api_key:
+            return jsonify({'success': False, 'error': 'HEYGEN_API_KEY not configured'}), 500
+
+        import requests
+        headers = {'X-Api-Key': heygen_api_key}
+        response = requests.get(
+            f'https://api.heygen.com/v2/video/{heygen_video_id}',
+            headers=headers,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            log_error(f"HeyGen API error: {response.status_code} - {response.text}")
+            return jsonify({'success': False, 'error': f'HeyGen API error: {response.status_code}'}), 500
+
+        video_data = response.json()
+
+        if video_data.get('error'):
+            return jsonify({'success': False, 'error': video_data['error'].get('message', 'Unknown error')}), 500
+
+        # Check video status
+        video_status = video_data.get('data', {}).get('status')
+        video_url = video_data.get('data', {}).get('video_url')
+
+        if video_status == 'completed' and video_url:
+            # Update database
+            supabase_client.table('social_posts').update({
+                'video_url': video_url,
+                'status': 'pending_media_approval',
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('id', post_id).execute()
+
+            log_info(f"✅ Video fetched and saved for post {post_id}: {video_url}")
+            return jsonify({
+                'success': True,
+                'video_url': video_url,
+                'message': 'Video fetched successfully'
+            })
+        elif video_status == 'processing':
+            return jsonify({
+                'success': False,
+                'error': 'Video still processing',
+                'status': video_status,
+                'retry': True
+            }), 202
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Video in unexpected status: {video_status}'
+            }), 500
+
+    except Exception as e:
+        log_error(f"❌ Error fetching HeyGen video: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/approve-all', methods=['POST'])
 def api_approve_all_posts():
     """API: Approve all pending posts"""
