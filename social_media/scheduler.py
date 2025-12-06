@@ -361,12 +361,17 @@ class SocialMediaScheduler:
 
         try:
             # Query posts ready to publish
+            # IMPORTANT: Only fetch posts with status='scheduled'
+            # This ensures BOTH approval stages are complete:
+            # 1. Media approval (media_approved=True)
+            # 2. Content approval (content_approved=True)
+            # Posts are only set to 'scheduled' status after both approvals
             now_sa = datetime.now(SA_TIMEZONE)
             response = (
                 self.supabase_client.table("social_posts")
                 .select("*")  # Get all fields including content_text, metadata, etc.
-                .eq("status", "scheduled")
-                .lte("scheduled_time", now_sa.isoformat())
+                .eq("status", "scheduled")  # Only posts that passed BOTH approval stages
+                .lte("scheduled_time", now_sa.isoformat())  # Scheduled time has been reached
                 .limit(int(self.app.config.get("CONTENT_POSTING_BATCH_LIMIT", 5)))
                 .execute()
             )
