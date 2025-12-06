@@ -406,6 +406,18 @@ CONTENT REQUIREMENTS:
 - Include practical wisdom earned, not advice given
 {f"- EMERGENCY MODE: Generate content quickly with high engagement potential" if emergency_mode else ""}
 
+VIDEO SCRIPT RESTRICTIONS (CRITICAL):
+- NEVER use "Refiloe" or "I'm Refiloe" in video scripts
+- NEVER use "Hi there" or "Hey there" as greetings
+- Jump straight into the content - no formal introductions
+- Speak TO trainers, not ABOUT yourself
+- Use "you" and "your" language, avoid "I" and "my" when possible
+- Start with a hook, question, or relatable moment
+- Good: "The message came at 5:47 AM..."
+- Good: "You know that feeling when..."
+- Bad: "Hey! I'm Refiloe, and today..."
+- Bad: "Hi there, personal trainers..."
+
 SA CONTEXT (South African flavour):
 - {chr(10).join(f"- {item}" for item in style.get('sa_context', []))}
 
@@ -552,6 +564,9 @@ Generate engaging, valuable content that personal trainers will love and share!"
 - Each slide should be self-contained but connected""",
             
             'video_with_caption': """
+CRITICAL: Do NOT introduce yourself or use "Refiloe" in the script. Jump straight into content.
+Start with a compelling hook, question, or scene that grabs attention immediately.
+
 - Create a caption for a short video (30-90 seconds)
 - Describe what the video shows
 - Include key takeaways
@@ -1247,6 +1262,18 @@ PERSONALITY & VOICE:
 - {', '.join(personality)}
 - Voice: {speaking_style.get('voice', 'First person')}
 - Tone: {speaking_style.get('tone', 'Conversational and engaging')}
+
+VIDEO SCRIPT RESTRICTIONS (CRITICAL):
+- NEVER use "Refiloe" or "I'm Refiloe" in video scripts
+- NEVER use "Hi there" or "Hey there" as greetings
+- Jump straight into the content - no formal introductions
+- Speak TO trainers, not ABOUT yourself
+- Use "you" and "your" language, avoid "I" and "my" when possible
+- Start with a hook, question, or relatable moment
+- Good: "The message came at 5:47 AM..."
+- Good: "You know that feeling when..."
+- Bad: "Hey! I'm Refiloe, and today..."
+- Bad: "Hi there, personal trainers..."
 
 RETENTION OPTIMIZATION:
 - Hook MUST grab attention in first 3 seconds
