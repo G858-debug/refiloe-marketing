@@ -772,63 +772,36 @@ def clear_all_test_posts(supabase_client) -> int:
     try:
         log_info("🗑️  Starting deletion of old/test posts...")
 
-        # Delete posts with post_type='test'
-        log_info("Deleting posts with post_type='test'...")
+        # Delete ALL pending_approval posts
+        log_info("🗑️  Deleting ALL pending_approval posts...")
+
+        deleted_count = 0
         try:
-            result1 = supabase_client.table('social_posts').delete().eq('post_type', 'test').execute()
-            count1 = len(result1.data) if result1.data else 0
-            if count1 > 0:
-                log_info(f"✅ Deleted {count1} test posts")
+            # Get all pending_approval posts
+            result = supabase_client.table('social_posts').select('id').eq('status', 'pending_approval').execute()
+
+            if result.data:
+                pending_ids = [post['id'] for post in result.data]
+                log_info(f"Found {len(pending_ids)} pending_approval posts to delete")
+
+                # Delete each post
+                for post_id in pending_ids:
+                    try:
+                        supabase_client.table('social_posts').delete().eq('id', post_id).execute()
+                        deleted_count += 1
+                    except Exception as e:
+                        log_error(f"Failed to delete post {post_id}: {e}")
+
+                log_info(f"✅ Successfully deleted {deleted_count} posts")
             else:
-                log_info("ℹ️  No test posts found to delete")
+                log_info("ℹ️  No pending_approval posts found to delete")
+
         except Exception as e:
-            log_error(f"❌ Error deleting test posts: {e}")
-            count1 = 0
+            log_error(f"❌ Error deleting pending_approval posts: {e}")
 
-        # Delete any posts from before December 2025 (old test data)
-        # Get all posts first
-        log_info("Checking for posts created before December 1, 2025...")
-        try:
-            all_posts_result = supabase_client.table('social_posts').select('*').execute()
-
-            count2 = 0
-            failed_deletes = 0
-            if all_posts_result.data:
-                # Filter in Python for posts created before December 1, 2025
-                cutoff_date = '2025-12-01'
-                old_post_ids = [
-                    post['id'] for post in all_posts_result.data
-                    if post.get('created_at', '') < cutoff_date
-                ]
-
-                if old_post_ids:
-                    log_info(f"Found {len(old_post_ids)} old posts to delete...")
-                    # Delete each old post
-                    for idx, post_id in enumerate(old_post_ids, 1):
-                        try:
-                            supabase_client.table('social_posts').delete().eq('id', post_id).execute()
-                            count2 += 1
-                            if idx % 10 == 0:  # Log progress every 10 posts
-                                log_info(f"  Progress: {idx}/{len(old_post_ids)} old posts deleted...")
-                        except Exception as e:
-                            failed_deletes += 1
-                            log_error(f"❌ Failed to delete post {post_id}: {e}")
-
-                    if count2 > 0:
-                        log_info(f"✅ Deleted {count2} old posts")
-                    if failed_deletes > 0:
-                        log_warning(f"⚠️  Failed to delete {failed_deletes} old posts")
-                else:
-                    log_info("ℹ️  No old posts found to delete")
-            else:
-                log_info("ℹ️  No posts found in database")
-        except Exception as e:
-            log_error(f"❌ Error deleting old posts: {e}")
-            count2 = 0
-
-        total_deleted = count1 + count2
+        total_deleted = deleted_count
         if total_deleted > 0:
-            log_info(f"✅ Total deleted: {total_deleted} posts ({count1} test posts + {count2} old posts)")
+            log_info(f"✅ Total deleted: {total_deleted} pending_approval posts")
         else:
             log_info("ℹ️  No posts needed to be deleted")
 
