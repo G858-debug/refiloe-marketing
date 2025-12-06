@@ -384,42 +384,21 @@ class ImageGenerator:
             return {"error": str(e)}
     
     def download_and_upload(self, replicate_url: str, filename: str) -> str:
-        """Download image from Replicate and upload to Supabase Storage
-        
+        """Use Replicate URL directly without downloading/uploading
+
+        Replicate delivery URLs are permanent and publicly accessible via their CDN,
+        so there's no need to download and re-upload to Supabase Storage.
+
         Args:
             replicate_url: URL of the generated image from Replicate
-            filename: Desired filename for the stored image
-            
+            filename: Not used (kept for compatibility)
+
         Returns:
-            str: Storage path if successful, empty string if failed
+            str: Replicate URL (permanent and publicly accessible)
         """
-        try:
-            log_info(f"Downloading image from: {replicate_url}")
-            
-            # Download image
-            response = requests.get(replicate_url, timeout=30)
-            response.raise_for_status()
-            
-            # Upload to Supabase Storage
-            storage_path = f"social-media-images/{filename}"
-            
-            # Upload to Supabase Storage bucket
-            upload_result = self.db.db.storage.from_('social-media-images').upload(
-                storage_path, 
-                response.content,
-                file_options={"content-type": "image/png"}
-            )
-            
-            if upload_result:
-                log_info(f"Image uploaded successfully to: {storage_path}")
-                return storage_path
-            else:
-                log_error("Failed to upload image to Supabase Storage")
-                return ""
-                
-        except Exception as e:
-            log_error(f"Error downloading/uploading image: {str(e)}")
-            return ""
+        log_info(f"✅ Using Replicate URL directly: {replicate_url}")
+        log_info("Replicate CDN URLs are permanent - no storage upload needed")
+        return replicate_url
 
     def set_character_reference(self, reference_image: str) -> bool:
         """Set a reference image to guide character consistency.
