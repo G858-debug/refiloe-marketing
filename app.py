@@ -3652,20 +3652,29 @@ def fetch_heygen_video(post_id):
             log_warning(f"Post {post_id} already has video_url: {post_data['video_url']}")
             return jsonify({'success': True, 'message': 'Video already exists', 'video_url': post_data['video_url']})
 
-        # Parse generation_prompt to find HeyGen video_id
-        generation_prompt = post_data.get('generation_prompt')
-        if not generation_prompt:
-            return jsonify({'success': False, 'error': 'No generation_prompt found'}), 400
+        # Try to get video_id from multiple sources
+        heygen_video_id = None
 
-        try:
-            prompt_data = json.loads(generation_prompt) if isinstance(generation_prompt, str) else generation_prompt
-        except:
-            prompt_data = {}
+        # Source 1: Check request body for manual video_id
+        request_data = request.get_json() or {}
+        heygen_video_id = request_data.get('video_id')
 
-        heygen_video_id = prompt_data.get('heygen_video_id')
+        # Source 2: Check generation_prompt
+        if not heygen_video_id:
+            generation_prompt = post_data.get('generation_prompt')
+            if generation_prompt:
+                try:
+                    prompt_data = json.loads(generation_prompt) if isinstance(generation_prompt, str) else generation_prompt
+                    heygen_video_id = prompt_data.get('heygen_video_id')
+                except:
+                    pass
 
         if not heygen_video_id:
-            return jsonify({'success': False, 'error': 'No HeyGen video_id found in generation_prompt'}), 400
+            return jsonify({
+                'success': False,
+                'error': 'No HeyGen video_id found. This is a legacy post - please use the manual fetch with video_id.',
+                'hint': 'Check HeyGen dashboard for the video ID'
+            }), 400
 
         # Fetch video from HeyGen
         heygen_api_key = os.getenv('HEYGEN_API_KEY')
@@ -3694,10 +3703,19 @@ def fetch_heygen_video(post_id):
         video_url = video_data.get('data', {}).get('video_url')
 
         if video_status == 'completed' and video_url:
+            # Update generation_prompt to include video_id for future reference
+            existing_prompt = {}
+            try:
+                existing_prompt = json.loads(post_data.get('generation_prompt', '{}'))
+            except:
+                existing_prompt = {}
+            existing_prompt['heygen_video_id'] = heygen_video_id
+
             # Update database
             supabase_client.table('social_posts').update({
                 'video_url': video_url,
                 'status': 'pending_media_approval',
+                'generation_prompt': json.dumps(existing_prompt),
                 'updated_at': datetime.now(SA_TZ).isoformat()
             }).eq('id', post_id).execute()
 
