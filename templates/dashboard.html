@@ -219,6 +219,25 @@
             background: linear-gradient(transparent, white);
         }
         .post-content.expanded::after { display: none; }
+        .post-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0 0 10px 0;
+        }
+        .post-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 15px;
+        }
+        .post-theme, .post-platform {
+            background: #f3f4f6;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
 
         .post-schedule {
             font-size: 13px;
@@ -923,10 +942,14 @@
 
                 ${mediaIndicators}
 
+                ${post.title ? `<h4 class="post-title">${post.title}</h4>` : ''}
+
                 <p class="post-content">${contentPreview}</p>
 
                 <div class="post-meta">
                     <span class="scheduled-time">📅 ${scheduledDate}</span>
+                    ${post.content_theme ? `<span class="post-theme">🏷️ ${post.content_theme.replace(/_/g, ' ')}</span>` : ''}
+                    ${post.platform ? `<span class="post-platform">📱 ${post.platform}</span>` : ''}
                 </div>
 
                 ${getActionButtons(post, status)}
