@@ -3669,7 +3669,7 @@ def api_generate_media(post_id):
                 video_url = result.get('video_url')
 
                 if video_id:
-                    log_info(f"HeyGen video request accepted (video_id={video_id})")
+                    log_info(f"✅ HeyGen accepted video request: video_id={video_id}")
 
                     if video_url:
                         # Video completed immediately (rare but possible)
@@ -3703,14 +3703,20 @@ def api_generate_media(post_id):
                         })
                     else:
                         # CRITICAL: Save video_id to database so we can fetch it later
-                        supabase_client.table('social_posts').update({
+                        log_info(f"💾 Saving video_id {video_id} to database for post {post_id}")
+
+                        update_result = supabase_client.table('social_posts').update({
                             'video_id': video_id,
                             'status': 'generating',
                             'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
                             'updated_at': datetime.now(timezone.utc).isoformat()
                         }).eq('id', post_id).execute()
 
-                        log_info(f"✅ Video ID {video_id} saved to database for post {post_id}")
+                        if update_result.data:
+                            log_info(f"✅ Video ID saved: {video_id} for post {post_id}")
+                            log_info(f"📊 Post status updated to 'generating' - fetch job will retrieve video URL later")
+                        else:
+                            log_error(f"❌ Failed to save video_id to database for post {post_id}")
 
                         # Return success immediately - fetch job will get the video later
                         return jsonify({
@@ -3719,7 +3725,8 @@ def api_generate_media(post_id):
                             'status': 'generating'
                         }), 200
                 else:
-                    log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
+                    log_error(f"❌ No video_id returned from HeyGen for post {post_id}")
+                    log_error(f"❌ HeyGen response: {result}")
                     # Reset status so user can retry
                     supabase_client.table('social_posts').update({
                         'status': 'approved',
@@ -3827,14 +3834,27 @@ def api_regenerate_media(post_id):
 def api_fetch_videos_now():
     """Manually trigger video fetching from HeyGen"""
     try:
-        log_info("📥 Manual video fetch triggered")
+        log_info("📥 Manual video fetch triggered from dashboard")
+
+        # First check what posts are in generating status
+        result = supabase_client.table('social_posts').select('*').eq('status', 'generating').execute()
+        log_info(f"Found {len(result.data)} posts with status='generating'")
+
+        for post in result.data:
+            log_info(f"Post {post['id']}: video_id={post.get('video_id')}, post_type={post.get('post_type')}")
 
         # Import and run the fetch job immediately
         if scheduler:
             scheduler.fetch_orphaned_videos_job()
 
+            # Check status after fetch
+            result_after = supabase_client.table('social_posts').select('*').eq('status', 'generating').execute()
+            log_info(f"After fetch: {len(result_after.data)} posts still in 'generating' status")
+
             return jsonify({
                 'message': 'Video fetch completed',
+                'before_count': len(result.data),
+                'after_count': len(result_after.data),
                 'success': True
             }), 200
         else:
@@ -3845,6 +3865,7 @@ def api_fetch_videos_now():
 
     except Exception as e:
         log_error(f"Error in manual fetch: {str(e)}")
+        log_error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 
