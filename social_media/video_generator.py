@@ -141,7 +141,9 @@ class VideoGenerator:
 
         style_settings = self._resolve_style(style)
         chunk_char_limit = style_settings.get("chunk_char_limit", 480)
-        script_chunks = self._chunk_script(script_text, limit=chunk_char_limit)
+        # Prepare script for proper pronunciation in narration
+        narration_script = self._prepare_script_for_narration(script_text)
+        script_chunks = self._chunk_script(narration_script, limit=chunk_char_limit)
 
         if not script_chunks:
             raise ValueError("Script text is empty after processing")
