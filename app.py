@@ -3492,13 +3492,16 @@ def api_generate_media(post_id):
             log_info(f"🎬 Generating video for post {post_id}")
 
             # Generate video
-            result = video_gen.generate_video(
-                script=script,
+            result = video_gen.generate_avatar_video(
+                script_text=script,
                 avatar_id=avatar_id,
-                post_id=post_id
+                voice_id=None,
+                style='educational',
+                background_music=True,
+                metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
             )
 
-            if result['success']:
+            if result and result.get('video_url'):
                 # Update post status to pending_media_approval
                 supabase_client.table('social_posts').update({
                     'status': 'pending_media_approval',
