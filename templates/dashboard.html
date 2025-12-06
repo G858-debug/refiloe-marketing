@@ -190,6 +190,45 @@
         .badge-published { background: #dcfce7; color: #15803d; }
         .badge-rejected { background: #fee2e2; color: #dc2626; }
 
+        .media-indicators {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .media-indicator {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .media-indicator.video-ready {
+            background: #D4EDDA;
+            color: #155724;
+            border: 1px solid #C3E6CB;
+        }
+
+        .media-indicator.image-ready {
+            background: #D1ECF1;
+            color: #0C5460;
+            border: 1px solid #BEE5EB;
+        }
+
+        .media-indicator.carousel-ready {
+            background: #FFF3CD;
+            color: #856404;
+            border: 1px solid #FFEAA7;
+        }
+
+        .media-indicator.no-media {
+            background: #F8D7DA;
+            color: #721C24;
+            border: 1px solid #F5C6CB;
+        }
+
         .post-content {
             color: #4b5563;
             font-size: 14px;
@@ -768,6 +807,14 @@
                             <span class="badge ${getTypeBadge(post.post_type)}">${post.post_type || 'post'}</span>
                             <span class="badge ${getStatusBadge(post.status)}">${(post.status || 'pending').replace(/_/g, ' ')}</span>
                             ${post.content_theme ? `<span class="badge">${post.content_theme}</span>` : ''}
+                        </div>
+
+                        <!-- Media status indicators -->
+                        <div class="media-indicators">
+                            ${post.video_url ? '<span class="media-indicator video-ready" title="Video generated">🎥 Video</span>' : ''}
+                            ${post.image_url ? '<span class="media-indicator image-ready" title="Image generated">🖼️ Image</span>' : ''}
+                            ${post.carousel_slides && post.carousel_slides.length > 0 ? `<span class="media-indicator carousel-ready" title="Carousel ready">📊 Carousel (${post.carousel_slides.length} slides)</span>` : ''}
+                            ${!post.video_url && !post.image_url && (!post.carousel_slides || post.carousel_slides.length === 0) ? '<span class="media-indicator no-media" title="No media generated">❌ No Media</span>' : ''}
                         </div>
                     </div>
                     <div class="post-content">${truncatedContent}</div>
