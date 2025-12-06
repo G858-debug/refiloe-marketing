@@ -133,8 +133,8 @@
         }
         .btn-primary { background: #667eea; color: white; }
         .btn-primary:hover { background: #5a6fd6; }
-        .btn-success { background: #22c55e; color: white; }
-        .btn-success:hover { background: #16a34a; }
+        .btn-success { background: #4CAF50; color: white; border: none; }
+        .btn-success:hover { background: #45a049; transform: translateY(-1px); }
         .btn-danger { background: #ef4444; color: white; }
         .btn-danger:hover { background: #dc2626; }
         .btn.btn-warning {
@@ -144,12 +144,13 @@
         }
         .btn.btn-warning:hover {
             background: #F57C00;
+            transform: translateY(-1px);
         }
         .btn-secondary { background: #e5e7eb; color: #374151; }
         .btn-secondary:hover { background: #d1d5db; }
         .btn-info { background: #3b82f6; color: white; }
         .btn-info:hover { background: #2563eb; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         /* Posts List */
         .section-title {
@@ -254,9 +255,17 @@
             display: flex;
             gap: 10px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
         .post-actions button {
             flex: 1;
+            min-width: 150px;
+            padding: 10px 15px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
         .btn-sm {
             padding: 8px 16px;
@@ -977,11 +986,9 @@
                 console.log('📊 Received data:', data);
                 console.log('📊 Posts count:', data.posts ? data.posts.length : 0);
 
-                // DEBUG: Log first post to see its structure
+                // DEBUG: Log first post
                 if (data.posts && data.posts.length > 0) {
                     console.log('🔍 First post structure:', data.posts[0]);
-                    console.log('🔍 Post type field:', data.posts[0].post_type);
-                    console.log('🔍 Post format field:', data.posts[0].post_format);
                 }
 
                 if (!data.posts || data.posts.length === 0) {
@@ -1007,12 +1014,17 @@
                     scheduled: postsByStatus.scheduled.length
                 });
 
-                // Render each section
-                renderSection('pending-approval-posts', postsByStatus.pending_approval, 'pending_approval');
-                renderSection('approved-posts', postsByStatus.approved, 'approved');
-                renderSection('generating-posts', postsByStatus.generating, 'generating');
-                renderSection('pending-media-posts', postsByStatus.pending_media_approval, 'pending_media_approval');
-                renderSection('scheduled-posts', postsByStatus.scheduled, 'scheduled');
+                // Render each section - wrap in try/catch
+                try {
+                    renderSection('pending-approval-posts', postsByStatus.pending_approval, 'pending_approval');
+                    renderSection('approved-posts', postsByStatus.approved, 'approved');
+                    renderSection('generating-posts', postsByStatus.generating, 'generating');
+                    renderSection('pending-media-posts', postsByStatus.pending_media_approval, 'pending_media_approval');
+                    renderSection('scheduled-posts', postsByStatus.scheduled, 'scheduled');
+                } catch (renderError) {
+                    console.error('❌ Error rendering sections:', renderError);
+                    alert('Error rendering posts: ' + renderError.message);
+                }
 
                 // Hide loading messages
                 document.querySelectorAll('.loading-message').forEach(el => el.style.display = 'none');
@@ -1242,6 +1254,8 @@
         }
 
         function getActionButtons(post, status) {
+            console.log(`Getting action buttons for post ${post.id}, status: ${status}, type: ${post.post_type}`);
+
             let buttons = '';
 
             if (status === 'pending_approval') {
@@ -1251,30 +1265,47 @@
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
-            } else if (status === 'approved') {
+            }
+            else if (status === 'approved') {
                 buttons = `
                     <div class="post-actions">
                         <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
                     </div>
                 `;
-            } else if (status === 'generating') {
+            }
+            else if (status === 'generating') {
                 buttons = `
-                    <p class="status-message">⏱️ Generating media... This takes 30-60 seconds. Page will auto-refresh.</p>
+                    <p class="status-message">⏱️ Generating media... This takes 30-90 seconds.</p>
                 `;
-            } else if (status === 'pending_media_approval') {
-                // Show approve and regenerate for ALL media types
+            }
+            else if (status === 'pending_media_approval') {
+                // Determine media type for better labeling
                 const mediaType = post.post_type === 'video' ? 'Video' :
                                  post.post_type === 'image' ? 'Image' :
                                  post.post_type === 'carousel' ? 'Carousel' : 'Media';
 
+                console.log(`Creating buttons for ${mediaType} in pending_media_approval`);
+
                 buttons = `
                     <div class="post-actions">
-                        <button onclick="approveMedia('${post.id}')" class="btn btn-success">✅ Approve ${mediaType} (Stage 2)</button>
-                        <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">🔄 Regenerate ${mediaType}</button>
+                        <button onclick="approveMedia('${post.id}')" class="btn btn-success">
+                            ✅ Approve ${mediaType} (Stage 2)
+                        </button>
+                        <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
+                            🔄 Regenerate ${mediaType}
+                        </button>
                     </div>
                 `;
-            } else if (status === 'scheduled') {
-                buttons = `<p class="status-message">📅 Will post automatically at scheduled time</p>`;
+            }
+            else if (status === 'scheduled') {
+                buttons = `
+                    <p class="status-message">📅 Will post automatically at scheduled time</p>
+                `;
+            }
+            else {
+                buttons = `
+                    <p class="status-message">Status: ${status}</p>
+                `;
             }
 
             return buttons;
