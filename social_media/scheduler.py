@@ -101,13 +101,17 @@ class SocialMediaScheduler:
 
             cutoff_time = (datetime.now(SA_TIMEZONE) - timedelta(hours=24)).isoformat()
 
-            result = self.supabase_client.table('social_posts').select('*').eq('post_type', 'video').is_('video_url', 'null').eq('status', 'pending_approval').gte('created_at', cutoff_time).execute()
+            # Get all video posts from last 24 hours with pending_approval status
+            result = self.supabase_client.table('social_posts').select('*').eq('post_type', 'video').eq('status', 'pending_approval').gte('created_at', cutoff_time).execute()
 
-            if not result.data:
+            # Filter in Python for null video_url (Supabase REST client doesn't support is_ method)
+            orphaned_posts = [post for post in result.data if not post.get('video_url')] if result.data else []
+
+            if not orphaned_posts:
                 log_info("✅ No orphaned videos found")
                 return
 
-            log_info(f"📹 Found {len(result.data)} potential orphaned videos")
+            log_info(f"📹 Found {len(orphaned_posts)} potential orphaned videos")
 
             heygen_api_key = os.getenv('HEYGEN_API_KEY')
             if not heygen_api_key:
@@ -116,7 +120,7 @@ class SocialMediaScheduler:
 
             headers = {'X-Api-Key': heygen_api_key}
 
-            for post in result.data:
+            for post in orphaned_posts:
                 try:
                     # Parse generation_prompt
                     generation_prompt = post.get('generation_prompt')
@@ -157,7 +161,7 @@ class SocialMediaScheduler:
                     continue
 
         except Exception as e:
-            log_error(f"❌ Error in fetch_orphaned_videos_job: {str(e)}", exc_info=True)
+            log_error(f"❌ Error in fetch_orphaned_videos_job: {str(e)}")
 
     def _register_jobs(self) -> None:
         """Register recurring jobs with APScheduler."""
