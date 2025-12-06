@@ -3711,12 +3711,12 @@ def api_generate_media(post_id):
                     # Update post status to pending_media_approval
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
-                        'media_url': result.get('image_url'),
+                        'image_url': result.get('image_url'),
                         'storage_path': result.get('storage_path'),
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
-                    log_info(f"✅ Image generated successfully for post {post_id}")
+                    log_info(f"✅ Image URL saved to social_posts.image_url for post {post_id}")
                     return jsonify({
                         'success': True,
                         'image_url': result.get('image_url'),
