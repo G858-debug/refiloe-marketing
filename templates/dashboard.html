@@ -1007,11 +1007,63 @@
                 // Update stats
                 updateStats(data.posts);
 
-                // Auto-refresh if any posts are generating
-                if (postsByStatus.generating.length > 0) {
-                    console.log('⏳ Posts generating, will refresh in 15 seconds');
-                    setTimeout(() => location.reload(), 15000);
-                }
+                // Track generating posts and check for completions
+                (function initializeStatusChecker() {
+                    const initialGeneratingCount = document.querySelectorAll('.status-badge.generating').length;
+
+                    if (initialGeneratingCount === 0) {
+                        console.log('✅ No posts generating - auto-refresh disabled');
+                        return;
+                    }
+
+                    console.log(`⏳ ${initialGeneratingCount} post(s) generating. Checking every 60 seconds...`);
+
+                    let lastGeneratingCount = initialGeneratingCount;
+                    let checkCount = 0;
+                    const maxChecks = 20; // Stop after 20 minutes (20 checks × 60 sec)
+
+                    const statusChecker = setInterval(function() {
+                        checkCount++;
+                        console.log(`🔄 Background check #${checkCount} (${checkCount} min elapsed)...`);
+
+                        fetch('/api/dashboard/posts')
+                            .then(response => response.json())
+                            .then(data => {
+                                const currentGeneratingCount = data.posts.filter(p => p.status === 'generating').length;
+
+                                // Check if any post completed (count decreased)
+                                if (currentGeneratingCount < lastGeneratingCount) {
+                                    const completedCount = lastGeneratingCount - currentGeneratingCount;
+                                    console.log(`✅ ${completedCount} media generation(s) completed! Refreshing to show new media...`);
+                                    clearInterval(statusChecker);
+                                    location.reload();
+                                    return;
+                                }
+
+                                // No change - still waiting
+                                if (currentGeneratingCount > 0) {
+                                    console.log(`⏳ ${currentGeneratingCount} post(s) still generating. Next check in 60 seconds.`);
+                                    lastGeneratingCount = currentGeneratingCount;
+                                } else {
+                                    // All done
+                                    console.log('✅ All media generation complete! Refreshing...');
+                                    clearInterval(statusChecker);
+                                    location.reload();
+                                }
+
+                                // Stop checking after max time
+                                if (checkCount >= maxChecks) {
+                                    console.log('⏰ Auto-refresh stopped after 20 minutes. Refresh manually to see updates.');
+                                    clearInterval(statusChecker);
+                                }
+                            })
+                            .catch(err => {
+                                console.error('❌ Error checking status:', err);
+                                // Don't stop on errors, try again next interval
+                            });
+                    }, 60000); // Check every 60 seconds
+
+                })();
 
             } catch (error) {
                 console.error('❌ Error loading posts:', error);
