@@ -15,10 +15,16 @@ Created: 2024-12-01
 """
 
 import json
+import os
 import pytz
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from utils.logger import log_info, log_warning, log_error
+
+try:  # Allow use both as package module and standalone
+    from content_generator import ContentGenerator  # type: ignore
+except ImportError:  # pragma: no cover - fallback when imported from package wrapper
+    from ..content_generator import ContentGenerator  # type: ignore
 
 # South African timezone
 SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
@@ -35,9 +41,27 @@ class LaunchContentGenerator:
     Each post focuses on building trust and providing value, with NO product mentions.
     """
 
-    def __init__(self):
-        """Initialize the launch content generator."""
+    def __init__(self, supabase_client=None, config_path: str = None):
+        """Initialize the launch content generator.
+
+        Args:
+            supabase_client: Supabase client instance for ContentGenerator
+            config_path: Path to config.yaml file (defaults to ../config.yaml)
+        """
         self.sa_tz = SA_TIMEZONE
+
+        # Initialize ContentGenerator if supabase_client provided
+        if supabase_client:
+            if config_path is None:
+                # Default to config.yaml in parent directory
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                config_path = os.path.join(os.path.dirname(current_dir), 'config.yaml')
+
+            self.content_generator = ContentGenerator(config_path, supabase_client)
+            log_info("LaunchContentGenerator initialized with ContentGenerator")
+        else:
+            self.content_generator = None
+            log_info("LaunchContentGenerator initialized without ContentGenerator (will use hardcoded templates)")
 
     def _create_social_caption(self, video_script: str, hashtags: list, cta: str) -> str:
         """Create a social media caption that's different from the video script.
@@ -133,7 +157,37 @@ class LaunchContentGenerator:
         """Day 1, Post 1 (08:00): Video 60s - 'Meet Refiloe'"""
         scheduled_time = start_date.replace(hour=8, minute=0)
 
-        video_script = """Hey! I'm Refiloe.
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate video script using ContentGenerator
+            script_data = self.content_generator.create_video_script(
+                theme='introduction',
+                duration=60,
+                style='introduction'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='introduction',
+                    format_type='video_with_caption',
+                    hook_type='personal_story'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"]
+
+            call_to_action = "Follow for trainer tips that actually work"
+        else:
+            # Hardcoded template fallback
+            video_script = """Hey! I'm Refiloe.
 
 I've spent years studying what makes trainers successful - and what holds them back.
 
@@ -152,8 +206,8 @@ If that sounds useful, give me a follow.
 
 Let's make the business side of training suck less. 💪"""
 
-        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"]
-        call_to_action = "Follow for trainer tips that actually work"
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#PTLife", "#FitnessBusiness", "#TrainerTips"]
+            call_to_action = "Follow for trainer tips that actually work"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -184,7 +238,53 @@ Let's make the business side of training suck less. 💪"""
         """Day 1, Post 2 (13:00): Carousel 5 images - '5 Time Thieves Every Trainer Knows'"""
         scheduled_time = start_date.replace(hour=13, minute=0)
 
-        content_text = """5 Time Thieves Stealing Hours From Your Week ⏰
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate carousel content about time management pain points
+            post_data = self.content_generator.generate_single_post(
+                theme='relatable_trainer_life',
+                format_type='carousel_style',
+                hook_type='pain_point'
+            )
+
+            content_text = post_data.get('content', '')
+            hashtags = post_data.get('hashtags', ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#FitnessBusiness", "#PTLife"])
+            call_to_action = post_data.get('engagement_hook', "Comment which one hits hardest")
+
+            # Check if carousel_slides were generated
+            carousel_slides = post_data.get('carousel_slides', None)
+            if not carousel_slides:
+                # Create default slides structure for time thieves topic
+                carousel_slides = [
+                    {
+                        "slide_number": 1,
+                        "text": "Time Thieves Stealing Your Week",
+                        "description": "Hook slide - bold, attention-grabbing design with clock/time imagery"
+                    },
+                    {
+                        "slide_number": 2,
+                        "text": "The Schedule Shuffle",
+                        "description": "Clients changing times last minute, endless calendar management"
+                    },
+                    {
+                        "slide_number": 3,
+                        "text": "The Payment Chase",
+                        "description": "Awkwardly reminding clients about unpaid sessions"
+                    },
+                    {
+                        "slide_number": 4,
+                        "text": "The Message Marathon",
+                        "description": "Replying to endless messages before your first coffee"
+                    },
+                    {
+                        "slide_number": 5,
+                        "text": "The Admin Overwhelm",
+                        "description": "All the business tasks that steal training time"
+                    }
+                ]
+        else:
+            # Hardcoded template fallback
+            content_text = """5 Time Thieves Stealing Hours From Your Week ⏰
 
 Swipe to see which one hits hardest →
 
@@ -196,33 +296,36 @@ Comment your number 👇 Let's see which one we all hate the most.
 
 #PersonalTrainer #TrainerLife #FitnessCoach #TrainerProblems #FitnessBusiness #PTLife"""
 
-        carousel_slides = [
-            {
-                "slide_number": 1,
-                "text": "5 Time Thieves Stealing Hours From Your Week",
-                "description": "Hook slide - bold, attention-grabbing design with clock/time imagery"
-            },
-            {
-                "slide_number": 2,
-                "text": "🕐 The Schedule Shuffle",
-                "description": "Clients changing times last minute, you playing calendar Tetris for hours"
-            },
-            {
-                "slide_number": 3,
-                "text": "💸 The Payment Chase",
-                "description": "Awkwardly reminding clients about unpaid sessions (again and again)"
-            },
-            {
-                "slide_number": 4,
-                "text": "📱 The Message Marathon",
-                "description": "Replying to 50 WhatsApps before your first coffee"
-            },
-            {
-                "slide_number": 5,
-                "text": "📋 The Program Puzzle",
-                "description": "Writing the same exercises differently for every single client"
-            }
-        ]
+            carousel_slides = [
+                {
+                    "slide_number": 1,
+                    "text": "5 Time Thieves Stealing Hours From Your Week",
+                    "description": "Hook slide - bold, attention-grabbing design with clock/time imagery"
+                },
+                {
+                    "slide_number": 2,
+                    "text": "🕐 The Schedule Shuffle",
+                    "description": "Clients changing times last minute, you playing calendar Tetris for hours"
+                },
+                {
+                    "slide_number": 3,
+                    "text": "💸 The Payment Chase",
+                    "description": "Awkwardly reminding clients about unpaid sessions (again and again)"
+                },
+                {
+                    "slide_number": 4,
+                    "text": "📱 The Message Marathon",
+                    "description": "Replying to 50 WhatsApps before your first coffee"
+                },
+                {
+                    "slide_number": 5,
+                    "text": "📋 The Program Puzzle",
+                    "description": "Writing the same exercises differently for every single client"
+                }
+            ]
+
+            hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#FitnessBusiness", "#PTLife"]
+            call_to_action = "Comment 1-4 - which steals the most of YOUR time?"
 
         return {
             "day": 1,
@@ -237,8 +340,8 @@ Comment your number 👇 Let's see which one we all hate the most.
             "avatar_id_env": None,
             "carousel_slides": carousel_slides,
             "image_prompt": "Modern carousel design for personal trainers - vibrant colors (coral/purple), clean typography, relatable pain points, professional but approachable aesthetic",
-            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#FitnessBusiness", "#PTLife"],
-            "call_to_action": "Comment 1-4 - which steals the most of YOUR time?",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "comment",
             "status": "pending_approval"
         }
@@ -247,7 +350,37 @@ Comment your number 👇 Let's see which one we all hate the most.
         """Day 1, Post 3 (18:00): Video 30s - Relatable Moment"""
         scheduled_time = start_date.replace(hour=18, minute=0)
 
-        video_script = """*Phone buzzes*
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate video script about client cancellations
+            script_data = self.content_generator.create_video_script(
+                theme='relatable_trainer_life',
+                duration=30,
+                style='relatable'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='relatable_trainer_life',
+                    format_type='video_with_caption',
+                    hook_type='pain_point'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"]
+
+            call_to_action = "Drop a 😤 if this has happened to you"
+        else:
+            # Hardcoded template fallback
+            video_script = """*Phone buzzes*
 
 'Hey, so sorry, something came up, can we reschedule?'
 
@@ -261,8 +394,8 @@ Sound familiar?
 
 Drop a 😤 if you've lived this."""
 
-        hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"]
-        call_to_action = "Drop a 😤 if this has happened to you"
+            hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerProblems", "#GymLife", "#FitPro"]
+            call_to_action = "Drop a 😤 if this has happened to you"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -297,7 +430,37 @@ Drop a 😤 if you've lived this."""
         """Day 2, Post 1 (08:00): Video 60s - 'The 15 Hour Problem'"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=8, minute=0)
 
-        video_script = """I've talked to hundreds of trainers, and the pattern is always the same.
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate video script about time management
+            script_data = self.content_generator.create_video_script(
+                theme='admin_hacks',
+                duration=60,
+                style='educational'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='admin_hacks',
+                    format_type='video_with_caption',
+                    hook_type='statistic'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"]
+
+            call_to_action = "Comment which one steals the most of your time"
+        else:
+            # Hardcoded template fallback
+            video_script = """I've talked to hundreds of trainers, and the pattern is always the same.
 
 Here's where your 15 hours disappear:
 
@@ -319,8 +482,8 @@ But first - I'm curious. Which of these eats the most of YOUR time?
 
 Comment below. I read every single one."""
 
-        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"]
-        call_to_action = "Comment which one steals the most of your time"
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerTips", "#TimeManagement", "#PTLife"]
+            call_to_action = "Comment which one steals the most of your time"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -351,7 +514,21 @@ Comment below. I read every single one."""
         """Day 2, Post 2 (13:00): Single Image - Quote"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=13, minute=0)
 
-        content_text = """"You became a trainer to change lives. Not to become a part-time accountant." 💯
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate motivational image post
+            post_data = self.content_generator.generate_single_post(
+                theme='growth_mindset',
+                format_type='single_image_with_caption',
+                hook_type='inspiring_quote'
+            )
+
+            content_text = post_data.get('content', '')
+            hashtags = post_data.get('hashtags', ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerCommunity", "#FitPro"])
+            call_to_action = post_data.get('engagement_hook', "Tag a trainer friend")
+        else:
+            # Hardcoded template fallback
+            content_text = """"You became a trainer to change lives. Not to become a part-time accountant." 💯
 
 Read that again.
 
@@ -365,6 +542,9 @@ So why are you spending more time on admin than what you actually love?
 Tag a trainer who needs to hear this 👇
 
 #PersonalTrainer #FitnessCoach #TrainerLife #FitnessBusiness #TrainerCommunity #FitPro"""
+
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerCommunity", "#FitPro"]
+            call_to_action = "Tag a trainer friend"
 
         image_prompt = "Bold motivational quote image: 'You became a trainer to change lives. Not to become a part-time accountant.' White text on deep purple/dark gradient background, clean minimal design, modern sans-serif font, professional fitness aesthetic"
 
@@ -381,8 +561,8 @@ Tag a trainer who needs to hear this 👇
             "avatar_id_env": None,
             "carousel_slides": None,
             "image_prompt": image_prompt,
-            "hashtags": ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#TrainerCommunity", "#FitPro"],
-            "call_to_action": "Tag a trainer friend",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "tag",
             "status": "pending_approval"
         }
@@ -391,7 +571,37 @@ Tag a trainer who needs to hear this 👇
         """Day 2, Post 3 (18:00): Video 30s - Quick Tip #1"""
         scheduled_time = (start_date + timedelta(days=1)).replace(hour=18, minute=0)
 
-        video_script = """Here's something most trainers don't do:
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate quick tip video
+            script_data = self.content_generator.create_video_script(
+                theme='admin_hacks',
+                duration=30,
+                style='tip'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='admin_hacks',
+                    format_type='video_with_caption',
+                    hook_type='quick_win'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"]
+
+            call_to_action = "Save this for later 📌"
+        else:
+            # Hardcoded template fallback
+            video_script = """Here's something most trainers don't do:
 
 Create a 'FAQ voice note library.'
 
@@ -407,8 +617,8 @@ Forward the voice note. 10 seconds instead of 10 minutes.
 
 You're welcome. 😉"""
 
-        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"]
-        call_to_action = "Save this for later 📌"
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerTips", "#TrainerLife", "#FitnessBusiness", "#ProductivityTips"]
+            call_to_action = "Save this for later 📌"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -443,7 +653,37 @@ You're welcome. 😉"""
         """Day 3, Post 1 (08:00): Video 45s - The Dream"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=8, minute=0)
 
-        video_script = """Close your eyes. Imagine this:
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate inspirational video
+            script_data = self.content_generator.create_video_script(
+                theme='growth_mindset',
+                duration=45,
+                style='inspirational'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='growth_mindset',
+                    format_type='video_with_caption',
+                    hook_type='story'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"]
+
+            call_to_action = "Drop a 🙋 if this is the dream"
+        else:
+            # Hardcoded template fallback
+            video_script = """Close your eyes. Imagine this:
 
 You wake up. No 5am alarm panic.
 
@@ -463,8 +703,8 @@ If you want in, make sure you're following.
 
 And drop a 🙋 if this sounds like the dream."""
 
-        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"]
-        call_to_action = "Drop a 🙋 if this is the dream"
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#WorkLifeBalance", "#TrainerSuccess"]
+            call_to_action = "Drop a 🙋 if this is the dream"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -495,7 +735,48 @@ And drop a 🙋 if this sounds like the dream."""
         """Day 3, Post 2 (13:00): Carousel 4 images - 'The 3 Types of Trainers'"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=13, minute=0)
 
-        content_text = """The 3 Types of Trainers (Which one are you?) 🤔
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate engagement carousel
+            post_data = self.content_generator.generate_single_post(
+                theme='engagement_questions',
+                format_type='carousel_style',
+                hook_type='community_question'
+            )
+
+            content_text = post_data.get('content', '')
+            hashtags = post_data.get('hashtags', ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerCommunity", "#FitnessBusiness", "#PTLife"])
+            call_to_action = post_data.get('engagement_hook', "Comment which one you are!")
+
+            # Check if carousel_slides were generated
+            carousel_slides = post_data.get('carousel_slides', None)
+            if not carousel_slides:
+                # Create default slides structure for trainer types
+                carousel_slides = [
+                    {
+                        "slide_number": 1,
+                        "text": "The Types of Trainers",
+                        "description": "Which one are you? (Hook slide with bold typography)"
+                    },
+                    {
+                        "slide_number": 2,
+                        "text": "THE HUSTLER",
+                        "description": "Works 6am-9pm, says yes to everything, burning out slowly"
+                    },
+                    {
+                        "slide_number": 3,
+                        "text": "THE ORGANIZER",
+                        "description": "Spreadsheets for everything, but still drowning in admin"
+                    },
+                    {
+                        "slide_number": 4,
+                        "text": "THE SMART ONE",
+                        "description": "Works less, earns more, has systems that run automatically"
+                    }
+                ]
+        else:
+            # Hardcoded template fallback
+            content_text = """The 3 Types of Trainers (Which one are you?) 🤔
 
 Swipe to find yourself →
 
@@ -509,28 +790,31 @@ Comment 🏃, 📊, or 🧠 - be honest!
 
 #PersonalTrainer #TrainerLife #FitnessCoach #TrainerCommunity #FitnessBusiness #PTLife"""
 
-        carousel_slides = [
-            {
-                "slide_number": 1,
-                "text": "The 3 Types of Trainers",
-                "description": "Which one are you? (Hook slide with bold typography)"
-            },
-            {
-                "slide_number": 2,
-                "text": "THE HUSTLER 🏃",
-                "description": "Works 6am-9pm, says yes to everything, burning out slowly but surely"
-            },
-            {
-                "slide_number": 3,
-                "text": "THE ORGANIZER 📊",
-                "description": "Spreadsheets for everything, but still drowning in admin, just... neatly"
-            },
-            {
-                "slide_number": 4,
-                "text": "THE SMART ONE 🧠",
-                "description": "Works less, earns more, has systems that run without them"
-            }
-        ]
+            carousel_slides = [
+                {
+                    "slide_number": 1,
+                    "text": "The 3 Types of Trainers",
+                    "description": "Which one are you? (Hook slide with bold typography)"
+                },
+                {
+                    "slide_number": 2,
+                    "text": "THE HUSTLER 🏃",
+                    "description": "Works 6am-9pm, says yes to everything, burning out slowly but surely"
+                },
+                {
+                    "slide_number": 3,
+                    "text": "THE ORGANIZER 📊",
+                    "description": "Spreadsheets for everything, but still drowning in admin, just... neatly"
+                },
+                {
+                    "slide_number": 4,
+                    "text": "THE SMART ONE 🧠",
+                    "description": "Works less, earns more, has systems that run without them"
+                }
+            ]
+
+            hashtags = ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerCommunity", "#FitnessBusiness", "#PTLife"]
+            call_to_action = "Comment 🏃, 📊, or 🧠 - be honest!"
 
         return {
             "day": 3,
@@ -545,8 +829,8 @@ Comment 🏃, 📊, or 🧠 - be honest!
             "avatar_id_env": None,
             "carousel_slides": carousel_slides,
             "image_prompt": "Fun, engaging carousel design showing 3 trainer personality types - vibrant colors, playful but professional, relatable illustrations or icons",
-            "hashtags": ["#PersonalTrainer", "#TrainerLife", "#FitnessCoach", "#TrainerCommunity", "#FitnessBusiness", "#PTLife"],
-            "call_to_action": "Comment 🏃, 📊, or 🧠 - be honest!",
+            "hashtags": hashtags,
+            "call_to_action": call_to_action,
             "engagement_type": "comment",
             "status": "pending_approval"
         }
@@ -555,7 +839,37 @@ Comment 🏃, 📊, or 🧠 - be honest!
         """Day 3, Post 3 (18:00): Video 30s - Community Question"""
         scheduled_time = (start_date + timedelta(days=2)).replace(hour=18, minute=0)
 
-        video_script = """I want to make this page actually useful for you.
+        # Use ContentGenerator if available, otherwise fall back to hardcoded template
+        if self.content_generator:
+            # Generate community engagement video
+            script_data = self.content_generator.create_video_script(
+                theme='engagement_questions',
+                duration=30,
+                style='conversational'
+            )
+
+            # Extract video script from generated data
+            if script_data and 'script' in script_data:
+                # Convert script segments to plain text
+                video_script = "\n\n".join([segment.get('text', '') for segment in script_data['script']])
+            else:
+                # Fallback: generate simple post content
+                post_data = self.content_generator.generate_single_post(
+                    theme='engagement_questions',
+                    format_type='video_with_caption',
+                    hook_type='community_question'
+                )
+                video_script = post_data.get('content', '')
+
+            # Get hashtags from generated content or use defaults
+            hashtags = script_data.get('hashtags', []) if script_data else post_data.get('hashtags', [])
+            if not hashtags:
+                hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"]
+
+            call_to_action = "Comment your biggest frustration 👇"
+        else:
+            # Hardcoded template fallback
+            video_script = """I want to make this page actually useful for you.
 
 So tell me:
 
@@ -572,8 +886,8 @@ I'll create content specifically to help with whatever you're struggling with mo
 
 This page is for YOU. So tell me what you need."""
 
-        hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"]
-        call_to_action = "Comment your biggest frustration 👇"
+            hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#TrainerCommunity", "#FitnessBusiness", "#FitPro"]
+            call_to_action = "Comment your biggest frustration 👇"
 
         content_text = self._create_social_caption(
             video_script=video_script,
@@ -616,12 +930,13 @@ def get_launch_content_preview() -> List[Dict[str, Any]]:
     return posts
 
 
-def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) -> List[str]:
+def seed_launch_content(supabase_client, start_date: Optional[datetime] = None, config_path: str = None) -> List[str]:
     """Generate and save all 9 VALUE-FIRST launch posts to the database.
 
     Args:
         supabase_client: Supabase client instance for database operations
         start_date: Starting date for the launch (defaults to tomorrow if None)
+        config_path: Path to config.yaml file (defaults to ../config.yaml)
 
     Returns:
         List of created post IDs
@@ -633,8 +948,8 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None) 
 
     log_info("Starting VALUE-FIRST launch content generation and seeding...")
 
-    # Initialize generator
-    generator = LaunchContentGenerator()
+    # Initialize generator with ContentGenerator support
+    generator = LaunchContentGenerator(supabase_client=supabase_client, config_path=config_path)
 
     # Generate all posts
     posts = generator.generate_all_posts(start_date)
