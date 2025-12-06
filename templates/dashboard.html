@@ -890,9 +890,13 @@
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : 'Not scheduled';
 
+            // Determine post type with fallback
+            const postType = post.post_type || post.post_format || 'post';
+            const postTypeDisplay = postType.charAt(0).toUpperCase() + postType.slice(1);
+
             card.innerHTML = `
                 <div class="post-header">
-                    <span class="post-type ${post.post_format}">${post.post_format || 'unknown'}</span>
+                    <span class="post-type ${postType}">${postTypeDisplay}</span>
                     ${statusBadge}
                 </div>
 
