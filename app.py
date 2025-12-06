@@ -3638,33 +3638,60 @@ def api_generate_media(post_id):
                     metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
                 )
 
-                if result and result.get('video_url'):
-                    # Get existing generation_prompt
-                    post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
-                    existing_prompt = {}
-                    if post_result.data:
-                        try:
-                            existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
-                        except:
-                            existing_prompt = {}
+                # HeyGen accepted the request - check for video_id
+                video_id = result.get('video_id')
+                video_url = result.get('video_url')
 
-                    # Add HeyGen video_id to generation_prompt
-                    existing_prompt['heygen_video_id'] = result.get('video_id')
+                if video_id:
+                    log_info(f"HeyGen video request accepted (video_id={video_id})")
 
-                    # Update post status to pending_media_approval
-                    supabase_client.table('social_posts').update({
-                        'status': 'pending_media_approval',
-                        'video_url': result.get('video_url'),
-                        'generation_prompt': json.dumps(existing_prompt),
-                        'updated_at': datetime.now(SA_TZ).isoformat()
-                    }).eq('id', post_id).execute()
+                    if video_url:
+                        # Video completed immediately (rare but possible)
+                        # Get existing generation_prompt
+                        post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
+                        existing_prompt = {}
+                        if post_result.data:
+                            try:
+                                existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
+                            except:
+                                existing_prompt = {}
 
-                    log_info(f"✅ Video generated successfully for post {post_id}")
-                    return jsonify({
-                        'success': True,
-                        'video_url': result.get('video_url'),
-                        'message': 'Video generated successfully'
-                    })
+                        # Add HeyGen video_id to generation_prompt
+                        existing_prompt['heygen_video_id'] = video_id
+
+                        # Update post status to pending_media_approval
+                        supabase_client.table('social_posts').update({
+                            'status': 'pending_media_approval',
+                            'video_id': video_id,
+                            'video_url': video_url,
+                            'generation_prompt': json.dumps(existing_prompt),
+                            'media_generation_completed_at': datetime.now(timezone.utc).isoformat(),
+                            'updated_at': datetime.now(SA_TZ).isoformat()
+                        }).eq('id', post_id).execute()
+
+                        log_info(f"✅ Video generated successfully for post {post_id}")
+                        return jsonify({
+                            'success': True,
+                            'video_url': video_url,
+                            'message': 'Video generated successfully'
+                        })
+                    else:
+                        # CRITICAL: Save video_id to database so we can fetch it later
+                        supabase_client.table('social_posts').update({
+                            'video_id': video_id,
+                            'status': 'generating',
+                            'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }).eq('id', post_id).execute()
+
+                        log_info(f"✅ Video ID {video_id} saved to database for post {post_id}")
+
+                        # Return success immediately - fetch job will get the video later
+                        return jsonify({
+                            'message': 'Video generation started',
+                            'video_id': video_id,
+                            'status': 'generating'
+                        }), 200
                 else:
                     log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
                     # Reset status so user can retry
@@ -3768,6 +3795,31 @@ def api_regenerate_media(post_id):
     except Exception as e:
         log_error(f"❌ Error resetting media for {post_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/fetch-videos', methods=['POST'])
+def api_fetch_videos_now():
+    """Manually trigger video fetching from HeyGen"""
+    try:
+        log_info("📥 Manual video fetch triggered")
+
+        # Import and run the fetch job immediately
+        if scheduler:
+            scheduler.fetch_orphaned_videos_job()
+
+            return jsonify({
+                'message': 'Video fetch completed',
+                'success': True
+            }), 200
+        else:
+            return jsonify({
+                'message': 'Scheduler not available',
+                'success': False
+            }), 503
+
+    except Exception as e:
+        log_error(f"Error in manual fetch: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/dashboard/approve-all', methods=['POST'])

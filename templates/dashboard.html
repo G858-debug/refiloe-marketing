@@ -694,6 +694,9 @@
             <button class="btn btn-secondary" onclick="refreshPosts()">
                 Refresh
             </button>
+            <button class="btn btn-info" onclick="fetchVideosNow()">
+                🎥 Fetch Videos Now
+            </button>
             <button class="btn btn-success" onclick="approveAll()">
                 Approve All Pending
             </button>
@@ -1301,6 +1304,32 @@
         // Keep refreshPosts as an alias for backwards compatibility
         async function refreshPosts() {
             await loadPosts();
+        }
+
+        // Fetch videos from HeyGen
+        async function fetchVideosNow() {
+            if (!confirm('Check HeyGen for completed videos?')) return;
+
+            try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = '⏳ Fetching...';
+
+                const response = await fetch('/api/dashboard/fetch-videos', { method: 'POST' });
+
+                if (response.ok) {
+                    alert('✅ Video fetch complete! Refreshing page...');
+                    location.reload();
+                } else {
+                    alert('❌ Failed to fetch videos');
+                    btn.disabled = false;
+                    btn.textContent = '🎥 Fetch Videos Now';
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🎥 Fetch Videos Now';
+            }
         }
 
         // Seed launch content
