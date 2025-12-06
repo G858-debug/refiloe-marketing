@@ -3815,33 +3815,76 @@ def api_approve_all_posts():
 
 @app.route('/api/dashboard/fresh-start', methods=['POST'])
 def api_fresh_start():
-    """Delete all old posts and create fresh launch content."""
+    """Delete all old posts and create fresh launch content with comprehensive error handling."""
     if not supabase_client:
+        log_error("❌ Fresh start failed: Database not connected")
         return jsonify({'success': False, 'error': 'Database not connected'}), 503
 
     try:
         from social_media.launch_content import clear_all_test_posts, seed_launch_content
 
+        log_info("🔄 Starting fresh start process...")
+
         # Step 1: Delete old/test posts
-        deleted_count = clear_all_test_posts(supabase_client)
-        log_info(f"Deleted {deleted_count} old posts")
+        log_info("📝 Step 1: Deleting old/test posts...")
+        try:
+            deleted_count = clear_all_test_posts(supabase_client)
+            log_info(f"✅ Successfully deleted {deleted_count} old posts")
+        except Exception as delete_error:
+            log_error(f"❌ Failed to delete old posts: {delete_error}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to delete old posts: {str(delete_error)}',
+                'step': 'delete'
+            }), 500
 
         # Step 2: Seed fresh launch content
-        post_ids = seed_launch_content(supabase_client)
+        log_info("📝 Step 2: Generating and saving fresh launch content...")
+        try:
+            post_ids = seed_launch_content(supabase_client)
+            created_count = len(post_ids)
 
-        return jsonify({
-            'success': True,
-            'deleted_count': deleted_count,
-            'created_count': len(post_ids),
-            'post_ids': post_ids,
-            'message': f'Deleted {deleted_count} old posts, created {len(post_ids)} fresh launch posts'
-        })
+            if created_count == 0:
+                log_error("❌ Fresh start failed: No posts were created")
+                return jsonify({
+                    'success': False,
+                    'error': 'No posts were created. Check logs for details.',
+                    'deleted_count': deleted_count,
+                    'created_count': 0,
+                    'step': 'create'
+                }), 500
+
+            log_info(f"✅ Fresh start complete: {created_count} posts created successfully")
+
+            return jsonify({
+                'success': True,
+                'deleted_count': deleted_count,
+                'created_count': created_count,
+                'post_ids': post_ids,
+                'message': f'✅ Fresh start complete: Deleted {deleted_count} old posts, created {created_count} fresh launch posts'
+            })
+
+        except Exception as create_error:
+            log_error(f"❌ Failed to create fresh posts: {create_error}")
+            import traceback
+            log_error(traceback.format_exc())
+            return jsonify({
+                'success': False,
+                'error': f'Failed to create fresh posts: {str(create_error)}',
+                'deleted_count': deleted_count,
+                'created_count': 0,
+                'step': 'create'
+            }), 500
 
     except Exception as e:
-        log_error(f"Error in fresh start: {e}")
+        log_error(f"❌ Fresh start failed with unexpected error: {e}")
         import traceback
         log_error(traceback.format_exc())
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({
+            'success': False,
+            'error': f'Unexpected error during fresh start: {str(e)}',
+            'step': 'unknown'
+        }), 500
 
 
 @app.errorhandler(404)
