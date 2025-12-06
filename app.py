@@ -3502,10 +3502,24 @@ def api_generate_media(post_id):
             )
 
             if result and result.get('video_url'):
+                # Get existing generation_prompt
+                post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
+                existing_prompt = {}
+                if post_result.data:
+                    try:
+                        existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
+                    except:
+                        existing_prompt = {}
+
+                # Add HeyGen video_id to generation_prompt
+                existing_prompt['heygen_video_id'] = result.get('video_id')
+
                 # Update post status to pending_media_approval
                 supabase_client.table('social_posts').update({
                     'status': 'pending_media_approval',
                     'video_url': result.get('video_url'),
+                    'storage_path': result.get('storage_path'),
+                    'generation_prompt': json.dumps(existing_prompt),
                     'updated_at': datetime.now(SA_TZ).isoformat()
                 }).eq('id', post_id).execute()
 
