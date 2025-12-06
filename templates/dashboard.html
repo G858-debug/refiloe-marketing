@@ -366,6 +366,108 @@
         }
         .empty-state h3 { margin-bottom: 10px; color: #374151; }
 
+        /* Media Indicators */
+        .media-indicators {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .media-indicator {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .media-indicator.video-ready {
+            background: #D4EDDA;
+            color: #155724;
+        }
+
+        .media-indicator.image-ready {
+            background: #D1ECF1;
+            color: #0C5460;
+        }
+
+        .media-indicator.carousel-ready {
+            background: #FFF3CD;
+            color: #856404;
+        }
+
+        .media-indicator.no-media {
+            background: #F8D7DA;
+            color: #721C24;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-badge.pending {
+            background: #FFF3CD;
+            color: #856404;
+        }
+
+        .status-badge.approved {
+            background: #D4EDDA;
+            color: #155724;
+        }
+
+        .status-badge.generating {
+            background: #FFA500;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.pending-media {
+            background: #FFF3CD;
+            color: #856404;
+        }
+
+        .status-badge.scheduled {
+            background: #D1ECF1;
+            color: #0C5460;
+        }
+
+        .post-type {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .post-type.video {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .post-type.carousel {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .post-type.image {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .loading-message {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .status-section {
+            margin-bottom: 30px;
+        }
+
         /* Responsive */
         @media (max-width: 600px) {
             .container { padding: 15px; }
@@ -444,54 +546,38 @@
         </div>
 
         <!-- Pending Approval Section -->
-        <div id="pending-approval-section" style="margin-bottom: 30px;">
-            <h2 class="section-title">📝 Pending Content Approval</h2>
-            <div class="posts-list" id="pending-approval-posts">
-                <div class="empty-state">
-                    <h3>Loading...</h3>
-                    <p>Fetching your posts</p>
-                </div>
-            </div>
+        <div id="pending-approval-section" class="status-section">
+            <h3>📝 Pending Content Approval (<span id="pending-count">0</span>)</h3>
+            <div class="loading-message">Loading...</div>
+            <div id="pending-approval-posts"></div>
         </div>
 
-        <!-- Approved - Ready for Media Section -->
-        <div id="approved-section" style="margin-bottom: 30px;">
-            <h2 class="section-title">✅ Content Approved - Generate Media</h2>
-            <div class="posts-list" id="approved-posts">
-                <div class="empty-state">
-                    <p>Loading...</p>
-                </div>
-            </div>
+        <!-- Approved Section -->
+        <div id="approved-section" class="status-section">
+            <h3>✅ Content Approved - Generate Media (<span id="approved-count">0</span>)</h3>
+            <div class="loading-message">Loading...</div>
+            <div id="approved-posts"></div>
         </div>
 
-        <!-- Generating Media Section -->
-        <div id="generating-section" style="margin-bottom: 30px;">
-            <h2 class="section-title">⏳ Generating Media</h2>
-            <div class="posts-list" id="generating-posts">
-                <div class="empty-state">
-                    <p>Loading...</p>
-                </div>
-            </div>
+        <!-- Generating Section -->
+        <div id="generating-section" class="status-section">
+            <h3>⏳ Generating Media (<span id="generating-count">0</span>)</h3>
+            <div class="loading-message">Loading...</div>
+            <div id="generating-posts"></div>
         </div>
 
-        <!-- Pending Media Approval Section -->
-        <div id="pending-media-section" style="margin-bottom: 30px;">
-            <h2 class="section-title">🎬 Pending Media Approval</h2>
-            <div class="posts-list" id="pending-media-posts">
-                <div class="empty-state">
-                    <p>Loading...</p>
-                </div>
-            </div>
+        <!-- Pending Media Section -->
+        <div id="pending-media-section" class="status-section">
+            <h3>🎬 Pending Media Approval (<span id="pending-media-count">0</span>)</h3>
+            <div class="loading-message">Loading...</div>
+            <div id="pending-media-posts"></div>
         </div>
 
         <!-- Scheduled Section -->
-        <div id="scheduled-section" style="margin-bottom: 30px;">
-            <h2 class="section-title">📅 Scheduled for Posting</h2>
-            <div class="posts-list" id="scheduled-posts">
-                <div class="empty-state">
-                    <p>Loading...</p>
-                </div>
-            </div>
+        <div id="scheduled-section" class="status-section">
+            <h3>📅 Scheduled for Posting (<span id="scheduled-count">0</span>)</h3>
+            <div class="loading-message">Loading...</div>
+            <div id="scheduled-posts"></div>
         </div>
 
         <!-- No Posts Message -->
@@ -702,276 +788,234 @@
             return badges[status] || 'badge-pending';
         }
 
-        // Render a single post card
-        function renderPostCard(post, showApproveReject = true) {
-            const content = post.content_text || post.content || 'No content';
-            const truncatedContent = content.length > 200 ? content.substring(0, 200) + '...' : content;
+        // Load and render posts
+        async function loadPosts() {
+            console.log('🔍 Loading posts...');
 
-            // Determine action buttons based on status
-            let actionButtons = '';
-
-            if (showApproveReject) {
-                // Stage 1: Content Approval (for pending_approval posts)
-                if (post.status === 'pending_approval') {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm" onclick="editPost('${post.id}')">
-                            Edit
-                        </button>
-                        <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">
-                            ✅ Approve Content (Stage 1)
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="rejectPost('${post.id}')">
-                            ❌ Reject
-                        </button>
-                    `;
-                }
-                // Media Generation (for approved posts without media)
-                else if (post.status === 'approved') {
-                    actionButtons = `
-                        <div style="margin-bottom: 10px;">
-                            <span class="badge" style="background: #dcfce7; color: #15803d;">✅ Content Approved</span>
-                        </div>
-                        <button class="btn btn-primary btn-sm" onclick="generateMedia('${post.id}')">
-                            🎬 Generate Media
-                        </button>
-                    `;
-                }
-                // Stage 2: Media Approval (for posts with generated media)
-                else if (post.status === 'pending_media_approval') {
-                    actionButtons = `
-                        <div style="margin-bottom: 10px;">
-                            <span class="badge" style="background: #dbeafe; color: #1d4ed8;">🎬 Media Generated - Review Required</span>
-                        </div>
-                        <button class="btn btn-success btn-sm" onclick="approveMedia('${post.id}')">
-                            ✅ Approve Media (Stage 2)
-                        </button>
-                        <button class="btn btn-warning btn-sm" onclick="regenerateMedia('${post.id}')">
-                            🔄 Regenerate Media
-                        </button>
-                    `;
-                }
-            }
-
-            // Scheduled (ready for posting)
-            if (post.status === 'scheduled' && showApproveReject) {
-                actionButtons = `
-                    <div style="margin-bottom: 10px;">
-                        <span class="badge" style="background: #f3e8ff; color: #7c3aed;">📅 Scheduled for ${formatDate(post.scheduled_time)}</span>
-                    </div>
-                ` + actionButtons;
-            }
-
-            return `
-                <div class="post-card" data-id="${post.id}">
-                    <div class="post-header">
-                        <div class="post-meta">
-                            <span class="badge ${getTypeBadge(post.post_type)}">${post.post_type || 'post'}</span>
-                            <span class="badge ${getStatusBadge(post.status)}">${(post.status || 'pending').replace(/_/g, ' ')}</span>
-                            ${post.content_theme ? `<span class="badge">${post.content_theme}</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="post-content">${truncatedContent}</div>
-                    <div class="post-schedule">
-                        Scheduled: ${formatDate(post.scheduled_time)}
-                    </div>
-                    <div class="post-actions">
-                        <a href="/dashboard/post/${post.id}" class="btn btn-secondary btn-sm">View Details</a>
-                        ${actionButtons}
-                    </div>
-                </div>
-            `;
-        }
-
-        // Fetch and render posts
-        async function refreshPosts() {
-            const startTime = performance.now();
             try {
-                showToast('Loading posts...', 'info');
+                const response = await fetch('/api/dashboard/posts');
+                console.log('📡 Response status:', response.status);
 
-                // Clear previous errors
-                hideErrorBanner();
-
-                // Fetch all posts
-                if (debugMode) {
-                    console.log('🔄 Fetching posts from API...');
-                }
-
-                const response = await fetch(`${API_BASE}/api/dashboard/posts`);
-                const responseTime = (performance.now() - startTime).toFixed(0);
-
-                // Check if response is OK
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({
-                        error: `HTTP ${response.status}: ${response.statusText}`
-                    }));
-
-                    console.error('❌ API Error:', {
-                        status: response.status,
-                        statusText: response.statusText,
-                        errorData: errorData
-                    });
-
-                    if (response.status === 503) {
-                        showErrorBanner(
-                            'Database Connection Error',
-                            'The system cannot connect to the database. Please check Railway logs or contact support.',
-                            errorData.details || errorData
-                        );
-                        showToast('Database not connected (503)', 'error');
-                    } else if (response.status === 500) {
-                        showErrorBanner(
-                            'Server Error',
-                            errorData.error || 'An unexpected server error occurred',
-                            errorData.details || errorData
-                        );
-                        showToast(`Server error (500): ${errorData.error || 'Unknown'}`, 'error');
-                    } else {
-                        showErrorBanner(
-                            `HTTP ${response.status} Error`,
-                            errorData.error || response.statusText,
-                            errorData.details || errorData
-                        );
-                        showToast(`Failed to load: ${errorData.error || response.statusText}`, 'error');
-                    }
-
-                    return;
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
+                console.log('📊 Received data:', data);
+                console.log('📊 Posts count:', data.posts ? data.posts.length : 0);
 
-                if (!data.success) {
-                    console.error('❌ Data Error:', data);
-                    showErrorBanner(
-                        'Data Error',
-                        data.error || 'Failed to load posts',
-                        data.details || data
-                    );
-                    showToast('Failed to load posts', 'error');
+                if (!data.posts || data.posts.length === 0) {
+                    console.warn('⚠️ No posts returned from API');
+                    showNoPostsMessage();
                     return;
                 }
 
-                const posts = data.posts || [];
-                allPosts = posts;  // Store globally for editing
-                const queryTime = data.query_time ? `${(data.query_time * 1000).toFixed(0)}ms` : `${responseTime}ms`;
-
-                if (debugMode) {
-                    console.log(`✅ Loaded ${posts.length} posts in ${queryTime}`, {
-                        responseTime: `${responseTime}ms`,
-                        queryTime: data.query_time,
-                        postsCount: posts.length
-                    });
-                }
-
                 // Filter posts by status
-                const pendingApproval = posts.filter(p => p.status === 'pending_approval');
-                const approved = posts.filter(p => p.status === 'approved');
-                const generating = posts.filter(p => p.status === 'generating');
-                const pendingMedia = posts.filter(p => p.status === 'pending_media_approval');
-                const scheduled = posts.filter(p => p.status === 'scheduled');
-                const published = posts.filter(p => p.status === 'published');
+                const postsByStatus = {
+                    pending_approval: data.posts.filter(p => p.status === 'pending_approval'),
+                    approved: data.posts.filter(p => p.status === 'approved'),
+                    generating: data.posts.filter(p => p.status === 'generating'),
+                    pending_media_approval: data.posts.filter(p => p.status === 'pending_media_approval'),
+                    scheduled: data.posts.filter(p => p.status === 'scheduled')
+                };
 
-                // Update stats - count all pending statuses
-                const totalPending = pendingApproval.length + approved.length + generating.length + pendingMedia.length;
-                document.getElementById('stat-pending').textContent = totalPending;
-                document.getElementById('stat-scheduled').textContent = scheduled.length;
-                document.getElementById('stat-published').textContent = published.length;
-                document.getElementById('stat-total').textContent = posts.length;
+                console.log('📊 Posts by status:', {
+                    pending_approval: postsByStatus.pending_approval.length,
+                    approved: postsByStatus.approved.length,
+                    generating: postsByStatus.generating.length,
+                    pending_media_approval: postsByStatus.pending_media_approval.length,
+                    scheduled: postsByStatus.scheduled.length
+                });
 
-                // Check if there are any active posts
-                const hasActivePosts = pendingApproval.length > 0 || approved.length > 0 ||
-                                      generating.length > 0 || pendingMedia.length > 0 || scheduled.length > 0;
+                // Render each section
+                renderSection('pending-approval-posts', postsByStatus.pending_approval, 'pending_approval');
+                renderSection('approved-posts', postsByStatus.approved, 'approved');
+                renderSection('generating-posts', postsByStatus.generating, 'generating');
+                renderSection('pending-media-posts', postsByStatus.pending_media_approval, 'pending_media_approval');
+                renderSection('scheduled-posts', postsByStatus.scheduled, 'scheduled');
 
-                // Show/hide no posts message
-                document.getElementById('no-posts-message').style.display = hasActivePosts ? 'none' : 'block';
+                // Hide loading messages
+                document.querySelectorAll('.loading-message').forEach(el => el.style.display = 'none');
 
-                // Render Pending Approval posts
-                const pendingApprovalContainer = document.getElementById('pending-approval-posts');
-                const pendingApprovalSection = document.getElementById('pending-approval-section');
-                if (pendingApproval.length === 0) {
-                    pendingApprovalSection.style.display = 'none';
-                } else {
-                    pendingApprovalSection.style.display = 'block';
-                    pendingApprovalSection.querySelector('.section-title').textContent =
-                        `📝 Pending Content Approval (${pendingApproval.length})`;
-                    pendingApprovalContainer.innerHTML = pendingApproval.map(p => renderPostCard(p, true)).join('');
-                }
+                // Show/hide sections based on content
+                hideEmptySections(postsByStatus);
 
-                // Render Approved posts (ready for media generation)
-                const approvedContainer = document.getElementById('approved-posts');
-                const approvedSection = document.getElementById('approved-section');
-                if (approved.length === 0) {
-                    approvedSection.style.display = 'none';
-                } else {
-                    approvedSection.style.display = 'block';
-                    approvedSection.querySelector('.section-title').textContent =
-                        `✅ Content Approved - Generate Media (${approved.length})`;
-                    approvedContainer.innerHTML = approved.map(p => renderPostCard(p, true)).join('');
-                }
+                // Update stats
+                updateStats(data.posts);
 
-                // Render Generating posts
-                const generatingContainer = document.getElementById('generating-posts');
-                const generatingSection = document.getElementById('generating-section');
-                if (generating.length === 0) {
-                    generatingSection.style.display = 'none';
-                } else {
-                    generatingSection.style.display = 'block';
-                    generatingSection.querySelector('.section-title').textContent =
-                        `⏳ Generating Media (${generating.length})`;
-                    generatingContainer.innerHTML = generating.map(p => renderPostCard(p, true)).join('');
-                }
-
-                // Render Pending Media Approval posts
-                const pendingMediaContainer = document.getElementById('pending-media-posts');
-                const pendingMediaSection = document.getElementById('pending-media-section');
-                if (pendingMedia.length === 0) {
-                    pendingMediaSection.style.display = 'none';
-                } else {
-                    pendingMediaSection.style.display = 'block';
-                    pendingMediaSection.querySelector('.section-title').textContent =
-                        `🎬 Pending Media Approval (${pendingMedia.length})`;
-                    pendingMediaContainer.innerHTML = pendingMedia.map(p => renderPostCard(p, true)).join('');
-                }
-
-                // Render Scheduled posts
-                const scheduledContainer = document.getElementById('scheduled-posts');
-                const scheduledSection = document.getElementById('scheduled-section');
-                if (scheduled.length === 0) {
-                    scheduledSection.style.display = 'none';
-                } else {
-                    scheduledSection.style.display = 'block';
-                    scheduledSection.querySelector('.section-title').textContent =
-                        `📅 Scheduled for Posting (${scheduled.length})`;
-                    scheduledContainer.innerHTML = scheduled.map(p => renderPostCard(p, true)).join('');
-                }
-
-                // Auto-refresh if posts are generating
-                if (generating.length > 0) {
-                    console.log('⏳ Posts are generating. Page will auto-refresh in 15 seconds...');
-                    setTimeout(() => {
-                        console.log('🔄 Refreshing to check generation status...');
-                        location.reload();
-                    }, 15000);
+                // Auto-refresh if any posts are generating
+                if (postsByStatus.generating.length > 0) {
+                    console.log('⏳ Posts generating, will refresh in 15 seconds');
+                    setTimeout(() => location.reload(), 15000);
                 }
 
             } catch (error) {
-                const responseTime = (performance.now() - startTime).toFixed(0);
-                console.error('❌ Network Error:', {
-                    error: error.message,
-                    stack: error.stack,
-                    responseTime: `${responseTime}ms`
-                });
-
-                showErrorBanner(
-                    'Network Error',
-                    'Cannot connect to the server. Please check your internet connection or Railway deployment.',
-                    {
-                        error: error.message,
-                        type: error.name,
-                        responseTime: `${responseTime}ms`
-                    }
-                );
-                showToast('Network error - cannot connect to server', 'error');
+                console.error('❌ Error loading posts:', error);
+                alert('Failed to load posts: ' + error.message);
             }
+        }
+
+        function renderSection(containerId, posts, status) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error(`Container not found: ${containerId}`);
+                return;
+            }
+
+            container.innerHTML = '';
+
+            posts.forEach(post => {
+                const card = createPostCard(post, status);
+                container.appendChild(card);
+            });
+        }
+
+        function createPostCard(post, status) {
+            const card = document.createElement('div');
+            card.className = 'post-card';
+
+            // Media indicators
+            const mediaIndicators = getMediaIndicators(post);
+
+            // Status badge
+            const statusBadge = getStatusBadge(status);
+
+            // Truncate content
+            const contentPreview = post.content_text ?
+                (post.content_text.length > 200 ? post.content_text.substring(0, 200) + '...' : post.content_text) :
+                'No caption';
+
+            // Format date
+            const scheduledDate = post.scheduled_time ? new Date(post.scheduled_time).toLocaleString('en-ZA', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : 'Not scheduled';
+
+            card.innerHTML = `
+                <div class="post-header">
+                    <span class="post-type ${post.post_format}">${post.post_format || 'unknown'}</span>
+                    ${statusBadge}
+                </div>
+
+                ${mediaIndicators}
+
+                <p class="post-content">${contentPreview}</p>
+
+                <div class="post-meta">
+                    <span class="scheduled-time">📅 ${scheduledDate}</span>
+                </div>
+
+                ${getActionButtons(post, status)}
+            `;
+
+            return card;
+        }
+
+        function getMediaIndicators(post) {
+            const indicators = [];
+
+            if (post.video_url) {
+                indicators.push('<span class="media-indicator video-ready">🎥 Video Ready</span>');
+            }
+            if (post.image_url) {
+                indicators.push('<span class="media-indicator image-ready">🖼️ Image Ready</span>');
+            }
+            if (post.carousel_slides && post.carousel_slides.length > 0) {
+                indicators.push(`<span class="media-indicator carousel-ready">📊 Carousel (${post.carousel_slides.length})</span>`);
+            }
+            if (indicators.length === 0) {
+                indicators.push('<span class="media-indicator no-media">❌ No Media</span>');
+            }
+
+            return `<div class="media-indicators">${indicators.join('')}</div>`;
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                pending_approval: '<span class="status-badge pending">📝 Pending Review</span>',
+                approved: '<span class="status-badge approved">✅ Approved</span>',
+                generating: '<span class="status-badge generating">⏳ Generating...</span>',
+                pending_media_approval: '<span class="status-badge pending-media">🎬 Review Media</span>',
+                scheduled: '<span class="status-badge scheduled">📅 Scheduled</span>'
+            };
+            return badges[status] || '<span class="status-badge">Unknown</span>';
+        }
+
+        function getActionButtons(post, status) {
+            let buttons = '';
+
+            if (status === 'pending_approval') {
+                buttons = `
+                    <div class="post-actions">
+                        <button onclick="approvePost('${post.id}')" class="btn btn-success">✅ Approve Content (Stage 1)</button>
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
+                    </div>
+                `;
+            } else if (status === 'approved') {
+                buttons = `
+                    <div class="post-actions">
+                        <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                    </div>
+                `;
+            } else if (status === 'generating') {
+                buttons = `
+                    <p class="status-message">⏱️ Generating media... This takes 30-60 seconds. Page will auto-refresh.</p>
+                `;
+            } else if (status === 'pending_media_approval') {
+                buttons = `
+                    <div class="post-actions">
+                        <button onclick="approveMedia('${post.id}')" class="btn btn-success">✅ Approve Media (Stage 2)</button>
+                        <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">🔄 Regenerate</button>
+                    </div>
+                `;
+            } else if (status === 'scheduled') {
+                buttons = `<p class="status-message">📅 Will post automatically at scheduled time</p>`;
+            }
+
+            return buttons;
+        }
+
+        function hideEmptySections(postsByStatus) {
+            const sections = {
+                'pending-approval-section': postsByStatus.pending_approval.length === 0,
+                'approved-section': postsByStatus.approved.length === 0,
+                'generating-section': postsByStatus.generating.length === 0,
+                'pending-media-section': postsByStatus.pending_media_approval.length === 0,
+                'scheduled-section': postsByStatus.scheduled.length === 0
+            };
+
+            Object.entries(sections).forEach(([sectionId, isEmpty]) => {
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    section.style.display = isEmpty ? 'none' : 'block';
+                }
+            });
+
+            // Show "no posts" message if ALL sections are empty
+            const allEmpty = Object.values(postsByStatus).every(arr => arr.length === 0);
+            if (allEmpty) {
+                showNoPostsMessage();
+            }
+        }
+
+        function showNoPostsMessage() {
+            document.getElementById('no-posts-message').style.display = 'block';
+            document.querySelectorAll('.status-section').forEach(el => el.style.display = 'none');
+        }
+
+        function updateStats(posts) {
+            const pending = posts.filter(p => ['pending_approval', 'approved', 'generating', 'pending_media_approval'].includes(p.status)).length;
+            const scheduled = posts.filter(p => p.status === 'scheduled').length;
+            const published = posts.filter(p => p.status === 'published').length;
+
+            document.getElementById('stat-pending').textContent = pending;
+            document.getElementById('stat-scheduled').textContent = scheduled;
+            document.getElementById('stat-published').textContent = published;
+            document.getElementById('stat-total').textContent = posts.length;
+        }
+
+        // Keep refreshPosts as an alias for backwards compatibility
+        async function refreshPosts() {
+            await loadPosts();
         }
 
         // Seed launch content
@@ -1006,48 +1050,36 @@
 
         // Approve a single post
         async function approvePost(postId) {
-            try {
-                const response = await fetch(`${API_BASE}/api/dashboard/approve/${postId}`, {
-                    method: 'POST'
-                });
-                const data = await response.json();
+            if (!confirm('Approve this content for media generation?')) return;
 
-                if (data.success) {
-                    showToast('✅ Content approved! Generate media next.', 'success');
-                    refreshPosts();
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/approve/${postId}`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Content approved! You can now generate media.');
+                    location.reload();
                 } else {
-                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    alert('Failed to approve post');
                 }
             } catch (error) {
-                console.error('Error approving post:', error);
-                showToast('Failed to approve post', 'error');
+                alert('Error: ' + error.message);
             }
         }
 
         // Reject a single post
         async function rejectPost(postId) {
-            showModal(
-                'Reject Post',
-                'Are you sure you want to reject this post? It won\'t be published.',
-                async () => {
-                    try {
-                        const response = await fetch(`${API_BASE}/api/dashboard/reject/${postId}`, {
-                            method: 'POST'
-                        });
-                        const data = await response.json();
+            if (!confirm('Reject and delete this post?')) return;
 
-                        if (data.success) {
-                            showToast('Post rejected', 'success');
-                            refreshPosts();
-                        } else {
-                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error rejecting post:', error);
-                        showToast('Failed to reject post', 'error');
-                    }
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/reject/${postId}`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Post rejected');
+                    location.reload();
+                } else {
+                    alert('Failed to reject post');
                 }
-            );
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         // Approve all pending posts
@@ -1224,44 +1256,36 @@
 
         // Generate media for a post
         async function generateMedia(postId) {
-            showToast('Generating media...', 'info');
-            try {
-                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
-                    method: 'POST'
-                });
-                const data = await response.json();
+            if (!confirm('Generate media for this post? This may take 30-60 seconds.')) return;
 
-                if (data.success) {
-                    showToast('Media generated! Please review.', 'success');
-                    refreshPosts();
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Media generation started! Page will auto-refresh to show progress.');
+                    location.reload();
                 } else {
-                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    const data = await response.json();
+                    alert('Failed: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error generating media:', error);
-                showToast('Failed to generate media', 'error');
+                alert('Error: ' + error.message);
             }
         }
 
         // Approve media for a post
         async function approveMedia(postId) {
-            if (!confirm('Approve this media? Post will be scheduled for publishing.')) return;
+            if (!confirm('Approve this media for scheduling?')) return;
 
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/approve-media/${postId}`, {
-                    method: 'POST'
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast('✅ Media approved! Post scheduled for publishing.', 'success');
-                    refreshPosts();
+                const response = await fetch(`${API_BASE}/api/dashboard/approve-media/${postId}`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Media approved! Post is now scheduled.');
+                    location.reload();
                 } else {
-                    showToast('❌ Error: ' + (data.error || 'Unknown error'), 'error');
+                    alert('Failed to approve media');
                 }
             } catch (error) {
-                console.error('Error approving media:', error);
-                showToast('❌ Error: ' + error.message, 'error');
+                alert('Error: ' + error.message);
             }
         }
 
@@ -1270,21 +1294,15 @@
             if (!confirm('Regenerate media for this post?')) return;
 
             try {
-                // Reset to approved status so media can be regenerated
-                const response = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, {
-                    method: 'POST'
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast('✅ Post reset. Click "Generate Media" to create new media.', 'success');
-                    refreshPosts();
+                const response = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, { method: 'POST' });
+                if (response.ok) {
+                    alert('Post reset. You can now generate new media.');
+                    location.reload();
                 } else {
-                    showToast('❌ Error: ' + (data.error || 'Unknown error'), 'error');
+                    alert('Failed to reset post');
                 }
             } catch (error) {
-                console.error('Error regenerating media:', error);
-                showToast('❌ Error: ' + error.message, 'error');
+                alert('Error: ' + error.message);
             }
         }
 
@@ -1292,7 +1310,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 Dashboard initialized');
             checkConnection();
-            refreshPosts();
+            loadPosts();
         });
     </script>
 </body>
