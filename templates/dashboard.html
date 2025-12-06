@@ -658,6 +658,9 @@
                 // Stage 1: Content Approval (for pending_approval posts)
                 if (post.status === 'pending_approval') {
                     actionButtons = `
+                        <button class="btn btn-secondary btn-sm" onclick="editPost('${post.id}')" title="Edit Post">
+                            ✏️
+                        </button>
                         <button class="btn btn-success btn-sm" onclick="approvePost('${post.id}')">
                             ✅ Approve Content (Stage 1)
                         </button>
