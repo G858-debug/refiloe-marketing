@@ -247,9 +247,33 @@
 
         {% if post.status == 'pending_approval' %}
         <div class="actions">
+            <button class="btn btn-secondary" onclick="openEditForm()">Edit</button>
             <button class="btn btn-success" onclick="approvePost('{{ post.id }}')">Approve Post</button>
             <button class="btn btn-danger" onclick="rejectPost('{{ post.id }}')">Reject Post</button>
             <a href="/dashboard" class="btn btn-secondary">&larr; Back</a>
+        </div>
+
+        <!-- Edit Form (initially hidden) -->
+        <div id="edit-form-section" class="card" style="display: none; margin-top: 20px;">
+            <h2>Edit Post</h2>
+            <div class="edit-form">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="edit-title" style="display: block; margin-bottom: 5px; font-weight: 600;">Title</label>
+                    <input type="text" id="edit-title" value="{{ post.title or '' }}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="edit-caption" style="display: block; margin-bottom: 5px; font-weight: 600;">Caption</label>
+                    <textarea id="edit-caption" rows="8" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">{{ post.content_text or post.content or '' }}</textarea>
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="edit-scheduled-time" style="display: block; margin-bottom: 5px; font-weight: 600;">Scheduled Time</label>
+                    <input type="datetime-local" id="edit-scheduled-time" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="saveEdit('{{ post.id }}')">Save Changes</button>
+                    <button class="btn btn-secondary" onclick="closeEditForm()">Cancel</button>
+                </div>
+            </div>
         </div>
         {% else %}
         <div class="actions">
@@ -309,6 +333,57 @@
                 }
             } catch (error) {
                 showToast('Failed to reject post', 'error');
+            }
+        }
+
+        function openEditForm() {
+            document.getElementById('edit-form-section').style.display = 'block';
+            // Set scheduled time if available
+            const scheduledTime = '{{ post.scheduled_time or "" }}';
+            if (scheduledTime) {
+                try {
+                    const date = new Date(scheduledTime);
+                    const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                        .toISOString().slice(0, 16);
+                    document.getElementById('edit-scheduled-time').value = localDateTime;
+                } catch (e) {
+                    console.error('Error parsing date:', e);
+                }
+            }
+            // Scroll to edit form
+            document.getElementById('edit-form-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function closeEditForm() {
+            document.getElementById('edit-form-section').style.display = 'none';
+        }
+
+        async function saveEdit(postId) {
+            const scheduledTimeInput = document.getElementById('edit-scheduled-time').value;
+            const updateData = {
+                title: document.getElementById('edit-title').value,
+                content_text: document.getElementById('edit-caption').value,
+                scheduled_time: scheduledTimeInput ? new Date(scheduledTimeInput).toISOString() : null
+            };
+
+            try {
+                const response = await fetch(`/api/dashboard/edit/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Post updated successfully!', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showToast('Failed to save changes', 'error');
             }
         }
     </script>
