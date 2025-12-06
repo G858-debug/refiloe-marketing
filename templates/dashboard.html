@@ -428,21 +428,51 @@
             </button>
         </div>
 
-        <!-- Pending Posts Section -->
-        <h2 class="section-title">Pending Review</h2>
-        <div class="posts-list" id="pending-posts">
-            <div class="empty-state">
-                <h3>Loading...</h3>
-                <p>Fetching your posts</p>
+        <!-- Pending Approval Section -->
+        <div id="pending-approval-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">📝 Pending Content Approval</h2>
+            <div class="posts-list" id="pending-approval-posts">
+                <div class="empty-state">
+                    <h3>Loading...</h3>
+                    <p>Fetching your posts</p>
+                </div>
             </div>
         </div>
 
-        <!-- Scheduled Posts Section -->
-        <h2 class="section-title" style="margin-top: 30px;">Scheduled Posts</h2>
-        <div class="posts-list" id="scheduled-posts">
-            <div class="empty-state">
-                <p>Loading...</p>
+        <!-- Approved - Ready for Media Section -->
+        <div id="approved-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">✅ Content Approved - Generate Media</h2>
+            <div class="posts-list" id="approved-posts">
+                <div class="empty-state">
+                    <p>Loading...</p>
+                </div>
             </div>
+        </div>
+
+        <!-- Pending Media Approval Section -->
+        <div id="pending-media-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">🎬 Pending Media Approval</h2>
+            <div class="posts-list" id="pending-media-posts">
+                <div class="empty-state">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduled Section -->
+        <div id="scheduled-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">📅 Scheduled for Posting</h2>
+            <div class="posts-list" id="scheduled-posts">
+                <div class="empty-state">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- No Posts Message -->
+        <div id="no-posts-message" style="display: none; text-align: center; padding: 60px 20px;">
+            <h3 style="color: #6b7280;">No active posts found</h3>
+            <p style="color: #9ca3af;">Click "Fresh Start" to generate new posts!</p>
         </div>
     </div>
 
@@ -806,43 +836,73 @@
                     });
                 }
 
-                // Update stats - include all pending statuses
-                const pending = posts.filter(p =>
-                    p.status === 'pending_approval' ||
-                    p.status === 'pending_media_approval' ||
-                    p.status === 'media_approved'
-                );
+                // Filter posts by status
+                const pendingApproval = posts.filter(p => p.status === 'pending_approval');
+                const approved = posts.filter(p => p.status === 'approved');
+                const pendingMedia = posts.filter(p => p.status === 'pending_media_approval');
                 const scheduled = posts.filter(p => p.status === 'scheduled');
                 const published = posts.filter(p => p.status === 'published');
 
-                document.getElementById('stat-pending').textContent = pending.length;
+                // Update stats - count all pending statuses
+                const totalPending = pendingApproval.length + approved.length + pendingMedia.length;
+                document.getElementById('stat-pending').textContent = totalPending;
                 document.getElementById('stat-scheduled').textContent = scheduled.length;
                 document.getElementById('stat-published').textContent = published.length;
                 document.getElementById('stat-total').textContent = posts.length;
 
-                // Render pending posts
-                const pendingContainer = document.getElementById('pending-posts');
-                if (pending.length === 0) {
-                    pendingContainer.innerHTML = `
-                        <div class="empty-state">
-                            <h3>No posts pending review</h3>
-                            <p>Click "Generate Launch Content" to create your first posts</p>
-                        </div>
-                    `;
+                // Check if there are any active posts
+                const hasActivePosts = pendingApproval.length > 0 || approved.length > 0 ||
+                                      pendingMedia.length > 0 || scheduled.length > 0;
+
+                // Show/hide no posts message
+                document.getElementById('no-posts-message').style.display = hasActivePosts ? 'none' : 'block';
+
+                // Render Pending Approval posts
+                const pendingApprovalContainer = document.getElementById('pending-approval-posts');
+                const pendingApprovalSection = document.getElementById('pending-approval-section');
+                if (pendingApproval.length === 0) {
+                    pendingApprovalSection.style.display = 'none';
                 } else {
-                    pendingContainer.innerHTML = pending.map(p => renderPostCard(p, true)).join('');
+                    pendingApprovalSection.style.display = 'block';
+                    pendingApprovalSection.querySelector('.section-title').textContent =
+                        `📝 Pending Content Approval (${pendingApproval.length})`;
+                    pendingApprovalContainer.innerHTML = pendingApproval.map(p => renderPostCard(p, true)).join('');
                 }
 
-                // Render scheduled posts
-                const scheduledContainer = document.getElementById('scheduled-posts');
-                if (scheduled.length === 0) {
-                    scheduledContainer.innerHTML = `
-                        <div class="empty-state">
-                            <p>No scheduled posts yet</p>
-                        </div>
-                    `;
+                // Render Approved posts (ready for media generation)
+                const approvedContainer = document.getElementById('approved-posts');
+                const approvedSection = document.getElementById('approved-section');
+                if (approved.length === 0) {
+                    approvedSection.style.display = 'none';
                 } else {
-                    scheduledContainer.innerHTML = scheduled.map(p => renderPostCard(p, false)).join('');
+                    approvedSection.style.display = 'block';
+                    approvedSection.querySelector('.section-title').textContent =
+                        `✅ Content Approved - Generate Media (${approved.length})`;
+                    approvedContainer.innerHTML = approved.map(p => renderPostCard(p, true)).join('');
+                }
+
+                // Render Pending Media Approval posts
+                const pendingMediaContainer = document.getElementById('pending-media-posts');
+                const pendingMediaSection = document.getElementById('pending-media-section');
+                if (pendingMedia.length === 0) {
+                    pendingMediaSection.style.display = 'none';
+                } else {
+                    pendingMediaSection.style.display = 'block';
+                    pendingMediaSection.querySelector('.section-title').textContent =
+                        `🎬 Pending Media Approval (${pendingMedia.length})`;
+                    pendingMediaContainer.innerHTML = pendingMedia.map(p => renderPostCard(p, true)).join('');
+                }
+
+                // Render Scheduled posts
+                const scheduledContainer = document.getElementById('scheduled-posts');
+                const scheduledSection = document.getElementById('scheduled-section');
+                if (scheduled.length === 0) {
+                    scheduledSection.style.display = 'none';
+                } else {
+                    scheduledSection.style.display = 'block';
+                    scheduledSection.querySelector('.section-title').textContent =
+                        `📅 Scheduled for Posting (${scheduled.length})`;
+                    scheduledContainer.innerHTML = scheduled.map(p => renderPostCard(p, true)).join('');
                 }
 
             } catch (error) {
