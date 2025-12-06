@@ -1290,23 +1290,49 @@ def generate_video_form():
 def reset_to_approved(post_id):
     """Reset post to approved status for media regeneration"""
     try:
-        # Clear media URLs and reset to approved
-        result = supabase_client.table('social_posts').update({
-            'status': 'approved',
-            'video_url': None,
-            'media_url': None,
-            'updated_at': datetime.now(SA_TZ).isoformat()
-        }).eq('id', post_id).execute()
+        log_info(f"📥 Request: Reset post {post_id} to approved status")
 
-        if result.data:
-            log_info(f"🔄 Post {post_id} reset to approved for media regeneration")
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': 'Post not found'}), 404
+        # Get the post to determine what type of media to clear
+        post = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not post.data or len(post.data) == 0:
+            return jsonify({'error': 'Post not found'}), 404
+
+        post_data = post.data[0]
+        post_type = post_data.get('post_type')
+
+        # Build update dict based on post type
+        update_data = {
+            'status': 'approved',
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Clear media URLs based on post type
+        if post_type == 'video':
+            update_data['video_url'] = None
+            update_data['video_id'] = None
+            log_info(f"Clearing video_url and video_id for post {post_id}")
+        elif post_type == 'image':
+            update_data['image_url'] = None
+            log_info(f"Clearing image_url for post {post_id}")
+        elif post_type == 'carousel':
+            update_data['carousel_image_urls'] = None
+            log_info(f"Clearing carousel_image_urls for post {post_id}")
+
+        # Update the post
+        result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        log_info(f"✅ Post {post_id} reset to approved status")
+
+        return jsonify({
+            'message': 'Post reset to approved status',
+            'post_id': post_id,
+            'cleared_fields': list(update_data.keys())
+        }), 200
 
     except Exception as e:
-        log_error(f"❌ Error resetting post: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        log_error(f"❌ Error resetting post {post_id}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 app.register_blueprint(approval_bp, url_prefix='/approval')

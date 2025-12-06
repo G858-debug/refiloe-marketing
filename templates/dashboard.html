@@ -137,12 +137,18 @@
         .btn-success:hover { background: #16a34a; }
         .btn-danger { background: #ef4444; color: white; }
         .btn-danger:hover { background: #dc2626; }
+        .btn.btn-warning {
+            background: #FF9800;
+            color: white;
+            border: none;
+        }
+        .btn.btn-warning:hover {
+            background: #F57C00;
+        }
         .btn-secondary { background: #e5e7eb; color: #374151; }
         .btn-secondary:hover { background: #d1d5db; }
         .btn-info { background: #3b82f6; color: white; }
         .btn-info:hover { background: #2563eb; }
-        .btn-warning { background: #f59e0b; color: white; }
-        .btn-warning:hover { background: #d97706; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Posts List */
@@ -244,7 +250,14 @@
             color: #6b7280;
             margin-bottom: 15px;
         }
-        .post-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .post-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .post-actions button {
+            flex: 1;
+        }
         .btn-sm {
             padding: 8px 16px;
             font-size: 13px;
@@ -1249,10 +1262,15 @@
                     <p class="status-message">⏱️ Generating media... This takes 30-60 seconds. Page will auto-refresh.</p>
                 `;
             } else if (status === 'pending_media_approval') {
+                // Show approve and regenerate for ALL media types
+                const mediaType = post.post_type === 'video' ? 'Video' :
+                                 post.post_type === 'image' ? 'Image' :
+                                 post.post_type === 'carousel' ? 'Carousel' : 'Media';
+
                 buttons = `
                     <div class="post-actions">
-                        <button onclick="approveMedia('${post.id}')" class="btn btn-success">✅ Approve Media (Stage 2)</button>
-                        <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">🔄 Regenerate</button>
+                        <button onclick="approveMedia('${post.id}')" class="btn btn-success">✅ Approve ${mediaType} (Stage 2)</button>
+                        <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">🔄 Regenerate ${mediaType}</button>
                     </div>
                 `;
             } else if (status === 'scheduled') {
@@ -1605,15 +1623,23 @@
 
         // Regenerate media for a post
         async function regenerateMedia(postId) {
-            if (!confirm('Regenerate media for this post?')) return;
+            // Get post type for better messaging
+            const postCard = event.target.closest('.post-card');
+            const postTypeSpan = postCard.querySelector('.post-type');
+            const mediaType = postTypeSpan ? postTypeSpan.textContent : 'media';
+
+            if (!confirm(`Regenerate ${mediaType} for this post? The current ${mediaType} will be discarded and you can generate a new one.`)) return;
 
             try {
                 const response = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, { method: 'POST' });
+
                 if (response.ok) {
-                    alert('Post reset. You can now generate new media.');
+                    const data = await response.json();
+                    alert(`✅ Post reset! You can now generate new ${mediaType}.`);
                     location.reload();
                 } else {
-                    alert('Failed to reset post');
+                    const error = await response.json();
+                    alert('Failed to reset post: ' + (error.error || 'Unknown error'));
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
