@@ -178,6 +178,12 @@
         .badge-carousel { background: #fef3c7; color: #b45309; }
         .badge-image { background: #dcfce7; color: #15803d; }
         .badge-pending { background: #fef3c7; color: #b45309; }
+        .badge-generating {
+            background: #FFA500;
+            color: white;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
         .badge-pending-media { background: #fef3c7; color: #b45309; }
         .badge-media-approved { background: #dbeafe; color: #1d4ed8; }
         .badge-scheduled { background: #dbeafe; color: #1d4ed8; }
@@ -214,6 +220,15 @@
         .btn-sm {
             padding: 8px 16px;
             font-size: 13px;
+        }
+
+        .status-message {
+            margin-top: 10px;
+            padding: 8px;
+            background: #FFF3CD;
+            border-left: 3px solid #FFA500;
+            color: #856404;
+            font-size: 14px;
         }
 
         /* Modal */
@@ -449,6 +464,16 @@
             </div>
         </div>
 
+        <!-- Generating Media Section -->
+        <div id="generating-section" style="margin-bottom: 30px;">
+            <h2 class="section-title">⏳ Generating Media</h2>
+            <div class="posts-list" id="generating-posts">
+                <div class="empty-state">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Pending Media Approval Section -->
         <div id="pending-media-section" style="margin-bottom: 30px;">
             <h2 class="section-title">🎬 Pending Media Approval</h2>
@@ -667,6 +692,7 @@
         function getStatusBadge(status) {
             const badges = {
                 'pending_approval': 'badge-pending',
+                'generating': 'badge-generating',
                 'pending_media_approval': 'badge-pending-media',
                 'media_approved': 'badge-media-approved',
                 'scheduled': 'badge-scheduled',
@@ -839,12 +865,13 @@
                 // Filter posts by status
                 const pendingApproval = posts.filter(p => p.status === 'pending_approval');
                 const approved = posts.filter(p => p.status === 'approved');
+                const generating = posts.filter(p => p.status === 'generating');
                 const pendingMedia = posts.filter(p => p.status === 'pending_media_approval');
                 const scheduled = posts.filter(p => p.status === 'scheduled');
                 const published = posts.filter(p => p.status === 'published');
 
                 // Update stats - count all pending statuses
-                const totalPending = pendingApproval.length + approved.length + pendingMedia.length;
+                const totalPending = pendingApproval.length + approved.length + generating.length + pendingMedia.length;
                 document.getElementById('stat-pending').textContent = totalPending;
                 document.getElementById('stat-scheduled').textContent = scheduled.length;
                 document.getElementById('stat-published').textContent = published.length;
@@ -852,7 +879,7 @@
 
                 // Check if there are any active posts
                 const hasActivePosts = pendingApproval.length > 0 || approved.length > 0 ||
-                                      pendingMedia.length > 0 || scheduled.length > 0;
+                                      generating.length > 0 || pendingMedia.length > 0 || scheduled.length > 0;
 
                 // Show/hide no posts message
                 document.getElementById('no-posts-message').style.display = hasActivePosts ? 'none' : 'block';
@@ -881,6 +908,18 @@
                     approvedContainer.innerHTML = approved.map(p => renderPostCard(p, true)).join('');
                 }
 
+                // Render Generating posts
+                const generatingContainer = document.getElementById('generating-posts');
+                const generatingSection = document.getElementById('generating-section');
+                if (generating.length === 0) {
+                    generatingSection.style.display = 'none';
+                } else {
+                    generatingSection.style.display = 'block';
+                    generatingSection.querySelector('.section-title').textContent =
+                        `⏳ Generating Media (${generating.length})`;
+                    generatingContainer.innerHTML = generating.map(p => renderPostCard(p, true)).join('');
+                }
+
                 // Render Pending Media Approval posts
                 const pendingMediaContainer = document.getElementById('pending-media-posts');
                 const pendingMediaSection = document.getElementById('pending-media-section');
@@ -903,6 +942,15 @@
                     scheduledSection.querySelector('.section-title').textContent =
                         `📅 Scheduled for Posting (${scheduled.length})`;
                     scheduledContainer.innerHTML = scheduled.map(p => renderPostCard(p, true)).join('');
+                }
+
+                // Auto-refresh if posts are generating
+                if (generating.length > 0) {
+                    console.log('⏳ Posts are generating. Page will auto-refresh in 15 seconds...');
+                    setTimeout(() => {
+                        console.log('🔄 Refreshing to check generation status...');
+                        location.reload();
+                    }, 15000);
                 }
 
             } catch (error) {

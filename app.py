@@ -3169,7 +3169,7 @@ def api_dashboard_posts():
 
     try:
         # Active statuses to show
-        active_statuses = ['pending_approval', 'approved', 'pending_media_approval', 'scheduled']
+        active_statuses = ['pending_approval', 'approved', 'generating', 'pending_media_approval', 'scheduled']
 
         # Get ALL posts (SupabaseRestClient doesn't support .in_() filtering)
         result = supabase_client.table('social_posts').select('*').execute()
@@ -3599,6 +3599,13 @@ def api_generate_media(post_id):
 
         post_data = post.data[0]
 
+        # Set status to 'generating' to show user that process has started
+        supabase_client.table('social_posts').update({
+            'status': 'generating',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', post_id).execute()
+        log_info(f"🎬 Status set to 'generating' for post {post_id}")
+
         # Parse generation metadata
         metadata = json.loads(post_data.get('generation_prompt', '{}'))
         post_type = post_data.get('post_type')
@@ -3620,47 +3627,61 @@ def api_generate_media(post_id):
 
             log_info(f"🎬 Generating video for post {post_id}")
 
-            # Generate video
-            result = video_gen.generate_avatar_video(
-                script_text=script,
-                avatar_id=avatar_id,
-                voice_id=None,
-                style='educational',
-                background_music=True,
-                metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
-            )
+            try:
+                # Generate video
+                result = video_gen.generate_avatar_video(
+                    script_text=script,
+                    avatar_id=avatar_id,
+                    voice_id=None,
+                    style='educational',
+                    background_music=True,
+                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
+                )
 
-            if result and result.get('video_url'):
-                # Get existing generation_prompt
-                post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
-                existing_prompt = {}
-                if post_result.data:
-                    try:
-                        existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
-                    except:
-                        existing_prompt = {}
+                if result and result.get('video_url'):
+                    # Get existing generation_prompt
+                    post_result = supabase_client.table('social_posts').select('generation_prompt').eq('id', post_id).execute()
+                    existing_prompt = {}
+                    if post_result.data:
+                        try:
+                            existing_prompt = json.loads(post_result.data[0].get('generation_prompt', '{}'))
+                        except:
+                            existing_prompt = {}
 
-                # Add HeyGen video_id to generation_prompt
-                existing_prompt['heygen_video_id'] = result.get('video_id')
+                    # Add HeyGen video_id to generation_prompt
+                    existing_prompt['heygen_video_id'] = result.get('video_id')
 
-                # Update post status to pending_media_approval
+                    # Update post status to pending_media_approval
+                    supabase_client.table('social_posts').update({
+                        'status': 'pending_media_approval',
+                        'video_url': result.get('video_url'),
+                        'storage_path': result.get('storage_path'),
+                        'generation_prompt': json.dumps(existing_prompt),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Video generated successfully for post {post_id}")
+                    return jsonify({
+                        'success': True,
+                        'video_url': result.get('video_url'),
+                        'message': 'Video generated successfully'
+                    })
+                else:
+                    log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
+                    # Reset status so user can retry
+                    supabase_client.table('social_posts').update({
+                        'status': 'approved',
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+                    return jsonify({'success': False, 'error': result.get('error')}), 500
+            except Exception as e:
+                log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
+                # Reset status so user can retry
                 supabase_client.table('social_posts').update({
-                    'status': 'pending_media_approval',
-                    'video_url': result.get('video_url'),
-                    'storage_path': result.get('storage_path'),
-                    'generation_prompt': json.dumps(existing_prompt),
-                    'updated_at': datetime.now(SA_TZ).isoformat()
+                    'status': 'approved',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-
-                log_info(f"✅ Video generated successfully for post {post_id}")
-                return jsonify({
-                    'success': True,
-                    'video_url': result.get('video_url'),
-                    'message': 'Video generated successfully'
-                })
-            else:
-                log_error(f"❌ Video generation failed for post {post_id}: {result.get('error')}")
-                return jsonify({'success': False, 'error': result.get('error')}), 500
+                return jsonify({'error': f'Media generation failed: {str(e)}'}), 500
 
         elif post_type in ['image', 'carousel']:
             from social_media.image_generator import ImageGenerator
@@ -3676,33 +3697,47 @@ def api_generate_media(post_id):
 
             log_info(f"🎨 Generating image for post {post_id}")
 
-            # Generate image based on caption
-            prompt = f"Professional personal trainer, {theme}, {caption[:100]}"
+            try:
+                # Generate image based on caption
+                prompt = f"Professional personal trainer, {theme}, {caption[:100]}"
 
-            result = image_gen.generate_influencer_image(
-                prompt=prompt,
-                style='professional',
-                setting='gym_environment'
-            )
+                result = image_gen.generate_influencer_image(
+                    prompt=prompt,
+                    style='professional',
+                    setting='gym_environment'
+                )
 
-            if result and result.get('image_url'):
-                # Update post status to pending_media_approval
+                if result and result.get('image_url'):
+                    # Update post status to pending_media_approval
+                    supabase_client.table('social_posts').update({
+                        'status': 'pending_media_approval',
+                        'media_url': result.get('image_url'),
+                        'storage_path': result.get('storage_path'),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Image generated successfully for post {post_id}")
+                    return jsonify({
+                        'success': True,
+                        'image_url': result.get('image_url'),
+                        'message': 'Image generated successfully'
+                    })
+                else:
+                    log_error(f"❌ Image generation failed for post {post_id}")
+                    # Reset status so user can retry
+                    supabase_client.table('social_posts').update({
+                        'status': 'approved',
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+                    return jsonify({'success': False, 'error': 'Image generation failed'}), 500
+            except Exception as e:
+                log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
+                # Reset status so user can retry
                 supabase_client.table('social_posts').update({
-                    'status': 'pending_media_approval',
-                    'media_url': result.get('image_url'),
-                    'storage_path': result.get('storage_path'),
-                    'updated_at': datetime.now(SA_TZ).isoformat()
+                    'status': 'approved',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-
-                log_info(f"✅ Image generated successfully for post {post_id}")
-                return jsonify({
-                    'success': True,
-                    'image_url': result.get('image_url'),
-                    'message': 'Image generated successfully'
-                })
-            else:
-                log_error(f"❌ Image generation failed for post {post_id}")
-                return jsonify({'success': False, 'error': 'Image generation failed'}), 500
+                return jsonify({'error': f'Media generation failed: {str(e)}'}), 500
 
         else:
             return jsonify({'success': False, 'error': f'Unsupported post type: {post_type}'}), 400
