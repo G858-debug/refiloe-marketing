@@ -1286,7 +1286,7 @@ def generate_video_form():
     return html
 
 
-@dashboard_bp.route('/api/dashboard/posts/<post_id>/reset-to-approved', methods=['POST'])
+@app.route('/api/dashboard/posts/<post_id>/reset-to-approved', methods=['POST'])
 def reset_to_approved(post_id):
     """Reset post to approved status for media regeneration"""
     try:
