@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 import pytz
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -87,6 +88,77 @@ class SocialMediaScheduler:
     # --------------------------------------------------------------------- #
     # Job registration & wrappers
     # --------------------------------------------------------------------- #
+    def fetch_orphaned_videos_job(self) -> None:
+        """Check for posts with HeyGen video_ids but no video_url and fetch them"""
+        log_info("🔍 Checking for orphaned videos...")
+
+        try:
+            # Find posts that:
+            # 1. Are video posts
+            # 2. Have no video_url
+            # 3. Were created in last 24 hours (avoid old posts)
+            # 4. Status is pending_approval
+
+            cutoff_time = (datetime.now(SA_TIMEZONE) - timedelta(hours=24)).isoformat()
+
+            result = self.supabase_client.table('social_posts').select('*').eq('post_type', 'video').is_('video_url', 'null').eq('status', 'pending_approval').gte('created_at', cutoff_time).execute()
+
+            if not result.data:
+                log_info("✅ No orphaned videos found")
+                return
+
+            log_info(f"📹 Found {len(result.data)} potential orphaned videos")
+
+            heygen_api_key = os.getenv('HEYGEN_API_KEY')
+            if not heygen_api_key:
+                log_error("❌ HEYGEN_API_KEY not configured")
+                return
+
+            headers = {'X-Api-Key': heygen_api_key}
+
+            for post in result.data:
+                try:
+                    # Parse generation_prompt
+                    generation_prompt = post.get('generation_prompt')
+                    if not generation_prompt:
+                        continue
+
+                    prompt_data = json.loads(generation_prompt) if isinstance(generation_prompt, str) else generation_prompt
+                    heygen_video_id = prompt_data.get('heygen_video_id')
+
+                    if not heygen_video_id:
+                        continue
+
+                    # Fetch from HeyGen
+                    response = requests.get(
+                        f'https://api.heygen.com/v2/video/{heygen_video_id}',
+                        headers=headers,
+                        timeout=30
+                    )
+
+                    if response.status_code == 200:
+                        video_data = response.json()
+                        video_status = video_data.get('data', {}).get('status')
+                        video_url = video_data.get('data', {}).get('video_url')
+
+                        if video_status == 'completed' and video_url:
+                            # Update database
+                            self.supabase_client.table('social_posts').update({
+                                'video_url': video_url,
+                                'updated_at': datetime.now(SA_TIMEZONE).isoformat()
+                            }).eq('id', post['id']).execute()
+
+                            log_info(f"✅ Fetched orphaned video for post {post['id']}")
+                        else:
+                            log_info(f"⏳ Video {heygen_video_id} still {video_status}")
+
+                except Exception as e:
+                    log_error(f"❌ Error fetching video for post {post['id']}: {str(e)}")
+                    continue
+
+        except Exception as e:
+            log_error(f"❌ Error in fetch_orphaned_videos_job: {str(e)}", exc_info=True)
+
     def _register_jobs(self) -> None:
         """Register recurring jobs with APScheduler."""
         log_info("Registering social media scheduler jobs.")
@@ -135,6 +207,12 @@ class SocialMediaScheduler:
                 "name": "Facebook Comment Processing",
                 "trigger": IntervalTrigger(minutes=15, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("comment_processing_interval", self.run_comment_processing),
+            },
+            {
+                "id": "fetch_orphaned_videos",
+                "name": "Fetch Orphaned Videos",
+                "trigger": IntervalTrigger(minutes=15, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("fetch_orphaned_videos", self.fetch_orphaned_videos_job),
             },
         ]
 
