@@ -151,12 +151,21 @@
             margin-bottom: 15px;
             color: #374151;
         }
-        .posts-list { display: flex; flex-direction: column; gap: 15px; }
+        .posts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
         .post-card {
             background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 20px;
+        }
+        .post-card:last-child {
+            margin-bottom: 0;
         }
         .post-header {
             display: flex;
@@ -465,7 +474,19 @@
         }
 
         .status-section {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 20px;
             margin-bottom: 30px;
+            border: 1px solid #e5e7eb;
+        }
+        .status-section h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+            color: #374151;
+            font-size: 16px;
         }
 
         /* Responsive */
