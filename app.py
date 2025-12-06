@@ -3700,32 +3700,6 @@ def api_generate_media(post_id):
         log_error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
-@app.route('/api/dashboard/approve-media/<post_id>', methods=['POST'])
-def api_approve_media(post_id):
-    """API: Approve generated media and move post to ready for final approval"""
-    log_info(f"📥 Request: /api/dashboard/approve-media/{post_id}")
-
-    if not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
-
-    try:
-        result = supabase_client.table('social_posts').update({
-            'status': 'media_approved',
-            'updated_at': datetime.now(SA_TZ).isoformat()
-        }).eq('id', post_id).execute()
-
-        if result.data:
-            log_info(f"✅ Media approved for post {post_id}")
-            return jsonify({'success': True, 'message': 'Media approved'})
-        else:
-            return jsonify({'success': False, 'error': 'Post not found'}), 404
-
-    except Exception as e:
-        log_error(f"❌ Error approving media for {post_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/api/dashboard/regenerate-media/<post_id>', methods=['POST'])
 def api_regenerate_media(post_id):
     """API: Regenerate media for a post"""
