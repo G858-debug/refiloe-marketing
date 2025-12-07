@@ -3655,59 +3655,128 @@ def api_generate_media(post_id):
             log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
-                # Generate video
-                result = video_gen.generate_avatar_video(
-                    script_text=script,
-                    avatar_id=avatar_id,
-                    voice_id=None,
-                    style='educational',
-                    background_music=True,
-                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
+                # Call HeyGen API to START video generation (async - don't wait for completion)
+                log_info(f"🎬 Starting async video generation for post {post_id}")
+
+                # Use the internal _generate_with_avatar method to get video_id without waiting
+                # This bypasses the polling/waiting logic
+                from social_media.video_generator import VideoGenerator
+                import requests
+                import json
+
+                # Prepare HeyGen API request
+                heygen_api_key = video_gen.api_key
+                avatar_id_to_use = avatar_id
+
+                # Determine if this is a photo avatar or standard avatar
+                photo_avatar_ids = [
+                    os.getenv('HEYGEN_AVATAR_DEFAULT'),
+                    '5637676d31d54946b7585b012a3ce182',
+                    '75370ca4dd714442a70d84eee87870f3',
+                ]
+
+                is_photo_avatar = avatar_id_to_use in photo_avatar_ids
+
+                if is_photo_avatar:
+                    endpoint = "https://api.heygen.com/v1/video.generate"
+                    payload = {
+                        "video_inputs": [{
+                            "character": {
+                                "type": "talking_photo",
+                                "talking_photo_id": avatar_id_to_use,
+                                "talking_style": "stable"
+                            },
+                            "voice": {
+                                "type": "text",
+                                "input_text": script,
+                                "voice_id": "0a2dcbd6585048a2a71a90ea746741cc"  # Default voice
+                            }
+                        }],
+                        "dimension": {"width": 1080, "height": 1920},
+                        "test": False
+                    }
+                else:
+                    endpoint = "https://api.heygen.com/v2/video/generate"
+                    payload = {
+                        "video_inputs": [{
+                            "character": {
+                                "type": "avatar",
+                                "avatar_id": avatar_id_to_use,
+                                "avatar_style": "normal"
+                            },
+                            "voice": {
+                                "type": "text",
+                                "input_text": script,
+                                "voice_id": "0a2dcbd6585048a2a71a90ea746741cc"
+                            }
+                        }],
+                        "dimension": {"width": 1080, "height": 1920},
+                        "test": False
+                    }
+
+                # Call HeyGen API
+                headers = {
+                    "X-API-KEY": heygen_api_key,
+                    "Content-Type": "application/json"
+                }
+
+                log_info(f"🎬 Calling HeyGen API: {endpoint}")
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
+                response.raise_for_status()
+
+                heygen_response = response.json()
+                log_info(f"📹 HeyGen response: {heygen_response}")
+
+                # Extract video_id
+                video_id = (
+                    heygen_response.get("data", {}).get("video_id")
+                    or heygen_response.get("video_id")
+                    or heygen_response.get("task_id")
                 )
 
-                # CRITICAL: Extract video_id from result
-                log_info(f"📹 HeyGen result: {result}")
-
-                video_id = None
-                if isinstance(result, dict):
-                    video_id = result.get('video_id')
+                if not video_id:
+                    raise Exception(f"HeyGen did not return video_id. Response: {heygen_response}")
 
                 log_info(f"📹 Extracted video_id: {video_id}")
 
-                if not video_id:
-                    log_error(f"❌ HeyGen did not return video_id for post {post_id}")
-                    log_error(f"❌ Full result: {result}")
-                    raise Exception("No video_id returned from HeyGen")
-
-                # Save video_id to database IMMEDIATELY
+                # Save video_id to database IMMEDIATELY (don't wait for completion)
                 log_info(f"💾 Saving video_id to database: {video_id}")
 
                 update_result = supabase_client.table('social_posts').update({
                     'video_id': video_id,
-                    'status': 'generating',
+                    'status': 'generating',  # Keep as generating until video completes
                     'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
 
                 log_info(f"✅ Database updated with video_id: {video_id}")
-                log_info(f"💾 Update result: {update_result}")
+                log_info(f"💾 Update result: {update_result.data}")
 
-                # Return success
+                # Return success immediately (don't wait for video to complete)
                 return jsonify({
-                    'message': 'Video generation started',
+                    'success': True,
+                    'message': 'Video generation started successfully! The video will be ready in 30-60 seconds.',
                     'video_id': video_id,
                     'post_id': post_id,
-                    'status': 'generating'
+                    'status': 'generating',
+                    'note': 'Video is processing. It will automatically appear in the approval queue when ready.'
                 }), 200
 
             except Exception as e:
-                log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
+                log_error(f"❌ Async video generation failed for {post_id}: {str(e)}")
+                import traceback
+                log_error(f"Traceback: {traceback.format_exc()}")
+
                 # Reset status so user can retry
                 supabase_client.table('social_posts').update({
                     'status': 'approved',
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-                return jsonify({'error': f'Media generation failed: {str(e)}'}), 500
+
+                return jsonify({
+                    'success': False,
+                    'error': f'Video generation failed: {str(e)}'
+                }), 500
 
         elif post_type in ['image', 'carousel']:
             from social_media.image_generator import ImageGenerator
