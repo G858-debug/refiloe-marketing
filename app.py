@@ -3658,11 +3658,10 @@ def api_generate_media(post_id):
                 # Call HeyGen API to START video generation (async - don't wait for completion)
                 log_info(f"🎬 Starting async video generation for post {post_id}")
 
-                # Use the internal _generate_with_avatar method to get video_id without waiting
-                # This bypasses the polling/waiting logic
+                # Import required modules
                 from social_media.video_generator import VideoGenerator
                 import requests
-                import json
+                # Note: Don't import json here - it's already imported at module level
 
                 # Prepare HeyGen API request
                 heygen_api_key = video_gen.api_key
