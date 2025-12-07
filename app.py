@@ -3655,112 +3655,84 @@ def api_generate_media(post_id):
             log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
-                # Call HeyGen API to START video generation (async - don't wait for completion)
-                log_info(f"🎬 Starting async video generation for post {post_id}")
-
-                # Import required modules
-                from social_media.video_generator import VideoGenerator
-                import requests
-                # Note: Don't import json here - it's already imported at module level
-
-                # Prepare HeyGen API request
-                heygen_api_key = video_gen.api_key
-
-                # Use single default avatar for all videos
-                avatar_id_to_use = '5637676d31d54946b7585b012a3ce182'
-
-                # This is a photo avatar
-                photo_avatar_ids = ['5637676d31d54946b7585b012a3ce182']
-
-                is_photo_avatar = avatar_id_to_use in photo_avatar_ids
-
-                if is_photo_avatar:
-                    endpoint = "https://api.heygen.com/v1/video.generate"
-                    payload = {
-                        "video_inputs": [{
-                            "character": {
-                                "type": "talking_photo",
-                                "talking_photo_id": avatar_id_to_use,
-                                "talking_style": "stable"
-                            },
-                            "voice": {
-                                "type": "text",
-                                "input_text": script,
-                                "voice_id": "0a2dcbd6585048a2a71a90ea746741cc"  # Default voice
-                            }
-                        }],
-                        "dimension": {"width": 1080, "height": 1920},
-                        "test": False
-                    }
-                else:
-                    endpoint = "https://api.heygen.com/v2/video/generate"
-                    payload = {
-                        "video_inputs": [{
-                            "character": {
-                                "type": "avatar",
-                                "avatar_id": avatar_id_to_use,
-                                "avatar_style": "normal"
-                            },
-                            "voice": {
-                                "type": "text",
-                                "input_text": script,
-                                "voice_id": "0a2dcbd6585048a2a71a90ea746741cc"
-                            }
-                        }],
-                        "dimension": {"width": 1080, "height": 1920},
-                        "test": False
-                    }
-
-                # Call HeyGen API
-                headers = {
-                    "X-API-KEY": heygen_api_key,
-                    "Content-Type": "application/json"
-                }
-
-                log_info(f"🎬 Calling HeyGen API: {endpoint}")
-                response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
-                response.raise_for_status()
-
-                heygen_response = response.json()
-                log_info(f"📹 HeyGen response: {heygen_response}")
-
-                # Extract video_id
-                video_id = (
-                    heygen_response.get("data", {}).get("video_id")
-                    or heygen_response.get("video_id")
-                    or heygen_response.get("task_id")
+                # Call VideoGenerator - it will handle the HeyGen API correctly
+                # The VideoGenerator.generate_avatar_video waits for completion by default
+                # We'll accept this for now since it works reliably
+                result = video_gen.generate_avatar_video(
+                    script_text=script,
+                    avatar_id=avatar_id,
+                    voice_id=None,
+                    style='educational',
+                    background_music=True,
+                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
                 )
 
+                log_info(f"📹 HeyGen response received: {result}")
+
+                # Extract video_id and video_url from result
+                video_id = None
+                video_url = None
+
+                if isinstance(result, dict):
+                    video_id = result.get('video_id')
+                    video_url = result.get('video_url')
+
+                log_info(f"📹 Video ID from HeyGen: {video_id}")
+                log_info(f"📹 Video URL from HeyGen: {video_url}")
+
                 if not video_id:
-                    raise Exception(f"HeyGen did not return video_id. Response: {heygen_response}")
+                    log_error(f"❌ HeyGen did not return video_id for post {post_id}")
+                    log_error(f"❌ Full result: {result}")
+                    raise Exception("No video_id returned from HeyGen")
 
-                log_info(f"📹 Extracted video_id: {video_id}")
+                # Save video to database
+                if video_url:
+                    # Video completed immediately
+                    log_info(f"🎉 Video completed immediately with URL: {video_url}")
+                    log_info(f"💾 Saving video_id {video_id} and URL to database for post {post_id}")
 
-                # Save video_id to database IMMEDIATELY (don't wait for completion)
-                log_info(f"💾 Saving video_id to database: {video_id}")
+                    supabase_client.table('social_posts').update({
+                        'video_id': video_id,
+                        'video_url': video_url,
+                        'status': 'pending_approval',
+                        'media_generation_completed_at': datetime.now(timezone.utc).isoformat(),
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
 
-                update_result = supabase_client.table('social_posts').update({
-                    'video_id': video_id,
-                    'status': 'generating',  # Keep as generating until video completes
-                    'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
-                    'updated_at': datetime.now(timezone.utc).isoformat()
-                }).eq('id', post_id).execute()
+                    log_info(f"✅ Video generated successfully for post {post_id}")
 
-                log_info(f"✅ Database updated with video_id: {video_id}")
-                log_info(f"💾 Update result: {update_result.data}")
+                    return jsonify({
+                        'success': True,
+                        'message': 'Video generated successfully!',
+                        'video_id': video_id,
+                        'video_url': video_url,
+                        'post_id': post_id,
+                        'status': 'pending_approval'
+                    }), 200
+                else:
+                    # Video is processing - save video_id and let background job fetch URL
+                    log_info(f"⏳ Video processing - saving video_id {video_id} for background fetch")
+                    log_info(f"💾 Saving video_id to database: {video_id}")
 
-                # Return success immediately (don't wait for video to complete)
-                return jsonify({
-                    'success': True,
-                    'message': 'Video generation started successfully! The video will be ready in 30-60 seconds.',
-                    'video_id': video_id,
-                    'post_id': post_id,
-                    'status': 'generating',
-                    'note': 'Video is processing. It will automatically appear in the approval queue when ready.'
-                }), 200
+                    supabase_client.table('social_posts').update({
+                        'video_id': video_id,
+                        'status': 'generating',
+                        'media_generation_started_at': datetime.now(timezone.utc).isoformat(),
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Video generation started for post {post_id}")
+
+                    return jsonify({
+                        'success': True,
+                        'message': 'Video generation started! It will be ready in 30-60 seconds.',
+                        'video_id': video_id,
+                        'post_id': post_id,
+                        'status': 'generating'
+                    }), 200
 
             except Exception as e:
-                log_error(f"❌ Async video generation failed for {post_id}: {str(e)}")
+                log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
                 import traceback
                 log_error(f"Traceback: {traceback.format_exc()}")
 
