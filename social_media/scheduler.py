@@ -106,12 +106,15 @@ class SocialMediaScheduler:
             return
 
         try:
-            # Find posts with status='generating' AND video_id is not null
+            # Find posts with status='generating' then filter for video_id not null
+            # Note: The custom Supabase REST client doesn't support .not_ chaining
             result = self.supabase_client.table('social_posts').select(
                 'id, video_id, post_type, content_text, created_at'
-            ).eq('status', 'generating').not_.is_('video_id', 'null').execute()
+            ).eq('status', 'generating').execute()
 
+            # Filter in Python for posts that have video_id
             posts = result.data if result.data else []
+            posts = [post for post in posts if post.get('video_id') is not None]
             log_info(f"📊 Found {len(posts)} posts with video_id in 'generating' status")
 
             if not posts:
