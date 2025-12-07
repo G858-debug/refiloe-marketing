@@ -15,7 +15,7 @@ import json
 import os
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 import pytz
@@ -115,12 +115,34 @@ class SocialMediaScheduler:
             # Filter in Python for posts that have video_id
             posts = result.data if result.data else []
             posts = [post for post in posts if post.get('video_id') is not None]
-            log_info(f"📊 Found {len(posts)} posts with video_id in 'generating' status")
+            # Also check for posts stuck in 'generating' with NO video_id (worker timeout victims)
+            posts_without_video_id = [post for post in (result.data or []) if not post.get('video_id')]
 
+            log_info(f"📊 Found {len(posts)} posts with video_id in 'generating' status")
+            log_info(f"📊 Found {len(posts_without_video_id)} posts stuck in 'generating' without video_id")
+
+            # Reset stuck posts without video_id back to approved
+            if posts_without_video_id:
+                log_warning(f"⚠️  Resetting {len(posts_without_video_id)} stuck posts to 'approved' status")
+
+                for stuck_post in posts_without_video_id:
+                    post_id = stuck_post.get('id')
+                    try:
+                        self.supabase_client.table('social_posts').update({
+                            'status': 'approved',
+                            'video_id': None,
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }).eq('id', post_id).execute()
+
+                        log_info(f"✅ Reset stuck post {post_id} to approved status")
+                    except Exception as e:
+                        log_error(f"❌ Failed to reset post {post_id}: {e}")
+
+            # If no posts with video_id to check, we're done
             if not posts:
-                log_info("✅ No videos to check")
+                log_info("✅ No videos with video_id to check")
                 log_info("=" * 60)
-                log_info("✅ Fetch job complete: 0 videos retrieved, 0 errors")
+                log_info(f"✅ Fetch job complete: 0 videos retrieved, {len(posts_without_video_id)} stuck posts reset")
                 log_info("=" * 60)
                 return
 
