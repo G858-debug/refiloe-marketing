@@ -1045,7 +1045,7 @@ def generate_real_video():
             content_text = script_text
 
         voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
-        avatar_id = data.get('avatar_id') or os.getenv('HEYGEN_AVATAR_DEFAULT')
+        avatar_id = data.get('avatar_id') or '5637676d31d54946b7585b012a3ce182'
 
         result = video_gen.generate_avatar_video(
             script_text=script_text,
@@ -3666,14 +3666,12 @@ def api_generate_media(post_id):
 
                 # Prepare HeyGen API request
                 heygen_api_key = video_gen.api_key
-                avatar_id_to_use = avatar_id
 
-                # Determine if this is a photo avatar or standard avatar
-                photo_avatar_ids = [
-                    os.getenv('HEYGEN_AVATAR_DEFAULT'),
-                    '5637676d31d54946b7585b012a3ce182',
-                    '75370ca4dd714442a70d84eee87870f3',
-                ]
+                # Use single default avatar for all videos
+                avatar_id_to_use = '5637676d31d54946b7585b012a3ce182'
+
+                # This is a photo avatar
+                photo_avatar_ids = ['5637676d31d54946b7585b012a3ce182']
 
                 is_photo_avatar = avatar_id_to_use in photo_avatar_ids
 

@@ -73,7 +73,7 @@ class VideoGenerator:
         if not self.api_key:
             raise ValueError("HEYGEN_API_KEY environment variable is required")
 
-        self.default_avatar_id = os.getenv("HEYGEN_AVATAR_ID")
+        self.default_avatar_id = '5637676d31d54946b7585b012a3ce182'
         self.monthly_limit = int(os.getenv("HEYGEN_MONTHLY_LIMIT", "120"))
 
         self.sa_tz = pytz.timezone("Africa/Johannesburg")
@@ -532,139 +532,17 @@ class VideoGenerator:
         candidates: List[Dict[str, Any]] = []
         selection_context: Optional[Dict[str, Any]] = None
 
-        # Priority 1: Always prefer HEYGEN_AVATAR_DEFAULT if set
-        env_avatar = os.getenv('HEYGEN_AVATAR_DEFAULT')
-        if env_avatar:
-            candidates.append(
-                {
-                    "avatar_id": env_avatar,
-                    "reason": "environment_default_avatar",
-                    "source": "env_default",
-                }
-            )
-            log_info(f"Using environment default avatar: {env_avatar}")
+        # Priority 1: Always use hardcoded default avatar
+        candidates.append(
+            {
+                "avatar_id": '5637676d31d54946b7585b012a3ce182',
+                "reason": "hardcoded_default_avatar",
+                "source": "default",
+            }
+        )
+        log_info("Using hardcoded default avatar: 5637676d31d54946b7585b012a3ce182")
 
-        # Priority 2: Caller-provided avatar
-        if requested_avatar_id:
-            candidates.append(
-                {
-                    "avatar_id": requested_avatar_id,
-                    "reason": "caller_provided_avatar",
-                    "source": "caller",
-                }
-            )
-            log_info(f"Adding caller-provided avatar: {requested_avatar_id}")
-
-        # Priority 3: Try new avatar selector (if available) - post config
-        if self.avatar_selector is not None:
-            try:
-                selector_result = self.avatar_selector.select_avatar(
-                    content_theme=content_type,
-                    content_text=content_text,
-                )
-                if selector_result and selector_result.get("avatar_id"):
-                    # Only add if not already requested by caller
-                    if selector_result.get("source") != "override":
-                        candidates.append(
-                            {
-                                "avatar_id": selector_result["avatar_id"],
-                                "reason": selector_result.get("reason", "avatar_selector"),
-                                "source": f"avatar_selector_{selector_result.get('source', 'unknown')}",
-                                "context": selector_result,
-                            }
-                        )
-                        selection_context = selector_result
-                        log_info(f"Adding avatar from selector: {selector_result['avatar_id']}")
-            except Exception as exc:  # pylint: disable=broad-except
-                log_warning(f"Avatar selector failed: {exc}")
-
-        # Fall back to legacy avatar mapping (if available)
-        if callable(get_avatar_for_content):  # pragma: no branch - runtime guarded
-            selection_kwargs: Dict[str, Any] = {}
-            if content_text:
-                selection_kwargs["content_text"] = content_text
-            if content_type:
-                selection_kwargs["content_type"] = content_type
-
-            try:
-                selection_result = get_avatar_for_content(**selection_kwargs)
-                mapping_context = selection_result if isinstance(selection_result, dict) else None
-
-                derived_avatar_id: Optional[str] = None
-                derived_reason: Optional[str] = None
-
-                if isinstance(selection_result, dict):
-                    derived_avatar_id = selection_result.get("avatar_id") or selection_result.get("id")
-                    derived_reason = selection_result.get("reason") or selection_result.get("strategy")
-                elif isinstance(selection_result, (list, tuple)) and selection_result:
-                    primary = selection_result[0]
-                    if isinstance(primary, dict):
-                        derived_avatar_id = primary.get("avatar_id") or primary.get("id")
-                        derived_reason = primary.get("reason") or primary.get("strategy")
-                        mapping_context = primary
-                    elif isinstance(primary, str):
-                        derived_avatar_id = primary
-                elif isinstance(selection_result, str):
-                    derived_avatar_id = selection_result
-
-                if derived_avatar_id:
-                    candidates.append(
-                        {
-                            "avatar_id": derived_avatar_id,
-                            "reason": derived_reason or "avatar_mapping_selection",
-                            "source": "avatar_mapping",
-                            "context": mapping_context,
-                        }
-                    )
-                    if not selection_context:
-                        selection_context = mapping_context
-            except AvatarSelectionError as exc:
-                log_warning(f"Dynamic avatar selection failed: {exc}")
-            except Exception as exc:  # pylint: disable=broad-except
-                log_warning(f"Unexpected error during avatar mapping selection: {exc}")
-
-        # Additional fallback: HEYGEN_AVATAR_ID (legacy env var)
-        if not candidates and self.default_avatar_id:
-            candidates.append(
-                {
-                    "avatar_id": self.default_avatar_id,
-                    "reason": "legacy_default_avatar_configured",
-                    "source": "legacy_default",
-                }
-            )
-            log_info(f"Using legacy default avatar: {self.default_avatar_id}")
-
-        group_avatar = self._resolve_named_avatar("GROUP")
-        if group_avatar:
-            candidates.append(
-                {
-                    "avatar_id": group_avatar,
-                    "reason": "group_avatar_fallback",
-                    "source": "fallback_group",
-                }
-            )
-
-        closeup_avatar = self._resolve_named_avatar("THREEQUARTERS_CLOSEUP")
-        if closeup_avatar:
-            candidates.append(
-                {
-                    "avatar_id": closeup_avatar,
-                    "reason": "threequarters_closeup_fallback",
-                    "source": "fallback_closeup",
-                }
-            )
-
-        # Final hardcoded fallback if no candidates found
-        if not candidates:
-            fallback_avatar_id = '5637676d31d54946b7585b012a3ce182'
-            candidates.append(
-                {
-                    "avatar_id": fallback_avatar_id,
-                    "reason": "hardcoded_fallback",
-                    "source": "fallback_hardcoded",
-                }
-            )
-            log_info(f"Using hardcoded fallback avatar: {fallback_avatar_id}")
+        # No other avatars needed - we always use the single default avatar
 
         deduped: List[Dict[str, Any]] = []
         seen_ids: set[str] = set()
