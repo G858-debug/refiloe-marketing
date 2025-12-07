@@ -1624,7 +1624,15 @@
             try {
                 const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, { method: 'POST' });
                 if (response.ok) {
-                    alert('Media generation started! Page will auto-refresh to show progress.');
+                    const data = await response.json();
+                    if (data.video_id) {
+                        alert('✅ Video generation started!\n\n' +
+                              'Your video is being created by HeyGen (30-60 seconds).\n' +
+                              'It will automatically appear in the approval queue when ready.\n\n' +
+                              'You can close this page or continue working - the video will process in the background.');
+                    } else {
+                        alert('Media generation started! Page will auto-refresh to show progress.');
+                    }
                     location.reload();
                 } else {
                     const data = await response.json();
