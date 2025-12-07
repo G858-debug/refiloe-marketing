@@ -48,11 +48,12 @@ class AvatarSelector:
         """Initialize the avatar selector.
 
         Args:
-            default_avatar_env: Environment variable name for the default/fallback avatar.
+            default_avatar_env: Environment variable name for the default/fallback avatar (deprecated).
         """
         self.default_avatar_env = default_avatar_env
+        self.default_avatar = '5637676d31d54946b7585b012a3ce182'
         self._cache: Dict[str, Optional[str]] = {}
-        log_info("AvatarSelector initialized with default env var: %s" % default_avatar_env)
+        log_info("AvatarSelector initialized with hardcoded default avatar: %s" % self.default_avatar)
 
     def select_avatar(
         self,
@@ -60,72 +61,28 @@ class AvatarSelector:
         content_text: Optional[str] = None,
         avatar_override: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Select the most appropriate avatar ID based on content theme and text.
+        """Always return the default avatar - content-based selection disabled.
 
-        This method uses a multi-tier selection strategy:
-        1. If avatar_override is provided, use it directly
-        2. If content_theme is provided, map it to an avatar
-        3. If content_text is provided, analyze it for theme keywords
-        4. Fall back to the default avatar
+        This method now always returns the hardcoded default avatar ID regardless
+        of content theme or text. Content-based avatar selection has been disabled
+        to use a single consistent avatar across all video generation.
 
         Args:
-            content_theme: Optional explicit content theme (e.g., "professional", "casual", "fitness")
-            content_text: Optional content text to analyze for theme detection
-            avatar_override: Optional explicit avatar ID to use (bypasses selection logic)
+            content_theme: Optional explicit content theme (ignored)
+            content_text: Optional content text to analyze (ignored)
+            avatar_override: Optional explicit avatar ID to use (ignored)
 
         Returns:
             Dict containing:
-                - avatar_id: The selected avatar ID
+                - avatar_id: The default avatar ID (5637676d31d54946b7585b012a3ce182)
                 - reason: Why this avatar was selected
-                - source: Source of the selection (override, theme, keyword, default)
-                - theme: Detected or provided theme (if applicable)
+                - source: Source of the selection (always "default")
+                - theme: None
         """
-        # Handle explicit override
-        if avatar_override:
-            log_info("Using avatar override: %s" % avatar_override)
-            return {
-                "avatar_id": avatar_override,
-                "reason": "explicit_override",
-                "source": "override",
-                "theme": content_theme,
-            }
-
-        # Try theme-based selection
-        if content_theme:
-            avatar_id = self._get_avatar_by_theme(content_theme)
-            if avatar_id:
-                log_info("Selected avatar for theme '%s': %s" % (content_theme, avatar_id))
-                return {
-                    "avatar_id": avatar_id,
-                    "reason": "theme_mapping",
-                    "source": "theme",
-                    "theme": content_theme,
-                }
-
-        # Try content analysis
-        if content_text:
-            detected_theme = self._detect_theme_from_text(content_text)
-            if detected_theme:
-                avatar_id = self._get_avatar_by_theme(detected_theme)
-                if avatar_id:
-                    log_info(
-                        "Selected avatar for detected theme '%s': %s"
-                        % (detected_theme, avatar_id)
-                    )
-                    return {
-                        "avatar_id": avatar_id,
-                        "reason": "keyword_detection",
-                        "source": "content_analysis",
-                        "theme": detected_theme,
-                        "content_excerpt": content_text[:100] if content_text else None,
-                    }
-
-        # Fall back to default avatar
-        default_avatar = self._get_default_avatar()
-        log_info("Using default avatar: %s" % default_avatar)
+        log_info("Using hardcoded default avatar (content-based selection disabled): %s" % self.default_avatar)
         return {
-            "avatar_id": default_avatar,
-            "reason": "no_match_found",
+            "avatar_id": self.default_avatar,
+            "reason": "hardcoded_default",
             "source": "default",
             "theme": None,
         }
@@ -205,20 +162,9 @@ class AvatarSelector:
         """Get the default/fallback avatar ID.
 
         Returns:
-            Default avatar ID from environment variable
-
-        Raises:
-            ValueError: If default avatar environment variable is not set
+            Hardcoded default avatar ID (5637676d31d54946b7585b012a3ce182)
         """
-        default_avatar = os.getenv(self.default_avatar_env)
-        if not default_avatar:
-            error_msg = (
-                "Default avatar environment variable '%s' is not set"
-                % self.default_avatar_env
-            )
-            log_error(error_msg)
-            raise ValueError(error_msg)
-        return default_avatar
+        return self.default_avatar
 
     def get_available_themes(self) -> List[str]:
         """Get list of all available content themes.
