@@ -89,78 +89,80 @@ class SocialMediaScheduler:
     # Job registration & wrappers
     # --------------------------------------------------------------------- #
     def fetch_orphaned_videos_job(self) -> None:
-        """Check HeyGen for completed videos and save URLs to database"""
+        """
+        Fetch and update videos that are still processing on HeyGen.
+
+        This job handles the async video generation pattern:
+        1. Finds posts with status='generating' and a video_id
+        2. Checks video completion status with HeyGen
+        3. Updates posts when videos are ready
+        """
+        log_info("=" * 60)
+        log_info("🎥 FETCH ORPHANED VIDEOS JOB STARTED")
+        log_info("=" * 60)
+
+        if not self.supabase_client:
+            log_error("❌ Supabase client not initialized")
+            return
+
         try:
-            log_info("=" * 60)
-            log_info("🎥 FETCH ORPHANED VIDEOS JOB STARTED")
-            log_info("=" * 60)
+            # Find posts with status='generating' AND video_id is not null
+            result = self.supabase_client.table('social_posts').select(
+                'id, video_id, post_type, content_text, created_at'
+            ).eq('status', 'generating').not_.is_('video_id', 'null').execute()
 
-            # Get posts with video_id but no video_url (waiting for completion)
-            result = self.supabase_client.table('social_posts').select('*').eq('status', 'generating').execute()
+            posts = result.data if result.data else []
+            log_info(f"📊 Found {len(posts)} posts with video_id in 'generating' status")
 
-            log_info(f"📊 Found {len(result.data)} posts with status='generating'")
-
-            if not result.data or len(result.data) == 0:
-                log_info("✅ No videos currently generating")
+            if not posts:
+                log_info("✅ No videos to check")
+                log_info("=" * 60)
+                log_info("✅ Fetch job complete: 0 videos retrieved, 0 errors")
+                log_info("=" * 60)
                 return
 
-            # Import video generator
+            # Initialize video generator for status checks
             from social_media.video_generator import VideoGenerator
             video_gen = VideoGenerator('social_media/config.yaml', self.supabase_client)
 
-            completed_count = 0
-            error_count = 0
+            videos_completed = 0
+            videos_still_processing = 0
+            videos_failed = 0
 
-            for post in result.data:
-                post_id = post['id']
+            for post in posts:
+                post_id = post.get('id')
                 video_id = post.get('video_id')
 
                 log_info(f"\n--- Checking Post {post_id} ---")
-                log_info(f"Post type: {post.get('post_type')}")
                 log_info(f"Video ID: {video_id}")
-
-                if not video_id:
-                    log_warning(f"⚠️  Post {post_id} has no video_id - skipping")
-                    continue
 
                 try:
                     # Check video status with HeyGen
-                    log_info(f"📞 Calling HeyGen API for video {video_id}...")
-                    status_response = video_gen.check_video_status(video_id)
+                    status_result = video_gen.check_video_status(video_id)
 
-                    log_info(f"📡 HeyGen response: {status_response}")
+                    video_status = status_result.get('status')
+                    video_url = status_result.get('video_url')
+                    error = status_result.get('error')
 
-                    status = status_response.get('status')
-                    log_info(f"Status: {status}")
+                    log_info(f"HeyGen status: {video_status}")
 
-                    if status == 'completed':
-                        video_url = status_response.get('video_url')
+                    if video_status == 'completed' and video_url:
+                        # Video is ready! Update post
+                        log_info(f"✅ Video completed: {video_url}")
 
-                        if not video_url:
-                            log_error(f"❌ Video {video_id} completed but no URL in response!")
-                            continue
-
-                        log_info(f"✅ Video completed! URL: {video_url}")
-
-                        # Update post with video URL
-                        log_info(f"💾 Updating database for post {post_id}...")
                         self.supabase_client.table('social_posts').update({
                             'video_url': video_url,
-                            'status': 'pending_media_approval',
+                            'status': 'pending_approval',
                             'media_generation_completed_at': datetime.now(SA_TIMEZONE).isoformat(),
                             'updated_at': datetime.now(SA_TIMEZONE).isoformat()
                         }).eq('id', post_id).execute()
 
-                        log_info(f"✅ Database updated successfully for post {post_id}")
-                        completed_count += 1
+                        log_info(f"✅ Post {post_id} updated to pending_approval")
+                        videos_completed += 1
 
-                    elif status == 'processing':
-                        log_info(f"⏳ Video {video_id} still processing...")
-
-                    elif status == 'failed':
-                        error_msg = status_response.get('error', 'Unknown error')
-                        log_error(f"❌ Video {video_id} failed: {error_msg}")
-                        error_count += 1
+                    elif video_status == 'failed' or (error and 'not found' in str(error).lower()):
+                        # Video failed or not found
+                        log_error(f"❌ Video failed for post {post_id}: {error or video_status}")
 
                         # Reset to approved so user can retry
                         self.supabase_client.table('social_posts').update({
@@ -169,21 +171,33 @@ class SocialMediaScheduler:
                             'updated_at': datetime.now(SA_TIMEZONE).isoformat()
                         }).eq('id', post_id).execute()
 
+                        log_info(f"🔄 Post {post_id} reset to approved for retry")
+                        videos_failed += 1
+
+                    elif video_status in ['processing', 'pending', 'unknown']:
+                        # Still processing - check again next run
+                        log_info(f"⏳ Video still processing for post {post_id}")
+                        videos_still_processing += 1
+
                     else:
-                        log_warning(f"⚠️  Unknown status for video {video_id}: {status}")
+                        # Unexpected status
+                        log_warning(f"⚠️ Unexpected video status '{video_status}' for post {post_id}")
+                        videos_still_processing += 1
 
                 except Exception as e:
-                    log_error(f"❌ Error checking video {video_id}: {str(e)}")
+                    log_error(f"❌ Error checking video {video_id} for post {post_id}: {e}")
                     log_error(f"Traceback: {traceback.format_exc()}")
-                    error_count += 1
-                    continue
+                    videos_failed += 1
 
             log_info("=" * 60)
-            log_info(f"✅ Fetch job complete: {completed_count} videos retrieved, {error_count} errors")
+            log_info(f"✅ Fetch job complete:")
+            log_info(f"   - Completed: {videos_completed}")
+            log_info(f"   - Still processing: {videos_still_processing}")
+            log_info(f"   - Failed: {videos_failed}")
             log_info("=" * 60)
 
         except Exception as e:
-            log_error(f"❌ Critical error in fetch_orphaned_videos_job: {str(e)}")
+            log_error(f"❌ Fetch orphaned videos job failed: {e}")
             log_error(f"Traceback: {traceback.format_exc()}")
 
     def _register_jobs(self) -> None:
