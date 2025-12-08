@@ -179,6 +179,11 @@ class LooksGenerator:
 
         self.looks_table = os.getenv("HEYGEN_LOOKS_TABLE", "avatar_looks")
 
+        # Cache for avatar_id lookups by look_type
+        self._avatar_id_cache: Dict[str, Optional[str]] = {}
+        # Cache for available looks list
+        self._available_looks_cache: Optional[List[str]] = None
+
         log_info("LooksGenerator initialized with HeyGen Photo Avatar integration")
 
     @property
@@ -207,6 +212,110 @@ class LooksGenerator:
             Look configuration dictionary or None if not found.
         """
         return REFILOE_LOOKS.get(look_type)
+
+    def get_avatar_id_by_look_type(self, look_type: str) -> Optional[str]:
+        """Get photo_avatar_id for a specific look_type from the database.
+
+        This method queries the avatar_looks table to find the photo_avatar_id
+        associated with a given look_type. Results are cached in memory to avoid
+        repeated database queries.
+
+        Args:
+            look_type: The look type to query (e.g., 'morning_workout_energy').
+
+        Returns:
+            The photo_avatar_id string if found, None if not found or on error.
+        """
+        if not self.supabase_client:
+            log_warning("Supabase client not configured; cannot query avatar_id by look_type")
+            return None
+
+        # Check cache first
+        if look_type in self._avatar_id_cache:
+            log_debug(f"Cache hit for look_type '{look_type}': {self._avatar_id_cache[look_type]}")
+            return self._avatar_id_cache[look_type]
+
+        try:
+            log_debug(f"Querying database for photo_avatar_id with look_type: {look_type}")
+
+            # Query the avatar_looks table
+            result = (
+                self.supabase_client.table(self.looks_table)
+                .select("photo_avatar_id")
+                .eq("look_type", look_type)
+                .execute()
+            )
+
+            if result.data and len(result.data) > 0:
+                photo_avatar_id = result.data[0].get("photo_avatar_id")
+                log_info(f"Found photo_avatar_id '{photo_avatar_id}' for look_type '{look_type}'")
+
+                # Cache the result
+                self._avatar_id_cache[look_type] = photo_avatar_id
+                return photo_avatar_id
+
+            log_info(f"No photo_avatar_id found for look_type '{look_type}'")
+            # Cache the None result to avoid repeated queries
+            self._avatar_id_cache[look_type] = None
+            return None
+
+        except Exception as exc:
+            log_error(f"Error querying photo_avatar_id for look_type '{look_type}': {exc}")
+            return None
+
+    def get_all_available_looks(self) -> List[str]:
+        """Get a list of all available look_types from the database.
+
+        This method queries the avatar_looks table to retrieve all distinct
+        look_type values. Results are cached in memory to avoid repeated
+        database queries.
+
+        Returns:
+            List of look_type strings. Returns empty list if database is
+            not configured or on error.
+        """
+        if not self.supabase_client:
+            log_warning("Supabase client not configured; cannot retrieve available looks")
+            return []
+
+        # Check cache first
+        if self._available_looks_cache is not None:
+            log_debug(f"Cache hit for available looks: {len(self._available_looks_cache)} looks")
+            return self._available_looks_cache.copy()
+
+        try:
+            log_debug("Querying database for all available look_types")
+
+            # Query all records and extract unique look_types
+            result = (
+                self.supabase_client.table(self.looks_table)
+                .select("look_type")
+                .execute()
+            )
+
+            if result.data:
+                # Extract unique look_types
+                look_types = list(set(
+                    record.get("look_type")
+                    for record in result.data
+                    if record.get("look_type")
+                ))
+                look_types.sort()  # Sort alphabetically for consistency
+
+                log_info(f"Found {len(look_types)} unique look_types in database")
+
+                # Cache the result
+                self._available_looks_cache = look_types
+                return look_types.copy()
+
+            log_info("No look_types found in database")
+            # Cache empty list
+            self._available_looks_cache = []
+            return []
+
+        except Exception as exc:
+            log_error(f"Error retrieving available look_types: {exc}")
+            return []
 
     def generate_avatar_look(
         self,
