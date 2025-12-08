@@ -643,6 +643,77 @@ def debug_image_check():
         }), 500
 
 
+@app.route('/api/debug/all-images-check')
+def debug_all_images():
+    """Check ALL posts (including published) for images"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get ALL posts, including published ones
+        result = supabase_client.table('social_posts').select(
+            'id, status, post_type, image_url, video_url, created_at'
+        ).order('created_at', desc=True).limit(20).execute()
+
+        if not result.data:
+            return jsonify({'success': True, 'message': 'No posts found'}), 200
+
+        # Analyze image coverage
+        stats = {
+            'total_posts': len(result.data),
+            'posts_with_images': 0,
+            'posts_with_videos': 0,
+            'posts_by_status': {},
+            'sample_posts_with_images': [],
+            'sample_posts_without_images': []
+        }
+
+        for post in result.data:
+            status = post.get('status', 'unknown')
+            stats['posts_by_status'][status] = stats['posts_by_status'].get(status, 0) + 1
+
+            has_image = bool(post.get('image_url'))
+            has_video = bool(post.get('video_url'))
+
+            if has_image:
+                stats['posts_with_images'] += 1
+                if len(stats['sample_posts_with_images']) < 3:
+                    stats['sample_posts_with_images'].append({
+                        'id': post['id'][:8],
+                        'status': status,
+                        'type': post.get('post_type'),
+                        'created': post.get('created_at', '')[:10]
+                    })
+            else:
+                if len(stats['sample_posts_without_images']) < 3:
+                    stats['sample_posts_without_images'].append({
+                        'id': post['id'][:8],
+                        'status': status,
+                        'type': post.get('post_type'),
+                        'created': post.get('created_at', '')[:10]
+                    })
+
+            if has_video:
+                stats['posts_with_videos'] += 1
+
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'diagnosis': {
+                'images_generated': f"{stats['posts_with_images']}/{stats['total_posts']} posts have images",
+                'videos_generated': f"{stats['posts_with_videos']}/{stats['total_posts']} posts have videos",
+                'possible_issue': 'Images are not being generated for most posts' if stats['posts_with_images'] < 5 else 'Image generation appears to be working'
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+
 @app.route('/api/debug/verify-avatar-group', methods=['GET'])
 def verify_avatar_group():
     """Verify if HEYGEN_AVATAR_GROUP is a valid Photo Avatar Group"""
