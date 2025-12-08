@@ -26,6 +26,7 @@ class PostTemplate:
         optimal_posting_time: Best time(s) to post for maximum engagement
         tone: Voice and tone guidelines (e.g., empathetic, celebratory, informative)
         call_to_action: Suggested CTAs for the post
+        media_type: Media type for the post (static_image, video, carousel)
     """
 
     name: str
@@ -37,6 +38,7 @@ class PostTemplate:
     optimal_posting_time: str
     tone: str = "professional"
     call_to_action: Optional[str] = None
+    media_type: str = "video"  # Default to video, can be overridden
 
 
 # ============================================================================
@@ -69,6 +71,7 @@ PAIN_POINT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Tuesday-Thursday, 7-9 AM or 6-8 PM",
         tone="empathetic and relatable",
         call_to_action="Comment below if you've experienced this! 👇",
+        media_type="static_image",  # Motivational/relatable content
     ),
     "pov_trainer": PostTemplate(
         name="pov_trainer",
@@ -96,6 +99,7 @@ PAIN_POINT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Monday, Wednesday, Friday, 8-10 AM",
         tone="humorous yet authentic",
         call_to_action="Tag a trainer who gets it! 😂",
+        media_type="video",  # Scenario-based storytelling content
     ),
     "struggle_to_solution": PostTemplate(
         name="struggle_to_solution",
@@ -122,6 +126,7 @@ PAIN_POINT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Tuesday, Thursday, 12-2 PM",
         tone="solution-oriented and supportive",
         call_to_action="Save this for when you need it! 📌 Which tip will you try first?",
+        media_type="carousel",  # Multiple solutions in list format
     ),
 }
 
@@ -159,6 +164,7 @@ SUCCESS_STORY_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Tuesday (Transformation Tuesday), 9-11 AM",
         tone="celebratory and inspiring",
         call_to_action="Drop a 🔥 to celebrate [Name]'s incredible journey!",
+        media_type="static_image",  # Testimonial/success story
     ),
     "milestone_achievement": PostTemplate(
         name="milestone_achievement",
@@ -187,6 +193,7 @@ SUCCESS_STORY_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Monday (Milestone Monday), 10 AM-12 PM",
         tone="proud and energetic",
         call_to_action="What's your next big milestone? Tell me below! ⬇️",
+        media_type="static_image",  # Motivational/achievement content
     ),
     "before_after_narrative": PostTemplate(
         name="before_after_narrative",
@@ -215,6 +222,7 @@ SUCCESS_STORY_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Tuesday, Friday, 8-10 AM",
         tone="inspiring and honest",
         call_to_action="Double-tap if this inspires you to start YOUR journey! 💪",
+        media_type="static_image",  # Testimonial/transformation story
     ),
 }
 
@@ -251,6 +259,7 @@ EDUCATIONAL_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Monday, Wednesday, 1-3 PM",
         tone="authoritative yet approachable",
         call_to_action="Share this with someone who needs to hear it! What other myths should I bust?",
+        media_type="video",  # Educational/tutorial content
     ),
     "quick_tips": PostTemplate(
         name="quick_tips",
@@ -279,6 +288,7 @@ EDUCATIONAL_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Daily, 7-9 AM or 5-7 PM",
         tone="helpful and energetic",
         call_to_action="Save this for later! 💾 Which tip resonates most with you?",
+        media_type="carousel",  # List/tips format
     ),
     "how_to_guide": PostTemplate(
         name="how_to_guide",
@@ -308,6 +318,7 @@ EDUCATIONAL_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Tuesday, Thursday, 11 AM-1 PM",
         tone="instructive and thorough",
         call_to_action="Bookmark this guide! 📚 Questions? Drop them below!",
+        media_type="carousel",  # Step-by-step tutorial format
     ),
 }
 
@@ -343,6 +354,7 @@ ENGAGEMENT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Wednesday, Friday, 6-8 PM",
         tone="curious and conversational",
         call_to_action="I'll respond to every comment! 💬 Go!",
+        media_type="static_image",  # Engagement/question content
     ),
     "poll_ideas": PostTemplate(
         name="poll_ideas",
@@ -370,6 +382,7 @@ ENGAGEMENT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Monday, Thursday, 12-2 PM",
         tone="playful and inclusive",
         call_to_action="Vote below! 🗳️ Can't wait to see the results!",
+        media_type="static_image",  # Poll/engagement content
     ),
     "call_to_action": PostTemplate(
         name="call_to_action",
@@ -397,6 +410,7 @@ ENGAGEMENT_TEMPLATES: Dict[str, PostTemplate] = {
         optimal_posting_time="Daily, 8-10 AM",
         tone="motivating and direct",
         call_to_action="Do it now! ⏰ I'm watching the comments!",
+        media_type="static_image",  # Motivational/CTA content
     ),
 }
 
