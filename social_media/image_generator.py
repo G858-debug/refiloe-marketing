@@ -4,6 +4,7 @@ import yaml
 import uuid
 import hashlib
 import time
+import json
 from io import BytesIO
 import requests
 import asyncio
@@ -11,17 +12,20 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import pytz
 from PIL import Image, ImageStat, ImageChops
-from utils.logger import log_info, log_error, log_warning
+from utils.logger import log_info, log_error, log_warning, log_debug
 import replicate
 from social_media.database import SocialMediaDatabase
 
 
 class ImageGenerator:
     """Generates consistent AI influencer images for social media posts using Replicate API"""
-    
+
+    # HeyGen API configuration
+    HEYGEN_API_BASE_URL = "https://api.heygen.com"
+
     def __init__(self, config_path: str, supabase_client):
         """Initialize Replicate and load config
-        
+
         Args:
             config_path: Path to config.yaml file
             supabase_client: Supabase client instance
@@ -31,18 +35,25 @@ class ImageGenerator:
             self.replicate_token = os.getenv('REPLICATE_API_TOKEN')
             if not self.replicate_token:
                 raise ValueError("REPLICATE_API_TOKEN environment variable not set")
-            
+
             replicate.Client(api_token=self.replicate_token)
             self.client = replicate
-            
+
             # Initialize database service
             self.db = SocialMediaDatabase(supabase_client)
-            
+
             # Load configuration
             self.config = self._load_config(config_path)
-            
+
             # Set timezone
             self.sa_tz = pytz.timezone('Africa/Johannesburg')
+
+            # HeyGen API configuration
+            self.heygen_api_key = os.getenv('HEYGEN_API_KEY')
+            self.heygen_max_retries = 5
+            self.heygen_retry_backoff = 5
+            self.heygen_poll_interval = 10
+            self.heygen_poll_timeout = int(os.getenv('HEYGEN_POLL_TIMEOUT', '300'))
 
             # Character consistency state
             self.character_reference_url: Optional[str] = None
@@ -879,7 +890,7 @@ class ImageGenerator:
             
             log_info(f"Retrieved generation stats: {stats}")
             return stats
-            
+
         except Exception as e:
             log_error(f"Error getting generation stats: {str(e)}")
             return {
@@ -888,3 +899,382 @@ class ImageGenerator:
                 'style_distribution': {},
                 'error': str(e)
             }
+
+    def generate_heygen_static_image(
+        self,
+        avatar_id: str,
+        custom_prompt: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate a single static image using HeyGen Photo Avatar API.
+
+        Uses an existing avatar from the look library to generate a new static image
+        with optional prompt customization. Returns the image URL directly without
+        saving to the social_images table.
+
+        Args:
+            avatar_id: Photo avatar ID from the look library
+            custom_prompt: Optional custom prompt to customize the image generation
+
+        Returns:
+            Dict containing:
+                - image_url: The generated image URL
+                - avatar_id: The photo avatar ID used
+                - prompt: The prompt used for generation (if applicable)
+                - status: Generation status
+                - generated_at: Timestamp of generation
+
+        Raises:
+            ValueError: If avatar_id is not provided or HeyGen API key is not configured
+            Exception: If image generation fails after all retries
+        """
+        if not avatar_id:
+            raise ValueError("avatar_id is required")
+
+        if not self.heygen_api_key:
+            raise ValueError(
+                "HEYGEN_API_KEY environment variable is required for HeyGen image generation"
+            )
+
+        log_info(f"Starting HeyGen static image generation for avatar_id: {avatar_id}")
+
+        # Build the API payload
+        payload: Dict[str, Any] = {
+            "photo_avatar_id": avatar_id,
+            "output_format": "image",  # Request static image, not video
+        }
+
+        # Add custom prompt if provided
+        if custom_prompt:
+            payload["prompt"] = custom_prompt
+            log_info(f"Using custom prompt: {custom_prompt}")
+
+        # Log request details
+        log_info("=" * 80)
+        log_info("HEYGEN PHOTO AVATAR IMAGE GENERATION - REQUEST")
+        log_info("=" * 80)
+        log_info(f"API Endpoint: {self.HEYGEN_API_BASE_URL}/v2/photo_avatar/image")
+        log_info(f"Avatar ID: {avatar_id}")
+        log_info(f"Custom Prompt: {custom_prompt or 'None'}")
+        log_info(f"Payload: {json.dumps(payload, indent=2)}")
+        log_info("=" * 80)
+
+        try:
+            # Call HeyGen API to generate static image
+            response = self._heygen_post_with_retry(
+                "/v2/photo_avatar/image",
+                json_payload=payload
+            )
+
+            # Log full response for debugging
+            log_info("=" * 80)
+            log_info("HEYGEN SUCCESSFUL RESPONSE")
+            log_info("=" * 80)
+            log_info(f"Full response: {json.dumps(response, indent=2)}")
+            log_info(f"Response type: {type(response)}")
+            log_info(f"Response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+            log_info("=" * 80)
+
+            # Extract data from response
+            data = response.get("data", {})
+
+            # Extract image URL from various possible response structures
+            image_url = None
+
+            # Try different response structures HeyGen might return
+            if isinstance(data, dict):
+                image_url = (
+                    data.get("image_url") or
+                    data.get("url") or
+                    data.get("image") or
+                    response.get("image_url") or
+                    response.get("url")
+                )
+            elif isinstance(data, str):
+                # Data might be the URL directly
+                image_url = data
+
+            # If response includes a generation_id, poll for completion
+            generation_id = (
+                response.get("generation_id") or
+                data.get("generation_id") or
+                data.get("id") or
+                response.get("id")
+            )
+
+            if generation_id and not image_url:
+                log_info(f"Generation initiated with ID: {generation_id}. Polling for completion...")
+                result = self._heygen_poll_generation_status(generation_id)
+
+                # Extract image URL from polling result
+                result_data = result.get("data", result)
+                image_url = (
+                    result_data.get("image_url") or
+                    result_data.get("url") or
+                    result_data.get("image") or
+                    result.get("image_url")
+                )
+
+                # Check if generation completed successfully
+                status = result_data.get("status", result.get("status"))
+                if status not in ("completed", "done", "ready", "success"):
+                    raise Exception(f"Image generation failed with status: {status}")
+
+            if not image_url:
+                log_error("Could not extract image URL from HeyGen response")
+                log_error(f"Response data: {json.dumps(response, indent=2)}")
+                raise Exception("No image URL returned from HeyGen API")
+
+            log_info(f"✅ Successfully generated image URL: {image_url}")
+
+            # Build result dictionary
+            result_data = {
+                "image_url": image_url,
+                "avatar_id": avatar_id,
+                "status": "completed",
+                "generated_at": datetime.now(self.sa_tz).isoformat(),
+            }
+
+            if custom_prompt:
+                result_data["prompt"] = custom_prompt
+
+            if generation_id:
+                result_data["generation_id"] = generation_id
+
+            log_info(f"HeyGen static image generation completed successfully")
+            return result_data
+
+        except Exception as e:
+            log_error(f"HeyGen static image generation failed: {str(e)}")
+            return {
+                "error": str(e),
+                "avatar_id": avatar_id,
+                "status": "failed",
+            }
+
+    def _heygen_post_with_retry(
+        self,
+        endpoint: str,
+        *,
+        json_payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """POST request to HeyGen API with retry logic.
+
+        Args:
+            endpoint: API endpoint path (e.g., '/v2/photo_avatar/image')
+            json_payload: JSON payload for the request
+
+        Returns:
+            Response JSON as dictionary
+
+        Raises:
+            requests.RequestException: If all retries fail
+        """
+        url = f"{self.HEYGEN_API_BASE_URL}{endpoint}"
+        headers = {
+            "X-Api-Key": self.heygen_api_key,
+            "Content-Type": "application/json",
+        }
+
+        for attempt in range(1, self.heygen_max_retries + 1):
+            try:
+                log_debug(f"HeyGen API request attempt {attempt}/{self.heygen_max_retries}")
+
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json=json_payload,
+                    timeout=60,
+                )
+
+                # Handle rate limiting
+                if response.status_code == 429:
+                    wait_time = self.heygen_retry_backoff * attempt
+                    log_warning(
+                        f"HeyGen rate limit hit. Retrying in {wait_time}s (attempt {attempt})"
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                # Handle server errors
+                if response.status_code >= 500:
+                    wait_time = self.heygen_retry_backoff * attempt
+                    log_warning(
+                        f"HeyGen server error {response.status_code}. Retrying in {wait_time}s"
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                # Log error details before raising
+                if not response.ok:
+                    log_error("=" * 80)
+                    log_error("HEYGEN API ERROR RESPONSE")
+                    log_error("=" * 80)
+                    log_error(f"Status Code: {response.status_code}")
+                    log_error(f"Reason: {response.reason}")
+                    log_error(f"URL: {response.url}")
+                    log_error("Response Body:")
+                    try:
+                        error_json = response.json()
+                        log_error(json.dumps(error_json, indent=2))
+                    except Exception:
+                        log_error(f"Raw Text: {response.text}")
+                    log_error("=" * 80)
+
+                response.raise_for_status()
+                return response.json()
+
+            except requests.RequestException as exc:
+                if attempt == self.heygen_max_retries:
+                    log_error(
+                        f"HeyGen request failed after {self.heygen_max_retries} attempts: {exc}"
+                    )
+                    raise
+
+                wait_time = self.heygen_retry_backoff * attempt
+                log_warning(f"HeyGen request error ({exc}). Retrying in {wait_time}s")
+                time.sleep(wait_time)
+
+        raise Exception("Failed to communicate with HeyGen API")
+
+    def _heygen_get_with_retry(
+        self,
+        endpoint: str,
+        *,
+        params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """GET request to HeyGen API with retry logic.
+
+        Args:
+            endpoint: API endpoint path
+            params: Optional query parameters
+
+        Returns:
+            Response JSON as dictionary
+
+        Raises:
+            requests.RequestException: If all retries fail
+        """
+        url = f"{self.HEYGEN_API_BASE_URL}{endpoint}"
+        headers = {
+            "X-Api-Key": self.heygen_api_key,
+            "Content-Type": "application/json",
+        }
+
+        for attempt in range(1, self.heygen_max_retries + 1):
+            try:
+                log_debug(f"HeyGen API GET request attempt {attempt}/{self.heygen_max_retries}")
+
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=45,
+                )
+
+                # Handle rate limiting
+                if response.status_code == 429:
+                    wait_time = self.heygen_retry_backoff * attempt
+                    log_warning(
+                        f"HeyGen rate limit hit. Retrying in {wait_time}s (attempt {attempt})"
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                # Handle server errors
+                if response.status_code >= 500:
+                    wait_time = self.heygen_retry_backoff * attempt
+                    log_warning(
+                        f"HeyGen server error {response.status_code}. Retrying in {wait_time}s"
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                # Log error details before raising
+                if not response.ok:
+                    log_error("=" * 80)
+                    log_error("HEYGEN API ERROR RESPONSE")
+                    log_error("=" * 80)
+                    log_error(f"Status Code: {response.status_code}")
+                    log_error(f"Reason: {response.reason}")
+                    log_error(f"URL: {response.url}")
+                    log_error("Response Body:")
+                    try:
+                        error_json = response.json()
+                        log_error(json.dumps(error_json, indent=2))
+                    except Exception:
+                        log_error(f"Raw Text: {response.text}")
+                    log_error("=" * 80)
+
+                response.raise_for_status()
+                return response.json()
+
+            except requests.RequestException as exc:
+                if attempt == self.heygen_max_retries:
+                    log_error(
+                        f"HeyGen GET request failed after {self.heygen_max_retries} attempts: {exc}"
+                    )
+                    raise
+
+                wait_time = self.heygen_retry_backoff * attempt
+                log_warning(f"HeyGen request error ({exc}). Retrying in {wait_time}s")
+                time.sleep(wait_time)
+
+        raise Exception("Failed to communicate with HeyGen API")
+
+    def _heygen_poll_generation_status(self, generation_id: str) -> Dict[str, Any]:
+        """Poll HeyGen for image generation completion status.
+
+        Args:
+            generation_id: The generation ID returned from the image generation endpoint
+
+        Returns:
+            Final status response data
+
+        Raises:
+            Exception: If polling times out or generation fails
+        """
+        log_info(f"Polling HeyGen generation status for generation_id: {generation_id}")
+
+        start_time = time.time()
+        poll_count = 0
+
+        while time.time() - start_time < self.heygen_poll_timeout:
+            try:
+                poll_count += 1
+
+                # Poll the generation status endpoint
+                response = self._heygen_get_with_retry(
+                    f"/v2/photo_avatar/generation/{generation_id}"
+                )
+
+                log_debug(f"Poll attempt {poll_count}: {json.dumps(response, indent=2)}")
+
+                data = response.get("data", response)
+                status = data.get("status", response.get("status"))
+
+                log_debug(f"Generation {generation_id} status: {status}")
+
+                # Check if generation is complete
+                if status in ("completed", "done", "ready", "success"):
+                    log_info(f"Generation completed with status: {status}")
+                    return response
+
+                # Check if generation failed
+                if status in ("failed", "error"):
+                    error_msg = data.get("error", "Unknown error")
+                    log_error(f"Generation failed with status: {status}, error: {error_msg}")
+                    raise Exception(f"Generation failed: {error_msg}")
+
+                # Still processing - continue polling
+                if status in ("processing", "pending", "in_progress"):
+                    log_debug("Generation still in progress, continuing to poll...")
+
+            except Exception as exc:
+                log_warning(f"Generation status check failed (poll {poll_count}): {exc}")
+                # Continue polling unless it's a critical error
+                if "failed" in str(exc).lower() or "error" in str(exc).lower():
+                    raise
+
+            time.sleep(self.heygen_poll_interval)
+
+        raise Exception(f"Timed out waiting for generation {generation_id} to complete")
