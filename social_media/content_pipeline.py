@@ -1166,6 +1166,7 @@ class ContentPipeline:
                 "thumbnail_style": "energetic",
                 "needs_caption": True,
                 "persona_marker": name,
+                "media_type": "video",  # Tips/tutorial content
             },
             "educational_video": {
                 "name": "educational_video",
@@ -1183,6 +1184,7 @@ class ContentPipeline:
                 "thumbnail_style": "professional",
                 "needs_caption": True,
                 "persona_marker": name,
+                "media_type": "video",  # Educational/tutorial content
             },
             "image_carousel": {
                 "name": "image_carousel",
@@ -1193,6 +1195,7 @@ class ContentPipeline:
                 "visual_style": "educational",
                 "needs_caption": True,
                 "persona_marker": name,
+                "media_type": "carousel",  # List/multi-tip format
             },
             "educational_carousel": {
                 "name": "educational_carousel",
@@ -1204,6 +1207,7 @@ class ContentPipeline:
                 "slides_count": 5,
                 "visual_style": "professional_beige",
                 "persona_marker": name,
+                "media_type": "carousel",  # Step-by-step format
             },
             "mixed_media_post": {
                 "name": "mixed_media_post",
@@ -1221,6 +1225,7 @@ class ContentPipeline:
                 },
                 "needs_caption": True,
                 "persona_marker": name,
+                "media_type": "video",  # Story/narrative content
             },
             "single_image_highlight": {
                 "name": "single_image_highlight",
@@ -1230,6 +1235,7 @@ class ContentPipeline:
                 "visual_style": "professional",
                 "needs_caption": True,
                 "persona_marker": name,
+                "media_type": "static_image",  # Quote/highlight content
             },
         }
 
