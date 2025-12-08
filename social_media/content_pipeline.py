@@ -49,6 +49,11 @@ try:
 except ImportError:
     from carousel_template_generator import CarouselTemplateGenerator
 
+try:
+    from .config.avatar_mapping import get_avatar_and_look_for_content
+except ImportError:
+    from config.avatar_mapping import get_avatar_and_look_for_content
+
 
 class ContentPipeline:
     """High-level orchestrator for cross-modal social media content.
@@ -655,13 +660,99 @@ class ContentPipeline:
             log_warning("Image generator unavailable; skipping visual generation")
             return []
 
-        # Handle carousel type with carousel_generator
-        if template["type"] == "carousel" and self.carousel_generator:
+        # Check media_type from template
+        media_type = template.get("media_type")
+
+        # If media_type is 'static_image', use HeyGen static image generation
+        if media_type == "static_image":
+            log_info(f"Generating HeyGen static image for template={template['name']}")
+            return self._generate_heygen_static_image_asset(template, text_payload)
+
+        # If media_type is 'video', skip visual assets (video handles itself)
+        if media_type == "video":
+            log_info(f"Skipping visual assets for video media_type in template={template['name']}")
+            return []
+
+        # If media_type is 'carousel' or template type is carousel, use carousel generator
+        if (media_type == "carousel" or template["type"] == "carousel") and self.carousel_generator:
             return self._generate_carousel_assets(template, text_payload)
 
+        # Fallback to Replicate image generation
+        log_info(f"Using Replicate image generation for template={template['name']}")
         prompts = self._build_image_prompts(template, text_payload)
         images = self._batch_image_generation(prompts, template)
         return images
+
+    def _generate_heygen_static_image_asset(
+        self, template: Dict[str, Any], text_payload: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Generate a static image using HeyGen Photo Avatar API.
+
+        Args:
+            template: Template configuration containing media_type.
+            text_payload: Text content including caption for content analysis.
+
+        Returns:
+            List containing a single image asset dictionary, or empty list on failure.
+        """
+        try:
+            # Extract caption text for avatar selection
+            caption = text_payload.get("caption", {})
+            caption_text = caption.get("content", "") or caption.get("title", "")
+
+            if not caption_text:
+                log_warning("No caption text available for avatar selection, using default content type")
+                caption_text = template.get("theme", "")
+
+            # Get avatar_id and look info using avatar_mapping
+            log_info("Selecting avatar and look for HeyGen static image generation")
+            avatar_id, look_info = get_avatar_and_look_for_content(
+                content_text=caption_text,
+                content_type=template.get("content_type")
+            )
+
+            log_info(
+                f"Selected avatar_id={avatar_id}, look={look_info.get('look_description', 'N/A')}"
+            )
+
+            # Generate HeyGen static image
+            result = self.image_generator.generate_heygen_static_image(
+                avatar_id=avatar_id,
+                custom_prompt=template.get("custom_prompt")
+            )
+
+            if not result or "error" in result:
+                error_msg = result.get("error", "Unknown error") if result else "No result returned"
+                log_error(f"HeyGen static image generation failed: {error_msg}")
+
+                # Fallback to Replicate if HeyGen fails
+                log_info("Falling back to Replicate image generation")
+                prompts = self._build_image_prompts(template, text_payload)
+                return self._batch_image_generation(prompts, template)
+
+            # Annotate result with metadata
+            result["type"] = "heygen_static_image"
+            result["template"] = template["name"]
+            result["look_info"] = look_info
+            result["source"] = "heygen"
+
+            log_info(
+                f"Successfully generated HeyGen static image: {result.get('image_url', 'N/A')}"
+            )
+
+            return [result]
+
+        except Exception as exc:
+            log_error(f"Error generating HeyGen static image: {exc}")
+
+            # Fallback to Replicate on any error
+            log_info("Falling back to Replicate image generation due to error")
+            try:
+                prompts = self._build_image_prompts(template, text_payload)
+                return self._batch_image_generation(prompts, template)
+            except Exception as fallback_exc:
+                log_error(f"Replicate fallback also failed: {fallback_exc}")
+                return []
 
     def _generate_carousel_assets(
         self, template: Dict[str, Any], text_payload: Dict[str, Any]
