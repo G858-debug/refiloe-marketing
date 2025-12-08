@@ -218,6 +218,13 @@ class ContentGenerator(_LegacyContentGenerator):
 
         avatar_hint = self._resolve_avatar_hint(classification.label, combined_text)
 
+        # Determine media type for the content
+        media_type = self.determine_content_media_type(
+            content_text=combined_text,
+            theme=theme,
+            metadata=metadata,
+        )
+
         log_info(
             "Content classification | theme=%s format=%s label=%s confidence=%.2f matches=%s fallback=%s",
             theme,
@@ -237,6 +244,7 @@ class ContentGenerator(_LegacyContentGenerator):
 
         post_metadata: Dict[str, Any] = post.setdefault("metadata", {})
         post_metadata.update(classification.as_metadata())
+        post_metadata["media_type"] = media_type
 
         if metadata:
             post_metadata.update(metadata)
@@ -248,10 +256,12 @@ class ContentGenerator(_LegacyContentGenerator):
 
         video_meta = post_metadata.setdefault("video_generation", {})
         video_meta.setdefault("content_type", classification.label)
+        video_meta.setdefault("media_type", media_type)
         if avatar_hint:
             video_meta.setdefault("avatar_hint", avatar_hint)
 
         post["content_type"] = classification.label
+        post["media_type"] = media_type
         if avatar_hint:
             post["avatar_hint"] = avatar_hint
 
@@ -259,6 +269,7 @@ class ContentGenerator(_LegacyContentGenerator):
             "content_type": classification.label,
             "confidence": classification.confidence,
             "avatar_hint": avatar_hint,
+            "media_type": media_type,
         }
 
         # Add SA-specific context to post metadata
@@ -678,6 +689,138 @@ Generate the carousel content now:"""
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    def determine_content_media_type(
+        self,
+        content_text: str,
+        theme: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Determine the appropriate media type for the content.
+
+        Analyzes post content and theme to determine whether the content
+        should be presented as a video, static image, or carousel.
+
+        Args:
+            content_text: The combined text content of the post.
+            theme: Optional theme identifier for context.
+            metadata: Optional metadata that may contain type hints.
+
+        Returns:
+            str: One of 'video', 'static_image', or 'carousel'.
+
+            Decision Logic:
+            - 'video': Tips, educational content, announcements
+            - 'static_image': Quotes, single facts, testimonials
+            - 'carousel': Lists, step-by-step guides, multiple tips
+        """
+        # Check for explicit override in metadata
+        if metadata:
+            media_type_override = metadata.get("media_type")
+            if media_type_override in ("video", "static_image", "carousel"):
+                log_info(
+                    "Media type override from metadata | type=%s",
+                    media_type_override,
+                )
+                return media_type_override
+
+        text_lower = (content_text or "").lower()
+
+        # Define keywords for each media type
+        carousel_keywords = [
+            "step-by-step",
+            "steps",
+            "guide",
+            "how to",
+            "checklist",
+            "framework",
+            "list of",
+            "multiple",
+            "series",
+            "tips for",
+            "ways to",
+            "carousel",
+        ]
+
+        video_keywords = [
+            "tip",
+            "tutorial",
+            "learn",
+            "announcement",
+            "introducing",
+            "new feature",
+            "explain",
+            "demonstrate",
+            "workout",
+            "exercise",
+            "technique",
+            "educational",
+            "watch",
+            "see how",
+        ]
+
+        static_image_keywords = [
+            "quote",
+            "fact",
+            "testimonial",
+            "client says",
+            "success story",
+            "remember",
+            "mindset",
+            "motivation",
+            "inspiration",
+            "celebrate",
+            "proud",
+        ]
+
+        # Count matches for each type
+        carousel_matches = sum(1 for kw in carousel_keywords if kw in text_lower)
+        video_matches = sum(1 for kw in video_keywords if kw in text_lower)
+        static_matches = sum(1 for kw in static_image_keywords if kw in text_lower)
+
+        # Return the type with the most matches
+        max_matches = max(carousel_matches, video_matches, static_matches)
+
+        if max_matches == 0:
+            # No clear keywords found, use theme-based defaults
+            if theme:
+                theme_lower = theme.lower()
+                if "carousel" in theme_lower or "list" in theme_lower:
+                    log_info(
+                        "Media type from theme fallback | theme=%s type=carousel",
+                        theme,
+                    )
+                    return "carousel"
+                elif "quote" in theme_lower or "testimonial" in theme_lower or "success" in theme_lower:
+                    log_info(
+                        "Media type from theme fallback | theme=%s type=static_image",
+                        theme,
+                    )
+                    return "static_image"
+
+            # Default to video for educational content
+            log_info("Media type default fallback | type=video")
+            return "video"
+
+        # Return the type with most matches (with preference order if tied)
+        if carousel_matches >= video_matches and carousel_matches >= static_matches:
+            log_info(
+                "Media type determined | type=carousel matches=%d",
+                carousel_matches,
+            )
+            return "carousel"
+        elif video_matches >= static_matches:
+            log_info(
+                "Media type determined | type=video matches=%d",
+                video_matches,
+            )
+            return "video"
+        else:
+            log_info(
+                "Media type determined | type=static_image matches=%d",
+                static_matches,
+            )
+            return "static_image"
+
     def _collect_text_fragments(self, post: Dict[str, Any]) -> str:
         """Aggregate text fragments for keyword analysis."""
 
