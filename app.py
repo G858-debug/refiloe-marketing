@@ -3573,7 +3573,7 @@ def api_edit_post(post_id):
 
 @app.route('/api/dashboard/generate-media/<post_id>', methods=['POST'])
 def api_generate_media(post_id):
-    """API: Generate video or image for a post"""
+    """API: Generate video or image for a post based on media_type"""
     log_info(f"📥 Request: /api/dashboard/generate-media/{post_id}")
 
     if not supabase_client:
@@ -3597,12 +3597,30 @@ def api_generate_media(post_id):
 
         # Parse generation metadata
         metadata = json.loads(post_data.get('generation_prompt', '{}'))
+
+        # Check media_type field first (new approach), fallback to post_type for backwards compatibility
+        media_type = post_data.get('media_type') or metadata.get('media_type')
         post_type = post_data.get('post_type')
 
-        # Generate based on type
-        if post_type == 'video':
+        # If no media_type, infer from post_type for backwards compatibility
+        if not media_type:
+            if post_type == 'video':
+                media_type = 'video'
+            elif post_type == 'carousel':
+                media_type = 'carousel'
+            else:
+                media_type = 'static_image'
+
+        log_info(f"📋 Media type routing: media_type='{media_type}', post_type='{post_type}' for post {post_id}")
+
+        # ============================================================
+        # ROUTE 1: VIDEO GENERATION (HeyGen video with avatar)
+        # ============================================================
+        if media_type == 'video':
             from social_media.video_generator import VideoGenerator
             from database import SocialMediaDatabase
+
+            log_info(f"🎥 Using VIDEO generation workflow for post {post_id}")
 
             db = SocialMediaDatabase(supabase_client)
             video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
@@ -3614,7 +3632,7 @@ def api_generate_media(post_id):
             if not script:
                 return jsonify({'success': False, 'error': 'No video script found'}), 400
 
-            log_info(f"🎬 Generating video for post {post_id}")
+            log_info(f"🎬 Generating HeyGen video for post {post_id}")
             log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
@@ -3710,31 +3728,45 @@ def api_generate_media(post_id):
                     'error': f'Video generation failed: {str(e)}'
                 }), 500
 
-        elif post_type in ['image', 'carousel']:
+        # ============================================================
+        # ROUTE 2: STATIC IMAGE GENERATION (HeyGen Photo Avatar)
+        # ============================================================
+        elif media_type == 'static_image':
             from social_media.image_generator import ImageGenerator
+
+            log_info(f"🖼️  Using STATIC IMAGE generation workflow (HeyGen) for post {post_id}")
 
             image_gen = ImageGenerator('social_media/config.yaml', supabase_client)
 
             # Get caption/theme from metadata
             caption = post_data.get('content_text', '')
             theme = metadata.get('theme', 'professional_trainer')
+            content_type = metadata.get('content_type', 'motivational')
 
             if not caption:
                 return jsonify({'success': False, 'error': 'No caption found for image'}), 400
 
-            log_info(f"🎨 Generating image for post {post_id}")
+            log_info(f"🎨 Generating HeyGen static image for post {post_id} (content_type: {content_type})")
 
             try:
-                # Generate image based on caption
-                prompt = f"Professional personal trainer, {theme}, {caption[:100]}"
+                # Import avatar mapping to select appropriate avatar and look
+                from social_media.config.avatar_mapping import get_avatar_and_look_for_content
 
-                result = image_gen.generate_influencer_image(
-                    prompt=prompt,
-                    style='professional',
-                    setting='gym_environment'
+                # Get avatar_id and look info based on content
+                avatar_id, look_info = get_avatar_and_look_for_content(
+                    content_text=caption,
+                    content_type=content_type
                 )
 
-                if result and result.get('image_url'):
+                log_info(f"📸 Selected avatar_id={avatar_id}, look={look_info.get('look_description', 'N/A')}")
+
+                # Generate HeyGen static image
+                result = image_gen.generate_heygen_static_image(
+                    avatar_id=avatar_id,
+                    custom_prompt=metadata.get('custom_prompt')
+                )
+
+                if result and result.get('image_url') and 'error' not in result:
                     # Update post status to pending_media_approval
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
@@ -3742,31 +3774,99 @@ def api_generate_media(post_id):
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
-                    log_info(f"✅ Image URL saved to social_posts.image_url for post {post_id}")
+                    log_info(f"✅ HeyGen static image URL saved to social_posts.image_url for post {post_id}")
                     return jsonify({
                         'success': True,
                         'image_url': result.get('image_url'),
-                        'message': 'Image generated successfully'
+                        'message': 'Static image generated successfully (HeyGen)',
+                        'avatar_id': avatar_id,
+                        'look_info': look_info
                     })
                 else:
-                    log_error(f"❌ Image generation failed for post {post_id}")
+                    error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
+                    log_error(f"❌ HeyGen static image generation failed for post {post_id}: {error_msg}")
                     # Reset status so user can retry
                     supabase_client.table('social_posts').update({
                         'status': 'approved',
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': 'Image generation failed'}), 500
+                    return jsonify({'success': False, 'error': f'Static image generation failed: {error_msg}'}), 500
             except Exception as e:
-                log_error(f"❌ Media generation failed for {post_id}: {str(e)}")
+                log_error(f"❌ Static image generation failed for {post_id}: {str(e)}")
+                import traceback
+                log_error(f"Traceback: {traceback.format_exc()}")
                 # Reset status so user can retry
                 supabase_client.table('social_posts').update({
                     'status': 'approved',
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-                return jsonify({'error': f'Media generation failed: {str(e)}'}), 500
+                return jsonify({'error': f'Static image generation failed: {str(e)}'}), 500
+
+        # ============================================================
+        # ROUTE 3: CAROUSEL GENERATION (Multi-slide carousel)
+        # ============================================================
+        elif media_type == 'carousel':
+            from social_media.carousel_template_generator import CarouselTemplateGenerator
+
+            log_info(f"📊 Using CAROUSEL generation workflow for post {post_id}")
+
+            carousel_gen = CarouselTemplateGenerator('social_media/config.yaml')
+
+            # Get carousel content from metadata
+            caption = post_data.get('content_text', '')
+            carousel_data = metadata.get('carousel_data', {})
+
+            if not carousel_data:
+                # Try to parse caption for carousel structure
+                log_warning(f"⚠️  No carousel_data in metadata, attempting to parse from caption")
+                # For now, return error - carousel data should be structured
+                return jsonify({'success': False, 'error': 'No carousel data found. Carousel posts require structured slide data.'}), 400
+
+            log_info(f"🎨 Generating carousel slides for post {post_id}")
+
+            try:
+                # Generate carousel slides
+                slide_paths = carousel_gen.create_carousel(carousel_data)
+
+                if slide_paths and len(slide_paths) > 0:
+                    # Store slide paths as comma-separated URLs
+                    media_urls_csv = ','.join(slide_paths)
+
+                    # Update post with carousel image URLs
+                    supabase_client.table('social_posts').update({
+                        'status': 'pending_media_approval',
+                        'media_urls': media_urls_csv,
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Carousel with {len(slide_paths)} slides generated for post {post_id}")
+                    return jsonify({
+                        'success': True,
+                        'message': f'Carousel generated successfully with {len(slide_paths)} slides',
+                        'slide_count': len(slide_paths),
+                        'slide_paths': slide_paths
+                    })
+                else:
+                    log_error(f"❌ Carousel generation failed for post {post_id}")
+                    # Reset status so user can retry
+                    supabase_client.table('social_posts').update({
+                        'status': 'approved',
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+                    return jsonify({'success': False, 'error': 'Carousel generation failed'}), 500
+            except Exception as e:
+                log_error(f"❌ Carousel generation failed for {post_id}: {str(e)}")
+                import traceback
+                log_error(f"Traceback: {traceback.format_exc()}")
+                # Reset status so user can retry
+                supabase_client.table('social_posts').update({
+                    'status': 'approved',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', post_id).execute()
+                return jsonify({'error': f'Carousel generation failed: {str(e)}'}), 500
 
         else:
-            return jsonify({'success': False, 'error': f'Unsupported post type: {post_type}'}), 400
+            return jsonify({'success': False, 'error': f'Unsupported media type: {media_type}'}), 400
 
     except Exception as e:
         log_error(f"❌ Error generating media for {post_id}: {e}")
