@@ -616,6 +616,33 @@ def debug_schema():
         }), 500
 
 
+@app.route('/api/debug/image-check')
+def debug_image_check():
+    """Check if image_url column exists and has data"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Get a few recent posts with all fields
+        result = supabase_client.table('social_posts').select('id, status, post_type, image_url, created_at').limit(5).execute()
+
+        return jsonify({
+            'success': True,
+            'sample_posts': result.data,
+            'column_check': {
+                'has_image_url_field': any('image_url' in post for post in result.data) if result.data else False,
+                'posts_with_images': sum(1 for post in result.data if post.get('image_url')) if result.data else 0,
+                'total_posts': len(result.data) if result.data else 0
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+
 @app.route('/api/debug/verify-avatar-group', methods=['GET'])
 def verify_avatar_group():
     """Verify if HEYGEN_AVATAR_GROUP is a valid Photo Avatar Group"""
