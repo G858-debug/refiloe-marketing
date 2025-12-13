@@ -21,11 +21,24 @@ Environment variables required:
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from supabase import create_client, Client
+
+# Try to import dotenv
+try:
+    from dotenv import load_dotenv
+    HAS_DOTENV = True
+except ImportError:
+    HAS_DOTENV = False
+    def load_dotenv(*args, **kwargs):
+        pass
+
+# Get project root
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Configure logging
 import logging
@@ -34,6 +47,16 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def ensure_env_loaded() -> None:
+    """Load environment variables from .env file."""
+    dotenv_path = PROJECT_ROOT / ".env"
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=dotenv_path)
+        logger.info(f"Loaded environment variables from {dotenv_path}")
+    else:
+        load_dotenv()
 
 
 def get_supabase_client() -> Client:
@@ -69,6 +92,8 @@ def print_record(record: dict, index: int):
 
 def check_avatar_looks():
     """Check and display contents of photo_avatar_looks table."""
+    ensure_env_loaded()
+
     print_separator()
     print("PHOTO AVATAR LOOKS DIAGNOSTIC SCRIPT")
     print_separator()
