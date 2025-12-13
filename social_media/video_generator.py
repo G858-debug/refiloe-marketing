@@ -25,18 +25,7 @@ except ImportError:  # pragma: no cover - fallback when running from project roo
     except ImportError:  # pragma: no cover - avatar mapping optional at runtime
         _avatar_mapping_module = None
 
-# Import the new avatar selector
-try:
-    from .avatar_selector import AvatarSelector as _AvatarSelector  # type: ignore
-except ImportError:  # pragma: no cover - fallback when running from project root
-    try:
-        from avatar_selector import AvatarSelector as _AvatarSelector  # type: ignore
-    except ImportError:  # pragma: no cover - avatar selector optional at runtime
-        _AvatarSelector = None
-
 if _avatar_mapping_module is not None:
-    get_avatar_for_content = getattr(_avatar_mapping_module, "get_avatar_for_content", None)
-    get_fallback_avatar_id = getattr(_avatar_mapping_module, "get_fallback_avatar_id", None)
     get_photo_avatar_for_content = getattr(_avatar_mapping_module, "get_photo_avatar_for_content", None)
     get_photo_avatar_for_content_with_db = getattr(_avatar_mapping_module, "get_photo_avatar_for_content_with_db", None)
     PHOTO_AVATAR_REGISTRY = getattr(_avatar_mapping_module, "PHOTO_AVATAR_REGISTRY", {})
@@ -47,8 +36,6 @@ if _avatar_mapping_module is not None:
         type("AvatarSelectionError", (Exception,), {}),
     )
 else:  # pragma: no cover - defensive defaults when module missing
-    get_avatar_for_content = None
-    get_fallback_avatar_id = None
     get_photo_avatar_for_content = None
     get_photo_avatar_for_content_with_db = None
     PHOTO_AVATAR_REGISTRY = {}
@@ -102,15 +89,6 @@ class VideoGenerator:
         self.group_avatar_id = os.getenv("HEYGEN_GROUP_AVATAR_ID")
         self.closeup_avatar_id = os.getenv("HEYGEN_THREEQUARTERS_CLOSEUP_AVATAR_ID")
         self.analytics_table = os.getenv("HEYGEN_VIDEO_ANALYTICS_TABLE", "video_analytics")
-
-        # Initialize avatar selector if available
-        self.avatar_selector = None
-        if _AvatarSelector is not None:
-            try:
-                self.avatar_selector = _AvatarSelector(default_avatar_env="HEYGEN_AVATAR_DEFAULT")
-                log_info("AvatarSelector initialized successfully")
-            except Exception as exc:  # pylint: disable=broad-except
-                log_warning(f"Failed to initialize AvatarSelector: {exc}")
 
         log_info("VideoGenerator initialized with HeyGen integration")
 
