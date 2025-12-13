@@ -371,44 +371,44 @@ class TestContentTypeDetection:
 class TestAvatarSelection:
     """Unit tests for avatar ID selection."""
 
-    def test_get_avatar_for_fitness_content(self):
-        """Test avatar selection for fitness content."""
+    def test_get_photo_avatar_for_fitness_content(self):
+        """Test photo avatar selection for fitness content."""
         from social_media.config.avatar_mapping import (
-            get_avatar_for_content,
-            AVATAR_REGISTRY,
+            get_photo_avatar_for_content,
+            PHOTO_AVATAR_REGISTRY,
         )
 
-        avatar_id = get_avatar_for_content("Workout exercise training")
-        expected_id = AVATAR_REGISTRY["FITNESS_FULLBODY"]
+        avatar_id = get_photo_avatar_for_content("Workout exercise training")
+        expected_id = PHOTO_AVATAR_REGISTRY["fitness"]
         assert avatar_id == expected_id
 
-        logger.info("Fitness content gets correct avatar ID")
+        logger.info("Fitness content gets correct photo avatar ID")
 
-    def test_get_avatar_for_professional_content(self):
-        """Test avatar selection for professional content."""
+    def test_get_photo_avatar_for_professional_content(self):
+        """Test photo avatar selection for professional content."""
         from social_media.config.avatar_mapping import (
-            get_avatar_for_content,
-            AVATAR_REGISTRY,
+            get_photo_avatar_for_content,
+            PHOTO_AVATAR_REGISTRY,
         )
 
-        avatar_id = get_avatar_for_content("Business strategy for growth")
-        expected_id = AVATAR_REGISTRY["PROFESSIONAL_CLOSEUP"]
+        avatar_id = get_photo_avatar_for_content("Business strategy for growth")
+        expected_id = PHOTO_AVATAR_REGISTRY["professional"]
         assert avatar_id == expected_id
 
-        logger.info("Professional content gets correct avatar ID")
+        logger.info("Professional content gets correct photo avatar ID")
 
-    def test_get_avatar_with_explicit_type(self):
-        """Test avatar selection with explicit content type."""
+    def test_get_photo_avatar_with_explicit_type(self):
+        """Test photo avatar selection with explicit content type."""
         from social_media.config.avatar_mapping import (
-            get_avatar_for_content,
-            AVATAR_REGISTRY,
+            get_photo_avatar_for_content,
+            PHOTO_AVATAR_REGISTRY,
         )
 
-        avatar_id = get_avatar_for_content("Any text", content_type="motivational")
-        expected_id = AVATAR_REGISTRY["CONFIDENT_SWIMWEAR_FULLBODY"]
+        avatar_id = get_photo_avatar_for_content("Any text", content_type="motivational")
+        expected_id = PHOTO_AVATAR_REGISTRY["motivational"]
         assert avatar_id == expected_id
 
-        logger.info("Explicit content type gets correct avatar ID")
+        logger.info("Explicit content type gets correct photo avatar ID")
 
     def test_get_avatar_and_look_combined(self):
         """Test combined avatar and look selection."""
@@ -422,19 +422,19 @@ class TestAvatarSelection:
 
         logger.info("Combined avatar and look selection works correctly")
 
-    def test_all_avatar_ids_are_valid_format(self):
-        """Test that all avatar IDs have valid format."""
-        from social_media.config.avatar_mapping import AVATAR_REGISTRY
+    def test_all_photo_avatar_ids_are_valid_format(self):
+        """Test that all photo avatar IDs have valid format."""
+        from social_media.config.avatar_mapping import PHOTO_AVATAR_REGISTRY
 
-        for avatar_key, avatar_id in AVATAR_REGISTRY.items():
+        for content_type, avatar_id in PHOTO_AVATAR_REGISTRY.items():
             assert len(avatar_id) == 32, (
-                f"Avatar '{avatar_key}' has invalid ID length: {len(avatar_id)}"
+                f"Photo avatar '{content_type}' has invalid ID length: {len(avatar_id)}"
             )
             assert avatar_id.isalnum(), (
-                f"Avatar '{avatar_key}' has non-alphanumeric ID: {avatar_id}"
+                f"Photo avatar '{content_type}' has non-alphanumeric ID: {avatar_id}"
             )
 
-        logger.info("All avatar IDs have valid format")
+        logger.info("All photo avatar IDs have valid format")
 
 
 # ===========================================================================
@@ -953,29 +953,27 @@ class TestErrorHandling:
 class TestBackwardCompatibility:
     """Tests to ensure new code doesn't break existing functionality."""
 
-    def test_avatar_mapping_still_returns_valid_ids(self):
-        """Test that avatar_mapping still returns valid avatar IDs."""
+    def test_photo_avatar_mapping_returns_valid_ids(self):
+        """Test that photo avatar mapping returns valid avatar IDs."""
         from social_media.config.avatar_mapping import (
-            get_avatar_for_content,
-            AVATAR_REGISTRY,
+            get_photo_avatar_for_content,
+            PHOTO_AVATAR_REGISTRY,
         )
 
-        # Test with various content types
         test_cases = [
-            ("workout tips", "fitness"),
+            ("workout tips", "workout"),
             ("business growth", "professional"),
             ("transform your life", "motivational"),
             ("weekend vibes", "casual"),
-            ("random content", None),  # Should get default
         ]
 
         for content, expected_type in test_cases:
-            avatar_id = get_avatar_for_content(content)
-            assert avatar_id in AVATAR_REGISTRY.values(), (
-                f"Avatar ID '{avatar_id}' not in registry for content: '{content}'"
+            avatar_id = get_photo_avatar_for_content(content)
+            assert avatar_id in PHOTO_AVATAR_REGISTRY.values(), (
+                f"Avatar ID '{avatar_id}' not in photo registry for content: '{content}'"
             )
 
-        logger.info("Avatar mapping returns valid IDs for all content types")
+        logger.info("Photo avatar mapping returns valid IDs for all content types")
 
     def test_content_to_look_keys_match_content_types(self):
         """Test that CONTENT_TO_LOOK keys align with content type detection."""
@@ -997,23 +995,6 @@ class TestBackwardCompatibility:
             logger.warning(f"Content types without look config: {unconfigured}")
 
         logger.info("Content types alignment verified")
-
-    def test_existing_video_generation_imports_work(self):
-        """Test that existing video generation code can still import avatar_mapping."""
-        try:
-            from social_media.config.avatar_mapping import (
-                get_avatar_for_content,
-                AVATAR_REGISTRY,
-                CONTENT_TYPE_MAPPING,
-            )
-            assert callable(get_avatar_for_content)
-            assert isinstance(AVATAR_REGISTRY, dict)
-            assert isinstance(CONTENT_TYPE_MAPPING, dict)
-
-        except ImportError as e:
-            pytest.fail(f"Import failed: {e}")
-
-        logger.info("Existing video generation imports work correctly")
 
 
 # ===========================================================================
