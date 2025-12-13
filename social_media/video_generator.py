@@ -38,6 +38,7 @@ if _avatar_mapping_module is not None:
     get_avatar_for_content = getattr(_avatar_mapping_module, "get_avatar_for_content", None)
     get_fallback_avatar_id = getattr(_avatar_mapping_module, "get_fallback_avatar_id", None)
     get_photo_avatar_for_content = getattr(_avatar_mapping_module, "get_photo_avatar_for_content", None)
+    get_photo_avatar_for_content_with_db = getattr(_avatar_mapping_module, "get_photo_avatar_for_content_with_db", None)
     PHOTO_AVATAR_REGISTRY = getattr(_avatar_mapping_module, "PHOTO_AVATAR_REGISTRY", {})
     DEFAULT_PHOTO_AVATAR_ID = getattr(_avatar_mapping_module, "DEFAULT_PHOTO_AVATAR_ID", "55bdbaaa7ded40458bfc0e498ff24ae6")
     AvatarSelectionError = getattr(
@@ -49,6 +50,7 @@ else:  # pragma: no cover - defensive defaults when module missing
     get_avatar_for_content = None
     get_fallback_avatar_id = None
     get_photo_avatar_for_content = None
+    get_photo_avatar_for_content_with_db = None
     PHOTO_AVATAR_REGISTRY = {}
     DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
 
@@ -548,21 +550,22 @@ class VideoGenerator:
             )
             log_info(f"Using explicitly requested avatar: {requested_avatar_id}")
 
-        # Priority 2: Get photo avatar ID based on content type
-        if get_photo_avatar_for_content is not None:
+        # Priority 2: Get photo avatar ID based on content type - try database first, fallback to registry
+        if get_photo_avatar_for_content_with_db is not None:
             try:
-                photo_avatar_id = get_photo_avatar_for_content(
+                photo_avatar_id = get_photo_avatar_for_content_with_db(
                     content_text=content_text or "",
                     content_type=content_type,
+                    supabase_client=self.supabase_client,
                 )
 
                 # Build reason string based on content type
                 if content_type:
-                    reason = f"photo_avatar_registry_content_type_{content_type}"
-                    source_detail = f"photo_avatar_registry (content_type: {content_type})"
+                    reason = f"photo_avatar_content_type_{content_type}"
+                    source_detail = f"database_or_registry (content_type: {content_type})"
                 else:
-                    reason = "photo_avatar_registry_default"
-                    source_detail = "photo_avatar_registry (default)"
+                    reason = "photo_avatar_default"
+                    source_detail = "database_or_registry (default)"
 
                 candidates.append(
                     {
@@ -571,11 +574,11 @@ class VideoGenerator:
                         "source": source_detail,
                         "context": {
                             "content_type": content_type,
-                            "registry": "PHOTO_AVATAR_REGISTRY",
+                            "lookup_method": "database_with_fallback",
                         }
                     }
                 )
-                log_info(f"Added photo avatar from registry: {photo_avatar_id} ({source_detail})")
+                log_info(f"Selected photo avatar '{photo_avatar_id}' for content_type '{content_type}'")
             except Exception as exc:  # pylint: disable=broad-except
                 log_warning(f"Failed to get photo avatar for content: {exc}")
 

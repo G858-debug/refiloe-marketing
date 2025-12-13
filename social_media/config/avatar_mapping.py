@@ -544,6 +544,56 @@ def get_photo_avatar_for_content(
     return DEFAULT_PHOTO_AVATAR_ID
 
 
+def get_photo_avatar_for_content_with_db(
+    content_text: str = "",
+    content_type: Optional[str] = None,
+    supabase_client=None,
+) -> str:
+    """Get the appropriate photo avatar ID for content with database lookup and fallback.
+
+    This function attempts to retrieve the photo avatar ID from the database first,
+    then falls back to the registry-based lookup if database lookup fails.
+
+    Args:
+        content_text: The content text to analyze for type detection.
+        content_type: Optional explicit content type.
+        supabase_client: Supabase client instance for database queries.
+
+    Returns:
+        The HeyGen photo avatar ID for the content type.
+    """
+    # Determine the content type to look up
+    lookup_type = content_type
+    if not lookup_type and content_text:
+        lookup_type = _detect_look_type(content_text)
+
+    # Try database lookup first if we have both a client and content type
+    if supabase_client and lookup_type:
+        try:
+            log_debug(f"Attempting database lookup for content type '{lookup_type}'")
+            result = (
+                supabase_client.table("photo_avatar_looks")
+                .select("photo_avatar_id")
+                .eq("content_type", lookup_type)
+                .eq("is_active", True)
+                .execute()
+            )
+
+            if result.data and len(result.data) > 0:
+                db_avatar_id = result.data[0].get("photo_avatar_id")
+                if db_avatar_id:
+                    log_info(f"Found photo avatar '{db_avatar_id}' in database for content type '{lookup_type}'")
+                    return db_avatar_id
+            else:
+                log_debug(f"No database entry found for content type '{lookup_type}', falling back to registry")
+        except Exception as exc:
+            log_warning(f"Database lookup failed for content type '{lookup_type}': {exc}, falling back to registry")
+
+    # Fallback to registry-based lookup
+    log_debug("Using registry-based photo avatar lookup")
+    return get_photo_avatar_for_content(content_text=content_text, content_type=content_type)
+
+
 def get_avatar_and_look_for_content(
     content_text: str,
     content_type: Optional[str] = None,
