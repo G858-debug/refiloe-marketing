@@ -41,9 +41,11 @@ Usage
 >>> from social_media.config.avatar_mapping import (
 ...     get_avatar_for_content,
 ...     select_dynamic_look,
+...     get_photo_avatar_for_content,
 ... )
 >>> avatar_id = get_avatar_for_content("Check out these workout tips!")
 >>> look_info = select_dynamic_look("Transform your body with this workout!")
+>>> photo_avatar_id = get_photo_avatar_for_content("Hit the gym today!")
 """
 
 from __future__ import annotations
@@ -509,9 +511,37 @@ def select_dynamic_look(
         "content_type": determined_type,
         "environment": look_config["environment"],
         "outfit": look_config["outfit"],
+        "photo_avatar_id": PHOTO_AVATAR_REGISTRY.get(determined_type, DEFAULT_PHOTO_AVATAR_ID),
     }
 
     return result
+
+
+def get_photo_avatar_for_content(
+    content_text: str = "",
+    content_type: Optional[str] = None,
+) -> str:
+    """Get the appropriate photo avatar ID for content.
+
+    Args:
+        content_text: The content text to analyze for type detection.
+        content_type: Optional explicit content type.
+
+    Returns:
+        The HeyGen photo avatar ID for the content type.
+    """
+    if content_type and content_type in PHOTO_AVATAR_REGISTRY:
+        log_info(f"Using explicit content type '{content_type}' for photo avatar selection")
+        return PHOTO_AVATAR_REGISTRY[content_type]
+
+    if content_text:
+        detected_type = _detect_look_type(content_text)
+        if detected_type and detected_type in PHOTO_AVATAR_REGISTRY:
+            log_info(f"Detected content type '{detected_type}' from text for photo avatar")
+            return PHOTO_AVATAR_REGISTRY[detected_type]
+
+    log_info(f"Using default photo avatar ID")
+    return DEFAULT_PHOTO_AVATAR_ID
 
 
 def get_avatar_and_look_for_content(
