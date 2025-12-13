@@ -3752,16 +3752,15 @@ def api_generate_media(post_id):
             log_info(f"🎨 Generating HeyGen static image for post {post_id} (content_type: {content_type})")
 
             try:
-                # Import avatar mapping to select appropriate avatar and look
-                from social_media.config.avatar_mapping import get_avatar_and_look_for_content
+                # Import avatar mapping to use photo avatar registry
+                from social_media.config.avatar_mapping import get_photo_avatar_for_content
 
-                # Get avatar_id and look info based on content
-                avatar_id, look_info = get_avatar_and_look_for_content(
+                # Use photo avatar registry for static images
+                avatar_id = get_photo_avatar_for_content(
                     content_text=caption,
-                    content_type=content_type
+                    content_type=content_type,
                 )
-
-                log_info(f"📸 Selected avatar_id={avatar_id}, look={look_info.get('look_description', 'N/A')}")
+                log_info(f"📸 Selected photo avatar_id={avatar_id} for content_type={content_type}")
 
                 # Generate HeyGen static image
                 result = image_gen.generate_heygen_static_image(
@@ -3782,8 +3781,7 @@ def api_generate_media(post_id):
                         'success': True,
                         'image_url': result.get('image_url'),
                         'message': 'Static image generated successfully (HeyGen)',
-                        'avatar_id': avatar_id,
-                        'look_info': look_info
+                        'avatar_id': avatar_id
                     })
                 else:
                     error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
