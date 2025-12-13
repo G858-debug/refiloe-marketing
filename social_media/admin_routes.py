@@ -380,3 +380,73 @@ def test_avatar_selection(content_type: str):
     except Exception as e:
         log_error(f"Error testing avatar selection for {content_type}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@admin_bp.route("/debug/check-looks")
+def debug_check_looks():
+    """Debug endpoint to check photo_avatar_looks table contents."""
+    from utils.logger import log_info, log_error
+
+    client = _get_supabase_client()
+    if not client:
+        error_msg = "Database not connected"
+        log_error(error_msg)
+        return jsonify({"success": False, "error": error_msg}), 503
+
+    try:
+        log_info("=" * 80)
+        log_info("CHECKING PHOTO_AVATAR_LOOKS TABLE")
+        log_info("=" * 80)
+
+        # Get all records
+        result = client.table("photo_avatar_looks").select("*").execute()
+        looks = result.data if result.data else []
+
+        log_info(f"📊 Total records found: {len(looks)}")
+
+        if not looks:
+            log_info("⚠️  Table is EMPTY - no avatar looks found")
+            return jsonify({
+                "success": True,
+                "total_records": 0,
+                "looks": [],
+                "message": "Table is empty - needs seeding"
+            })
+
+        # Count by content_type
+        by_type = {}
+        default_look = None
+
+        for look in looks:
+            content_type = look.get("content_type", "unknown")
+            by_type[content_type] = by_type.get(content_type, 0) + 1
+
+            if look.get("is_default"):
+                default_look = look
+
+            log_info(f"  - {content_type}: {look.get('label')} (Active: {look.get('is_active')}, Default: {look.get('is_default')})")
+
+        log_info(f"\n📊 Breakdown by content_type:")
+        for ctype, count in by_type.items():
+            log_info(f"  - {ctype}: {count}")
+
+        if default_look:
+            log_info(f"\n⭐ Default look: {default_look.get('content_type')} - {default_look.get('label')}")
+        else:
+            log_info("⚠️  No default look set!")
+
+        log_info("=" * 80)
+
+        return jsonify({
+            "success": True,
+            "total_records": len(looks),
+            "by_content_type": by_type,
+            "default_look": default_look,
+            "looks": looks
+        })
+
+    except Exception as e:
+        log_error(f"Error checking looks table: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({"success": False, "error": str(e)}), 500
