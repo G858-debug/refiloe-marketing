@@ -6,15 +6,15 @@ South African personal trainers.
 
 Avatar Selection System
 -----------------------
-The system works in two layers:
+The system uses the PHOTO_AVATAR_REGISTRY to map content types to specific
+HeyGen photo avatar IDs. Each content type has an associated avatar that
+provides the appropriate visual style for the content.
 
-1. **Avatar Selection**: Maps content types to specific avatar poses/shots
-   (e.g., closeup, fullbody, three-quarter view). Each avatar has a unique
-   HeyGen avatar ID stored in AVATAR_REGISTRY.
-
-2. **Look Selection**: Maps content types to appropriate visual styles
-   (outfits and environments). Looks define what Refiloe wears and where
-   she appears, making content more contextually appropriate.
+Look Selection System
+---------------------
+The look selection system maps content types to appropriate visual styles
+(outfits and environments). Looks define what Refiloe wears and where
+she appears, making content more contextually appropriate.
 
 Content Type Detection
 ----------------------
@@ -39,13 +39,13 @@ Supported Content Types
 Usage
 -----
 >>> from social_media.config.avatar_mapping import (
-...     get_avatar_for_content,
-...     select_dynamic_look,
 ...     get_photo_avatar_for_content,
+...     select_dynamic_look,
+...     get_avatar_and_look_for_content,
 ... )
->>> avatar_id = get_avatar_for_content("Check out these workout tips!")
+>>> avatar_id = get_photo_avatar_for_content("Check out these workout tips!")
 >>> look_info = select_dynamic_look("Transform your body with this workout!")
->>> photo_avatar_id = get_photo_avatar_for_content("Hit the gym today!")
+>>> avatar_id, look_info = get_avatar_and_look_for_content("Hit the gym today!")
 """
 
 from __future__ import annotations
@@ -75,18 +75,6 @@ class LookInfo(TypedDict, total=False):
     photo_avatar_id: Optional[str]
 
 
-AVATAR_REGISTRY = {
-    "PROFESSIONAL_CLOSEUP": "110f75a397604454ba6f822c68f29949",
-    "CASUAL_CLOSEUP": "e39d22ad46c34b5599dc939c63ba1d89",
-    "FITNESS_FULLBODY": "3fa139effeb348a99b959065a2425363",
-    "CONFIDENT_SWIMWEAR_FULLBODY": "5d511d22069d4a7d9d75ffd78d1a0bda",
-    "SERIOUS_CLOSEUP": "efe8efb12f0a4bc8b961e22220fc974d",
-    "WARMSMILE_CLOSEUP": "9648b4e9da9c444c877214312c5ad27c",
-    "THREEQUARTERS_CLOSEUP": "5637676d31d54946b7585b012a3ce182",
-    "SUMMERCASUAL_THREEQUARTERBODY": "12e5e8c825e547a0a67ad0057288a4da",
-    "GROUP": "89c3da65880249e78e26070732b52f53",
-}
-
 PHOTO_AVATAR_REGISTRY = {
     "workout": "96c419d3058444069ab8e28308fdc834",
     "fitness": "291df9103e744984be41715e649ae8e6",
@@ -104,19 +92,6 @@ PHOTO_AVATAR_REGISTRY = {
 }
 
 DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
-
-
-CONTENT_TYPE_MAPPING = {
-    "educational": "WARMSMILE_CLOSEUP",
-    "motivational": "CONFIDENT_SWIMWEAR_FULLBODY",
-    "relatable": "WARMSMILE_CLOSEUP",
-    "professional": "PROFESSIONAL_CLOSEUP",
-    "community": "CASUAL_CLOSEUP",
-    "fitness": "FITNESS_FULLBODY",
-    "announcement": "SERIOUS_CLOSEUP",
-    "casual": "SUMMERCASUAL_THREEQUARTERBODY",
-    "default": "THREEQUARTERS_CLOSEUP",
-}
 
 
 CONTENT_KEYWORDS = {
@@ -273,105 +248,6 @@ DEFAULT_LOOK: dict[str, str] = {
     "outfit": "Modern athleisure matching set in neutral tones",
     "environment": "Contemporary, clean fitness or lifestyle setting",
 }
-
-
-DEFAULT_AVATAR_TYPE = "THREEQUARTERS_CLOSEUP"
-
-
-def _detect_content_type(content_text: str) -> Optional[str]:
-    """Infer the content type from the provided text using keyword matching.
-
-    This function analyzes content text to determine the most appropriate
-    content type by searching for predefined keywords. It checks both
-    CONTENT_KEYWORDS and LOOK_KEYWORDS dictionaries.
-
-    Args:
-        content_text: The text content to analyze for type detection.
-
-    Returns:
-        The detected content type string (e.g., 'fitness', 'motivational'),
-        or None if no keywords match.
-
-    Note:
-        Priority is given to CONTENT_KEYWORDS matches over LOOK_KEYWORDS.
-        The first keyword match found determines the content type.
-    """
-    if not content_text:
-        log_debug("No content text provided for avatar detection.")
-        return None
-
-    normalized_text = content_text.lower()
-    log_debug("Analyzing content text for keyword matches to determine avatar type.")
-
-    # First check primary content keywords
-    for content_type, keywords in CONTENT_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in normalized_text:
-                log_info(
-                    "Keyword match detected for content type '%s' using keyword '%s'."
-                    % (content_type, keyword)
-                )
-                return content_type
-
-    # Then check extended look-specific keywords
-    for content_type, keywords in LOOK_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword in normalized_text:
-                log_info(
-                    "Look keyword match detected for content type '%s' using keyword '%s'."
-                    % (content_type, keyword)
-                )
-                return content_type
-
-    log_debug("No keyword matches found for provided content text.")
-    return None
-
-
-def _resolve_avatar_type(content_type: str) -> str:
-    """Resolve the avatar type from a provided content type or avatar key."""
-    if content_type in AVATAR_REGISTRY:
-        log_debug(
-            "Content type '%s' recognized as direct avatar key." % content_type
-        )
-        return content_type
-
-    mapped_avatar = CONTENT_TYPE_MAPPING.get(content_type)
-    if mapped_avatar:
-        log_debug(
-            "Content type '%s' mapped to avatar key '%s'."
-            % (content_type, mapped_avatar)
-        )
-        return mapped_avatar
-
-    log_warning(
-        "Content type '%s' not recognized. Falling back to default avatar type."
-        % content_type
-    )
-    return DEFAULT_AVATAR_TYPE
-
-
-def get_avatar_for_content(content_text: str, content_type: Optional[str] = None) -> str:
-    """Determine the appropriate avatar ID for the given content."""
-    log_debug(
-        "Starting avatar selection with content_type='%s' and content length=%d."
-        % (content_type, len(content_text) if content_text else 0)
-    )
-
-    inferred_type = content_type or _detect_content_type(content_text)
-    if inferred_type:
-        avatar_type = _resolve_avatar_type(inferred_type)
-    else:
-        log_debug("No explicit or inferred content type. Using default avatar type.")
-        avatar_type = DEFAULT_AVATAR_TYPE
-
-    avatar_id = AVATAR_REGISTRY.get(avatar_type, AVATAR_REGISTRY[DEFAULT_AVATAR_TYPE])
-
-    log_info(
-        "Selected avatar type '%s' with ID '%s' for content."
-        % (avatar_type, avatar_id)
-    )
-
-    return avatar_id
 
 
 def _detect_look_type(content_text: str) -> Optional[str]:
@@ -599,34 +475,19 @@ def get_avatar_and_look_for_content(
     content_type: Optional[str] = None,
     look_id: Optional[str] = None,
 ) -> tuple[str, LookInfo]:
-    """Get both avatar ID and look configuration for content.
-
-    This is a convenience function that combines avatar and look selection
-    into a single call, ensuring consistent content type detection for both.
-
-    Args:
-        content_text: The content text to analyze.
-        content_type: Optional explicit content type.
-        look_id: Optional database look ID for look configuration.
-
-    Returns:
-        A tuple containing:
-        - avatar_id: The HeyGen avatar ID string
-        - look_info: The LookInfo dictionary with look configuration
-
-    Example:
-        >>> avatar_id, look_info = get_avatar_and_look_for_content(
-        ...     "Time to hit the gym for leg day!"
-        ... )
-        >>> print(f"Avatar: {avatar_id}")
-        >>> print(f"Look: {look_info['look_description']}")
-    """
-    avatar_id = get_avatar_for_content(content_text, content_type)
-    look_info = select_dynamic_look(content_text, content_type, look_id)
-
-    log_info(
-        "Combined selection - Avatar: '%s', Look: '%s'"
-        % (avatar_id, look_info.get("look_description", "N/A"))
+    """Get both avatar ID and look configuration for content."""
+    # Use new photo avatar function
+    avatar_id = get_photo_avatar_for_content(
+        content_text=content_text,
+        content_type=content_type,
     )
+
+    look_info = select_dynamic_look(
+        content_text=content_text,
+        content_type=content_type,
+        look_id=look_id,
+    )
+
+    log_info(f"Combined selection - Avatar: '{avatar_id}', Look: '{look_info.get('look_description', 'N/A')}'")
 
     return avatar_id, look_info
