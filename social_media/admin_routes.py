@@ -346,49 +346,37 @@ def test_avatar_selection(content_type: str):
         return jsonify({"success": False, "error": "Database not connected"}), 503
 
     try:
-        # Try to find active look for content type
-        result = client.table("photo_avatar_looks").select("*").eq(
-            "content_type", content_type.lower()
-        ).eq("is_active", True).execute()
+        # Query for looks matching this content type
+        result = client.table("photo_avatar_looks").select("*").eq("content_type", content_type.lower()).eq("is_active", True).execute()
 
-        if result.data:
+        looks = result.data if result.data else []
+
+        if not looks:
+            # Try to find the default look
+            default_result = client.table("photo_avatar_looks").select("*").eq("is_default", True).execute()
+            default_look = default_result.data[0] if default_result.data else None
+
             return jsonify({
                 "success": True,
-                "source": "database",
                 "content_type": content_type,
-                "look": result.data[0],
+                "matched_looks": [],
+                "selected_look": default_look,
+                "fallback_used": True,
+                "message": f"No active looks found for '{content_type}'. Using default look.",
             })
 
-        # Fallback to default
-        default_result = client.table("photo_avatar_looks").select("*").eq(
-            "is_default", True
-        ).eq("is_active", True).single().execute()
-
-        if default_result.data:
-            return jsonify({
-                "success": True,
-                "source": "default_fallback",
-                "content_type": content_type,
-                "look": default_result.data,
-                "note": f"No active look found for '{content_type}', using default",
-            })
-
-        # No database looks available
-        from social_media.config.avatar_mapping import (
-            PHOTO_AVATAR_REGISTRY,
-            DEFAULT_PHOTO_AVATAR_ID,
-        )
-
-        avatar_id = PHOTO_AVATAR_REGISTRY.get(content_type.lower(), DEFAULT_PHOTO_AVATAR_ID)
+        # Select the default look for this content type, or the first active one
+        selected_look = next((l for l in looks if l.get("is_default")), looks[0])
 
         return jsonify({
             "success": True,
-            "source": "hardcoded_registry",
             "content_type": content_type,
-            "photo_avatar_id": avatar_id,
-            "note": "No database looks configured, using hardcoded registry",
+            "matched_looks": looks,
+            "selected_look": selected_look,
+            "fallback_used": False,
+            "message": f"Found {len(looks)} active look(s) for '{content_type}'",
         })
 
     except Exception as e:
-        log_error(f"Error testing avatar selection: {e}")
+        log_error(f"Error testing avatar selection for {content_type}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
