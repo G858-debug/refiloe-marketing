@@ -62,6 +62,7 @@ class LookInfo(TypedDict, total=False):
         content_type: The detected or provided content type.
         environment: The setting/background for the look.
         outfit: Description of the outfit/attire.
+        photo_avatar_id: HeyGen photo avatar ID for this look.
     """
 
     look_id: Optional[str]
@@ -69,6 +70,7 @@ class LookInfo(TypedDict, total=False):
     content_type: str
     environment: str
     outfit: str
+    photo_avatar_id: Optional[str]
 
 
 AVATAR_REGISTRY = {
@@ -82,6 +84,24 @@ AVATAR_REGISTRY = {
     "SUMMERCASUAL_THREEQUARTERBODY": "12e5e8c825e547a0a67ad0057288a4da",
     "GROUP": "89c3da65880249e78e26070732b52f53",
 }
+
+PHOTO_AVATAR_REGISTRY = {
+    "workout": "96c419d3058444069ab8e28308fdc834",
+    "fitness": "291df9103e744984be41715e649ae8e6",
+    "professional": "64a1ca313daf488698bebb282aa87dae",
+    "business": "331e5ac30c914d5abeb2853be17a8532",
+    "motivational": "d0c9ad8674ef49b79f618dd5303e50df",
+    "educational": "55bdbaaa7ded40458bfc0e498ff24ae6",
+    "community": "6a7f86c8c60544d497ae63695af00425",
+    "relatable": "b6bb73219ff54f5eb2934b3047bf028f",
+    "casual": "a33ab8bbeff5499a96ae613e5497247c",
+    "announcement": "e4fc74c588ba45ec9eb49020bd95417d",
+    "outdoor": "79938b6165b649b9b724d1af99a3b4b5",
+    "studio": "4a5842d1f4de4d0ab4d0cb832b71a1d3",
+    "lifestyle": "4c621fd3eae84def9dfcc5f25bd83c93",
+}
+
+DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
 
 
 CONTENT_TYPE_MAPPING = {
