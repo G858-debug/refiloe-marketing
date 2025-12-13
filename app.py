@@ -1300,9 +1300,9 @@ def reset_to_approved(post_id):
         return jsonify({'error': str(e)}), 500
 
 
-app.register_blueprint(approval_bp, url_prefix='/approval')
-app.register_blueprint(analytics_bp, url_prefix='/analytics')
-app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(approval_bp)
+app.register_blueprint(analytics_bp)
+app.register_blueprint(admin_bp)
 
 
 # ------------------------------------------------------------------------------
