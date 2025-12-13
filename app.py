@@ -27,6 +27,7 @@ from utils.whatsapp_notifier import get_whatsapp_notifier
 
 from social_media.approval_routes import approval_bp
 from social_media.analytics_routes import analytics_bp
+from social_media.admin_routes import admin_bp
 from social_media.scheduler import SocialMediaScheduler, create_social_media_scheduler
 from social_media.looks_generator import LooksGenerator, REFILOE_LOOKS
 
@@ -303,7 +304,8 @@ def health_check():
         },
         'links': {
             'approval_pending': '/approval/pending',
-            'content_pipeline_health': '/health/content-pipeline'
+            'content_pipeline_health': '/health/content-pipeline',
+            'admin_avatar_looks': '/admin/avatar-looks'
         }
     }), 200
 
@@ -1300,6 +1302,7 @@ def reset_to_approved(post_id):
 
 app.register_blueprint(approval_bp, url_prefix='/approval')
 app.register_blueprint(analytics_bp, url_prefix='/analytics')
+app.register_blueprint(admin_bp, url_prefix='/admin')
 
 
 # ------------------------------------------------------------------------------
