@@ -3732,76 +3732,99 @@ def api_generate_media(post_id):
                 }), 500
 
         # ============================================================
-        # ROUTE 2: STATIC IMAGE GENERATION (HeyGen Photo Avatar)
+        # ROUTE 2: STATIC IMAGE GENERATION (Leonardo AI)
         # ============================================================
         elif media_type == 'static_image':
-            from social_media.image_generator import ImageGenerator
-
-            log_info(f"🖼️  Using STATIC IMAGE generation workflow (HeyGen) for post {post_id}")
-
-            image_gen = ImageGenerator('social_media/config.yaml', supabase_client)
+            log_info(f"🖼️  Using STATIC IMAGE generation workflow (Leonardo AI) for post {post_id}")
 
             # Get caption/theme from metadata
             caption = post_data.get('content_text', '')
-            theme = metadata.get('theme', 'professional_trainer')
             content_type = metadata.get('content_type', 'motivational')
 
             if not caption:
                 return jsonify({'success': False, 'error': 'No caption found for image'}), 400
 
-            log_info(f"🎨 Generating HeyGen static image for post {post_id} (content_type: {content_type})")
+            log_info(f"🎨 Generating Leonardo AI image for post {post_id} (content_type: {content_type})")
 
             try:
-                # Import avatar mapping to use photo avatar registry
-                from social_media.config.avatar_mapping import get_photo_avatar_for_content
+                from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
 
-                # Use photo avatar registry for static images
-                avatar_id = get_photo_avatar_for_content(
-                    content_text=caption,
-                    content_type=content_type,
-                )
-                log_info(f"📸 Selected photo avatar_id={avatar_id} for content_type={content_type}")
+                leonardo = LeonardoGenerator()
 
-                # Generate HeyGen static image
-                result = image_gen.generate_heygen_static_image(
-                    avatar_id=avatar_id,
-                    custom_prompt=metadata.get('custom_prompt')
-                )
+                # Determine if this should be a quote graphic or character image
+                from social_media.leonardo_generator import CONTENT_TYPE_PROMPTS
+                config = CONTENT_TYPE_PROMPTS.get(content_type, {})
 
-                if result and result.get('image_url') and 'error' not in result:
-                    # Update post status to pending_media_approval
-                    supabase_client.table('social_posts').update({
-                        'status': 'pending_media_approval',
-                        'image_url': result.get('image_url'),
-                        'updated_at': datetime.now(SA_TZ).isoformat()
-                    }).eq('id', post_id).execute()
-
-                    log_info(f"✅ HeyGen static image URL saved to social_posts.image_url for post {post_id}")
-                    return jsonify({
-                        'success': True,
-                        'image_url': result.get('image_url'),
-                        'message': 'Static image generated successfully (HeyGen)',
-                        'avatar_id': avatar_id
-                    })
+                if config.get("style") == "quote_graphic":
+                    log_info(f"🎨 Generating quote graphic for content_type: {content_type}")
+                    result = leonardo.generate_quote_graphic(
+                        quote_text=caption,
+                        content_type=content_type,
+                    )
                 else:
-                    error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
-                    log_error(f"❌ HeyGen static image generation failed for post {post_id}: {error_msg}")
-                    # Reset status so user can retry
-                    supabase_client.table('social_posts').update({
-                        'status': 'approved',
-                        'updated_at': datetime.now(timezone.utc).isoformat()
-                    }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': f'Static image generation failed: {error_msg}'}), 500
-            except Exception as e:
-                log_error(f"❌ Static image generation failed for {post_id}: {str(e)}")
-                import traceback
-                log_error(f"Traceback: {traceback.format_exc()}")
-                # Reset status so user can retry
+                    log_info(f"🎨 Generating character image for content_type: {content_type}")
+                    result = leonardo.generate_image(
+                        prompt=caption,
+                        content_type=content_type,
+                    )
+
+                image_url = result.get("image_url")
+
+                if not image_url:
+                    raise LeonardoGenerationError("No image URL returned from Leonardo AI")
+
+                # Update post with image URL
+                supabase_client.table('social_posts').update({
+                    'status': 'pending_media_approval',
+                    'image_url': image_url,
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', post_id).execute()
+
+                log_info(f"✅ Leonardo AI image generated for post {post_id}: {image_url}")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Image generated successfully',
+                    'post_id': post_id,
+                    'image_url': image_url,
+                    'generation_id': result.get('generation_id'),
+                    'content_type': content_type,
+                }), 200
+
+            except ImportError as e:
+                log_error(f"❌ Leonardo AI module not available: {e}")
                 supabase_client.table('social_posts').update({
                     'status': 'approved',
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-                return jsonify({'error': f'Static image generation failed: {str(e)}'}), 500
+                return jsonify({
+                    'success': False,
+                    'error': 'Leonardo AI integration not configured. Please check LEONARDO_API_KEY.'
+                }), 500
+
+            except LeonardoGenerationError as e:
+                log_error(f"❌ Leonardo AI generation failed for {post_id}: {str(e)}")
+                supabase_client.table('social_posts').update({
+                    'status': 'approved',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', post_id).execute()
+                return jsonify({
+                    'success': False,
+                    'error': f'Image generation failed: {str(e)}'
+                }), 500
+
+            except Exception as e:
+                log_error(f"❌ Static image generation failed for {post_id}: {str(e)}")
+                import traceback
+                log_error(f"Traceback: {traceback.format_exc()}")
+                supabase_client.table('social_posts').update({
+                    'status': 'approved',
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', post_id).execute()
+                return jsonify({
+                    'success': False,
+                    'error': f'Static image generation failed: {str(e)}'
+                }), 500
 
         # ============================================================
         # ROUTE 3: CAROUSEL GENERATION (Multi-slide carousel)
