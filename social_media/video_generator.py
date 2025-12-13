@@ -37,6 +37,9 @@ except ImportError:  # pragma: no cover - fallback when running from project roo
 if _avatar_mapping_module is not None:
     get_avatar_for_content = getattr(_avatar_mapping_module, "get_avatar_for_content", None)
     get_fallback_avatar_id = getattr(_avatar_mapping_module, "get_fallback_avatar_id", None)
+    get_photo_avatar_for_content = getattr(_avatar_mapping_module, "get_photo_avatar_for_content", None)
+    PHOTO_AVATAR_REGISTRY = getattr(_avatar_mapping_module, "PHOTO_AVATAR_REGISTRY", {})
+    DEFAULT_PHOTO_AVATAR_ID = getattr(_avatar_mapping_module, "DEFAULT_PHOTO_AVATAR_ID", "55bdbaaa7ded40458bfc0e498ff24ae6")
     AvatarSelectionError = getattr(
         _avatar_mapping_module,
         "AvatarSelectionError",
@@ -45,6 +48,9 @@ if _avatar_mapping_module is not None:
 else:  # pragma: no cover - defensive defaults when module missing
     get_avatar_for_content = None
     get_fallback_avatar_id = None
+    get_photo_avatar_for_content = None
+    PHOTO_AVATAR_REGISTRY = {}
+    DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
 
     class AvatarSelectionError(Exception):
         """Raised when dynamic avatar selection fails."""
@@ -73,7 +79,7 @@ class VideoGenerator:
         if not self.api_key:
             raise ValueError("HEYGEN_API_KEY environment variable is required")
 
-        self.default_avatar_id = '5637676d31d54946b7585b012a3ce182'
+        self.default_avatar_id = DEFAULT_PHOTO_AVATAR_ID
         self.monthly_limit = int(os.getenv("HEYGEN_MONTHLY_LIMIT", "120"))
 
         self.sa_tz = pytz.timezone("Africa/Johannesburg")
@@ -523,27 +529,67 @@ class VideoGenerator:
         """Assemble avatar candidates honoring primary and fallback rules.
 
         Priority order:
-        1. HEYGEN_AVATAR_DEFAULT environment variable (always preferred when set)
-        2. Requested avatar_id parameter
-        3. Post config / dynamic selection
-        4. Other fallbacks
+        1. Requested avatar_id parameter (if explicitly provided)
+        2. Photo avatar from PHOTO_AVATAR_REGISTRY based on content type
+        3. DEFAULT_PHOTO_AVATAR_ID as final fallback
         """
 
         candidates: List[Dict[str, Any]] = []
         selection_context: Optional[Dict[str, Any]] = None
 
-        # Priority 1: Always use hardcoded default avatar
-        candidates.append(
-            {
-                "avatar_id": '5637676d31d54946b7585b012a3ce182',
-                "reason": "hardcoded_default_avatar",
-                "source": "default",
-            }
-        )
-        log_info("Using hardcoded default avatar: 5637676d31d54946b7585b012a3ce182")
+        # Priority 1: If explicit avatar_id is provided, use it first
+        if requested_avatar_id:
+            candidates.append(
+                {
+                    "avatar_id": requested_avatar_id,
+                    "reason": "explicit_request",
+                    "source": "parameter",
+                }
+            )
+            log_info(f"Using explicitly requested avatar: {requested_avatar_id}")
 
-        # No other avatars needed - we always use the single default avatar
+        # Priority 2: Get photo avatar ID based on content type
+        if get_photo_avatar_for_content is not None:
+            try:
+                photo_avatar_id = get_photo_avatar_for_content(
+                    content_text=content_text or "",
+                    content_type=content_type,
+                )
 
+                # Build reason string based on content type
+                if content_type:
+                    reason = f"photo_avatar_registry_content_type_{content_type}"
+                    source_detail = f"photo_avatar_registry (content_type: {content_type})"
+                else:
+                    reason = "photo_avatar_registry_default"
+                    source_detail = "photo_avatar_registry (default)"
+
+                candidates.append(
+                    {
+                        "avatar_id": photo_avatar_id,
+                        "reason": reason,
+                        "source": source_detail,
+                        "context": {
+                            "content_type": content_type,
+                            "registry": "PHOTO_AVATAR_REGISTRY",
+                        }
+                    }
+                )
+                log_info(f"Added photo avatar from registry: {photo_avatar_id} ({source_detail})")
+            except Exception as exc:  # pylint: disable=broad-except
+                log_warning(f"Failed to get photo avatar for content: {exc}")
+
+        # Priority 3: Fallback to default photo avatar if not already added
+        if DEFAULT_PHOTO_AVATAR_ID:
+            candidates.append(
+                {
+                    "avatar_id": DEFAULT_PHOTO_AVATAR_ID,
+                    "reason": "default_photo_avatar",
+                    "source": "DEFAULT_PHOTO_AVATAR_ID",
+                }
+            )
+
+        # Deduplicate candidates
         deduped: List[Dict[str, Any]] = []
         seen_ids: set[str] = set()
         for candidate in candidates:
