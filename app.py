@@ -1033,6 +1033,16 @@ def generate_real_video():
 
         scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
 
+        # Prepare metadata for generation_prompt
+        metadata = {
+            'content_type': theme,  # Use theme as content_type
+            'video_script': script_text,
+            'avatar_id': avatar_id,
+            'voice_id': voice_id,
+            'style': data.get('style', 'educational'),
+            'source': 'api.generate_real_video'
+        }
+
         post_data = {
             'post_type': 'video',
             'platform': 'facebook',
@@ -1045,6 +1055,7 @@ def generate_real_video():
             'video_style': data.get('style', 'educational'),
             'content_text': content_text,
             'content_theme': theme,
+            'generation_prompt': json.dumps(metadata),  # Add generation_prompt with content_type
             'has_captions': True,
             'completion_rate': 0,
             'avg_watch_time': 0

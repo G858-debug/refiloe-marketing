@@ -1059,6 +1059,7 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None, 
             metadata = {
                 "day": post["day"],
                 "post_number": post["post_number"],
+                "content_type": post.get("content_type", "educational"),  # Add content_type
                 "video_script": post.get("video_script"),
                 "avatar_id_env": post.get("avatar_id_env"),
                 "carousel_slides": post.get("carousel_slides"),

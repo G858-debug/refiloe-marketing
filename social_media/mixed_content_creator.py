@@ -1232,8 +1232,10 @@ class MixedContentCreator:
                 "aspect_ratio": aspect_ratio,
                 "hashtags": hashtags,
                 "poll": poll,
+                "content_type": content_package.get("content_type", "motivational"),  # Add content_type
             }
 
+            import json
             post_payload = {
                 "content": caption,
                 "platform": variant.get("platform", "facebook"),
@@ -1241,7 +1243,7 @@ class MixedContentCreator:
                 "status": "scheduled",
                 "trainer_id": self.default_trainer_id,
                 "template_id": variant.get("template_id"),
-                "metadata": metadata,
+                "generation_prompt": json.dumps(metadata),  # Convert metadata to JSON for generation_prompt
             }
 
             post_id = self.db.save_post(post_payload)
