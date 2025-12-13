@@ -12,7 +12,7 @@ supabase==2.4.0
 APScheduler==3.10.4
 
 # AI & Content Generation
-anthropic==0.8.1
+anthropic==0.39.0
 replicate==0.22.0
 
 # Image Processing
