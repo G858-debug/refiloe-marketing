@@ -7,6 +7,14 @@ from PIL import Image, ImageDraw, ImageFont
 import yaml
 from pathlib import Path
 
+from utils.logger import log_info, log_error, log_warning, log_debug
+
+try:
+    from .leonardo_generator import LeonardoGenerator, LeonardoGenerationError
+    LEONARDO_AVAILABLE = True
+except ImportError:
+    LEONARDO_AVAILABLE = False
+
 
 class CarouselTemplateGenerator:
     """Generates branded Facebook carousel templates for Refiloe"""
@@ -395,6 +403,37 @@ class CarouselTemplateGenerator:
 
         return lines
 
+    def _generate_leonardo_cover(
+        self,
+        title: str,
+        content_type: str = "educational",
+    ) -> Optional[str]:
+        """Generate a cover slide image using Leonardo AI.
+
+        Args:
+            title: The carousel title.
+            content_type: Content type for styling.
+
+        Returns:
+            URL of generated image, or None if generation fails.
+        """
+        if not LEONARDO_AVAILABLE:
+            log_warning("Leonardo AI not available, using local cover generation")
+            return None
+
+        try:
+            leonardo = LeonardoGenerator()
+            result = leonardo.generate_carousel_cover(
+                title=title,
+                content_type=content_type,
+                width=1080,
+                height=1350,
+            )
+            return result.get("image_url")
+        except Exception as e:
+            log_warning(f"Leonardo cover generation failed: {e}, using local fallback")
+            return None
+
     def _create_cover_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
         """Create a COVER slide
 
@@ -526,6 +565,32 @@ class CarouselTemplateGenerator:
 
             # Create slide based on type
             if slide_type == 'COVER':
+                # Try Leonardo AI first for cover
+                leonardo_cover_url = self._generate_leonardo_cover(
+                    title=slide_data.get('text', slide_data.get('title', '')),
+                    content_type=carousel_data.get('content_type', 'educational'),
+                )
+
+                if leonardo_cover_url:
+                    # Download and save Leonardo image
+                    import requests
+                    from io import BytesIO
+
+                    try:
+                        response = requests.get(leonardo_cover_url, timeout=30)
+                        response.raise_for_status()
+                        image = Image.open(BytesIO(response.content))
+
+                        filename = f"carousel_{carousel_id}_slide_{slide_number:02d}.png"
+                        filepath = self.output_dir / filename
+                        image.save(filepath, 'PNG', quality=95)
+                        generated_paths.append(str(filepath))
+                        log_info(f"Leonardo cover saved: {filepath}")
+                        continue  # Skip local generation
+                    except Exception as e:
+                        log_warning(f"Failed to download Leonardo cover: {e}, using local fallback")
+
+                # Fallback to local cover generation
                 image = self._create_cover_slide(slide_data, slide_number, total_slides)
             elif slide_type == 'CONTENT':
                 image = self._create_content_slide(slide_data, slide_number, total_slides)
