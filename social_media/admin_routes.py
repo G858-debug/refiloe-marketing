@@ -202,12 +202,13 @@ def update_avatar_look(look_id: str):
                 else:
                     update_data[field] = data[field]
 
-        # If setting as default, unset other defaults first
+        # If setting as default, unset ALL defaults first, then set this one
+        # (It's fine to temporarily set the current record to False, we'll set it back to True immediately after)
         if update_data.get("is_default"):
             client.table("photo_avatar_looks").update({
                 "is_default": False,
                 "updated_at": now,
-            }).eq("is_default", True).neq("id", look_id).execute()
+            }).eq("is_default", True).execute()
 
         result = client.table("photo_avatar_looks").update(update_data).eq("id", look_id).execute()
 
