@@ -3762,7 +3762,12 @@ def api_generate_media(post_id):
                 # For now, return error - carousel data should be structured
                 return jsonify({'success': False, 'error': 'No carousel data found. Carousel posts require structured slide data.'}), 400
 
-            log_info(f"🎨 Generating carousel slides for post {post_id}")
+            # Get content type from metadata and add to carousel_data for Leonardo AI cover generation
+            content_type = metadata.get('content_type', 'educational')
+            if 'content_type' not in carousel_data:
+                carousel_data['content_type'] = content_type
+
+            log_info(f"🎨 Generating carousel slides for post {post_id} (content_type: {content_type})")
 
             try:
                 # Generate carousel slides
