@@ -19,11 +19,12 @@ except ImportError:
 class CarouselTemplateGenerator:
     """Generates branded Facebook carousel templates for Refiloe"""
 
-    # Brand colors - modern warm palette
-    BACKGROUND_COLOR = "#FBF7F4"  # Warm off-white
-    TEXT_COLOR = "#2D2D2D"  # Near black for readability
-    ACCENT_COLOR = "#E07A5F"  # Coral accent (matches Refiloe's brand)
-    SECONDARY_COLOR = "#81B29A"  # Sage green accent
+    # Official Refiloe Brand Colors
+    BACKGROUND_COLOR = "#FFF8E8"  # Cream - primary background
+    BACKGROUND_SECONDARY = "#F7EED3"  # Warm Beige - secondary background
+    ACCENT_COLOR = "#AAB396"  # Sage Green - accent color
+    TEXT_COLOR = "#674636"  # Dark Brown - primary text
+    TEXT_LIGHT = "#FFFFFF"  # White - for dark backgrounds
 
     # Slide dimensions (4:5 portrait ratio for mobile optimization)
     SLIDE_WIDTH = 1080
@@ -580,7 +581,8 @@ class CarouselTemplateGenerator:
         draw = ImageDraw.Draw(image)
 
         # Add decorative circle pattern in slightly darker shade
-        darker_accent = tuple(max(0, c - 20) for c in accent_color)
+        # Darker sage for decorative elements
+        darker_accent = tuple(max(0, c - 30) for c in accent_color)
         center_x = self.SLIDE_WIDTH // 2
         center_y = self.SLIDE_HEIGHT // 2
 
