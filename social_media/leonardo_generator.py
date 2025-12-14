@@ -24,10 +24,14 @@ LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
 
 # Leonardo model IDs
 PHOENIX_MODEL_ID = "6b645e3a-d64f-4341-a6d8-7a3690fbf042"
-FLUX_DEV_MODEL_ID = "aa77f04e-3eec-4034-9c07-d0f619684628"  # Flux Dev - required for Elements
+FLUX_DEV_MODEL_ID = "aa77f04e-3eec-4034-9c07-d0f619684628"  # Flux Dev - required for user LoRAs
 
-# Default model - use Flux Dev for Element support
+# Default model - use Flux Dev for LoRA/Element support
 DEFAULT_MODEL_ID = FLUX_DEV_MODEL_ID
+
+# Refiloe 2.0 LoRA configuration
+DEFAULT_REFILOE_LORA_ID = 169703  # User-trained Refiloe 2.0 character
+DEFAULT_LORA_WEIGHT = 0.80  # Recommended strength
 
 # Default generation settings
 # Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
@@ -204,9 +208,10 @@ class LeonardoGenerator:
         self.reference_image_id = reference_image_id or os.getenv("LEONARDO_REFILOE_REFERENCE_ID")
         self.model_id = os.getenv("LEONARDO_MODEL_ID", DEFAULT_MODEL_ID)
 
-        # Element configuration for Refiloe character
-        self.refiloe_element_id = os.getenv("LEONARDO_REFILOE_ELEMENT_ID")
-        self.element_strength = 0.80  # Recommended strength for Refiloe 2.0
+        # User-trained LoRA configuration for Refiloe character
+        lora_id_str = os.getenv("LEONARDO_REFILOE_LORA_ID", str(DEFAULT_REFILOE_LORA_ID))
+        self.refiloe_lora_id = int(lora_id_str) if lora_id_str else DEFAULT_REFILOE_LORA_ID
+        self.lora_weight = float(os.getenv("LEONARDO_LORA_WEIGHT", str(DEFAULT_LORA_WEIGHT)))
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -221,10 +226,7 @@ class LeonardoGenerator:
 
         model_name = "Flux Dev" if self.model_id == FLUX_DEV_MODEL_ID else "Phoenix" if self.model_id == PHOENIX_MODEL_ID else "Unknown"
         log_info(f"LeonardoGenerator initialized with model: {model_name} ({self.model_id})")
-        if self.refiloe_element_id:
-            log_info(f"Refiloe 2.0 Element configured: {self.refiloe_element_id} (strength: {self.element_strength})")
-        else:
-            log_warning("LEONARDO_REFILOE_ELEMENT_ID not configured - character consistency may vary")
+        log_info(f"Refiloe 2.0 LoRA configured: ID={self.refiloe_lora_id}, weight={self.lora_weight}")
 
     def generate_image(
         self,
@@ -273,16 +275,13 @@ class LeonardoGenerator:
             "public": False,
         }
 
-        # Add Refiloe Element for character consistency
-        if use_reference and self.refiloe_element_id and self._content_type_features_refiloe(content_type):
-            # Use Elements feature with Flux Dev model
-            payload["elements"] = [{
-                "akUUID": self.refiloe_element_id,
-                "weight": self.element_strength,
+        # Add Refiloe 2.0 user-trained LoRA for character consistency
+        if use_reference and self.refiloe_lora_id and self._content_type_features_refiloe(content_type):
+            payload["userLoras"] = [{
+                "loraId": self.refiloe_lora_id,
+                "weight": self.lora_weight,
             }]
-            log_info(f"Using Refiloe 2.0 Element (ID: {self.refiloe_element_id}) with strength {self.element_strength}")
-        elif use_reference and self._content_type_features_refiloe(content_type):
-            log_warning("LEONARDO_REFILOE_ELEMENT_ID not set - using text description only for character")
+            log_info(f"Using Refiloe 2.0 LoRA (ID: {self.refiloe_lora_id}) with weight {self.lora_weight}")
 
         # Create generation
         try:
