@@ -578,15 +578,27 @@ class CarouselTemplateGenerator:
             fill=cream_color
         )
 
-        # Step title - LARGE and centered in the header banner
-        step_title = data.get('step_title', f'Step {slide_number - 1}')
+        # Header title - contextual (e.g., "The Schedule Shuffle" not "Step 2")
+        header_title = data.get('step_title', f'Tip {slide_number - 1}')
 
-        # Draw step title centered in header banner
-        title_y = header_top + (header_height - 100) // 2
-        bbox = draw.textbbox((0, 0), step_title, font=large_title_font)
+        # Truncate if too long and add ellipsis
+        max_header_chars = 35
+        if len(header_title) > max_header_chars:
+            header_title = header_title[:max_header_chars-3].strip() + '...'
+
+        # Draw header title centered in header banner
+        # Use slightly smaller font if title is long
+        if len(header_title) > 25:
+            header_font = self._load_font(bold=True, size=80)
+            title_y = header_top + (header_height - 80) // 2
+        else:
+            header_font = large_title_font
+            title_y = header_top + (header_height - 100) // 2
+
+        bbox = draw.textbbox((0, 0), header_title, font=header_font)
         text_width = bbox[2] - bbox[0]
         title_x = (self.SLIDE_WIDTH - text_width) // 2
-        draw.text((title_x, title_y), step_title, font=large_title_font, fill=text_color)
+        draw.text((title_x, title_y), header_title, font=header_font, fill=text_color)
 
         # Bullet points - LARGE and prominent
         bullets = data.get('bullets', [])
