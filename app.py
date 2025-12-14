@@ -194,7 +194,7 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     """Transform raw slide data from metadata into carousel generator format.
 
     Raw slides have: slide_number, text, description
-    Creates: COVER (1) + CONTENT slides (all items) + CTA (1)
+    Creates: COVER (1) + CONTENT slides (remaining items) + CTA (1)
 
     Args:
         raw_slides: List of slides with slide_number, text, description
@@ -216,17 +216,17 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
 
     # CTA messages to rotate through
     cta_messages = [
-        {"headline": "Ready to scale?", "cta_text": "Hit follow 📈", "subtext": "Tips to grow your PT business"},
+        {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
         {"headline": "Stop the admin chaos", "cta_text": "Follow now!", "subtext": "Reclaim your time"},
         {"headline": "Want 2x growth?", "cta_text": "Follow for the blueprint", "subtext": "Without 2x the hours"},
-        {"headline": "Time is money", "cta_text": "Follow to gain both 💰", "subtext": "Smart strategies for PTs"},
+        {"headline": "Time is money", "cta_text": "Follow to gain both!", "subtext": "Smart strategies for PTs"},
         {"headline": "Build your dream business", "cta_text": "Follow me!", "subtext": "Transform exhausting to effortless"},
         {"headline": "One step closer", "cta_text": "Follow for more!", "subtext": "To the business you actually want"},
     ]
 
     transformed = []
 
-    # Extract an overall title from the first slide for the COVER
+    # Extract title from the first slide for the COVER
     first_text = clean_text(raw_slides[0].get('text', ''))
     cover_title = first_text[:60] if first_text else 'Tips for Personal Trainers'
 
@@ -237,8 +237,11 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         'avatar_path': ''
     })
 
-    # All raw slides become CONTENT slides (use text as header, description as bullet)
-    for i, slide in enumerate(raw_slides):
+    # SKIP first slide - it's used for cover only
+    # All REMAINING raw slides become CONTENT slides
+    content_slides = raw_slides[1:] if len(raw_slides) > 1 else []
+
+    for i, slide in enumerate(content_slides):
         text = clean_text(slide.get('text', ''))
         description = clean_text(slide.get('description', ''))
 
@@ -248,24 +251,22 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         # Build bullets from description
         bullets = []
         if description:
-            # Split description into sentences or use as single bullet
             if '. ' in description:
                 sentences = [s.strip() for s in description.split('. ') if s.strip()]
                 bullets = sentences[:3]
             else:
                 bullets = [description]
 
-        # If no description, create a placeholder
         if not bullets:
             bullets = [text] if text else ["More details coming soon"]
 
         transformed.append({
             'type': 'CONTENT',
-            'step_title': header,  # Contextual header instead of "Step N"
+            'step_title': header,
             'bullets': bullets
         })
 
-    # Final slide: CTA (random selection from messages)
+    # Final slide: CTA
     cta = random.choice(cta_messages)
     transformed.append({
         'type': 'CTA',
