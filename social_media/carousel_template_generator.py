@@ -529,7 +529,7 @@ class CarouselTemplateGenerator:
         return image
 
     def _create_content_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CONTENT slide
+        """Create a CONTENT slide with enhanced visual styling
 
         Args:
             data: Slide data with 'step_title', 'bullets', and optional 'icon_path'
@@ -542,23 +542,46 @@ class CarouselTemplateGenerator:
         image = self._create_base_template()
         draw = ImageDraw.Draw(image)
 
-        # Add accent bar at top
         accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
-        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 8)], fill=accent_color)
+        cream_color = self._hex_to_rgb(self.BACKGROUND_CREAM)
 
-        # Add step header at top
+        # Add thicker accent bar at top
+        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 12)], fill=accent_color)
+
+        # Add subtle cream/beige sidebar on the left
+        draw.rectangle([(0, 0), (20, self.SLIDE_HEIGHT)], fill=cream_color)
+
+        # Add decorative circle in top-right corner (subtle)
+        circle_x = self.SLIDE_WIDTH - 150
+        circle_y = 80
+        circle_radius = 60
+        draw.ellipse(
+            [(circle_x - circle_radius, circle_y - circle_radius),
+             (circle_x + circle_radius, circle_y + circle_radius)],
+            outline=accent_color,
+            width=3
+        )
+
+        # Add step header at top with more space
         step_title = data.get('step_title', f'Step {slide_number - 1}')
         image = self._add_step_header(image, step_title)
 
-        # Add bullet points
+        # Add bullet points with adjusted starting position
         bullets = data.get('bullets', [])
-        bullet_start_y = self.PADDING + 140
+        bullet_start_y = self.PADDING + 180  # More space below header
         image = self._add_bullet_points(image, bullets, bullet_start_y)
 
         # Add optional icon
         icon_path = data.get('icon_path', '')
         if icon_path:
             image = self._add_icon(image, icon_path)
+
+        # Add decorative element at bottom
+        bottom_y = self.SLIDE_HEIGHT - 100
+        line_width = 200
+        line_x = (self.SLIDE_WIDTH - line_width) // 2
+        draw.line([(line_x, bottom_y), (line_x + line_width, bottom_y)],
+                  fill=accent_color, width=3)
 
         # Add slide number
         image = self._add_slide_number(image, slide_number, total_slides)
