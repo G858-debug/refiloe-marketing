@@ -685,9 +685,9 @@ class CarouselTemplateGenerator:
         # Thick accent bar at top
         draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 24)], fill=accent_color)
 
-        # Header banner background - taller to fit 2 lines
-        header_top = 60
-        header_height = 220  # Increased from 160
+        # Header banner background - positioned lower
+        header_top = 120  # Moved down from 60
+        header_height = 220
         draw.rectangle(
             [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
@@ -719,7 +719,7 @@ class CarouselTemplateGenerator:
 
         # Bullet points - CENTER ALIGNED, no numbering for single items
         bullets = data.get('bullets', [])
-        content_start_y = header_top + header_height + 80  # Adjusted for taller header
+        content_start_y = header_top + header_height + 120  # More space between header and content
 
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
         line_height = 56 + 45  # Font size + spacing
@@ -781,8 +781,8 @@ class CarouselTemplateGenerator:
 
         # Draw shape centered, between content and bottom line
         icon_center_x = self.SLIDE_WIDTH // 2
-        icon_center_y = self.SLIDE_HEIGHT - 280
-        icon_size = 70
+        icon_center_y = self.SLIDE_HEIGHT - 260
+        icon_size = 100  # Increased from 70
 
         self._draw_theme_shape(draw, theme_shape, icon_center_x, icon_center_y, icon_size, accent_color)
 
