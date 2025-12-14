@@ -754,6 +754,51 @@ class CarouselTemplateGenerator:
 
         return image
 
+    def _add_cover_overlay(self, image: Image.Image, slide_number: int, total_slides: int) -> Image.Image:
+        """Add brand overlay elements to Leonardo-generated cover image.
+
+        Adds top accent bar, bottom decorative line, and slide number
+        to maintain consistency with content slides.
+
+        Args:
+            image: The Leonardo-generated cover image
+            slide_number: Current slide number (usually 1)
+            total_slides: Total number of slides
+
+        Returns:
+            PIL.Image: Image with brand overlay elements
+        """
+        draw = ImageDraw.Draw(image)
+        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
+
+        # Add semi-transparent overlay bar at top for the accent stripe
+        # Create a subtle gradient/bar effect
+        top_bar_height = 20
+        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, top_bar_height)], fill=accent_color)
+
+        # Add decorative accent line near bottom (same as content slides)
+        bottom_y = self.SLIDE_HEIGHT - 120
+        line_width = 350
+        line_x = (self.SLIDE_WIDTH - line_width) // 2
+        draw.line([(line_x, bottom_y), (line_x + line_width, bottom_y)],
+                  fill=accent_color, width=8)
+
+        # Add slide number in bottom right (white with slight shadow for visibility)
+        slide_font = self._load_font(bold=False, size=40)
+        slide_text = f"{slide_number}/{total_slides}"
+        bbox = draw.textbbox((0, 0), slide_text, font=slide_font)
+        text_width = bbox[2] - bbox[0]
+        x = self.SLIDE_WIDTH - self.PADDING - text_width
+        y = self.SLIDE_HEIGHT - self.PADDING - 40
+
+        # Draw shadow first for better visibility on any background
+        shadow_color = (0, 0, 0, 128)  # Semi-transparent black
+        draw.text((x + 2, y + 2), slide_text, font=slide_font, fill=(50, 50, 50))
+        # Draw white text on top
+        draw.text((x, y), slide_text, font=slide_font, fill=(255, 255, 255))
+
+        return image
+
     def create_carousel(self, carousel_data: Dict) -> List[str]:
         """Generate a complete carousel from carousel data
 
@@ -815,6 +860,12 @@ class CarouselTemplateGenerator:
                         response = requests.get(leonardo_cover_url, timeout=30)
                         response.raise_for_status()
                         image = Image.open(BytesIO(response.content))
+                        image = image.convert('RGB')
+                        # Resize to match our slide dimensions
+                        image = image.resize((self.SLIDE_WIDTH, self.SLIDE_HEIGHT), Image.Resampling.LANCZOS)
+
+                        # Add brand overlay elements for consistency with other slides
+                        image = self._add_cover_overlay(image, slide_number, total_slides)
 
                         filename = f"carousel_{carousel_id}_slide_{slide_number:02d}.png"
                         filepath = self.output_dir / filename
