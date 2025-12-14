@@ -127,7 +127,7 @@ CONTENT_TYPE_PROMPTS = {
         "features_refiloe": True,
         "setting": "warm home office with light oak desk, beige chair, wooden shelves with books and succulents, fairy lights",
         "outfit": "cozy oversized mustard yellow knit cardigan over fitted white tank, delicate gold pendant necklace",
-        "pose": "approachable teaching gesture, warm smile, reading glasses on head",
+        "pose": "approachable teaching gesture, warm smile",
         "mood": "knowledgeable, friendly, helpful",
     },
     "community": {
@@ -147,7 +147,7 @@ CONTENT_TYPE_PROMPTS = {
     "casual": {
         "features_refiloe": True,
         "setting": "outdoor café terrace with wrought iron bistro table, potted lavender, cream canvas umbrella, bougainvillea",
-        "outfit": "vibrant yellow linen button-up shirt tied at waist, gold layered necklaces, tortoiseshell sunglasses on head",
+        "outfit": "vibrant yellow linen button-up shirt tied at waist, gold layered necklaces",
         "pose": "relaxed weekend vibe, natural smile",
         "mood": "carefree, happy, approachable",
     },
@@ -477,6 +477,9 @@ class LeonardoGenerator:
             Style: High-quality professional photography, natural lighting,
             Instagram-ready, warm color palette with beige and earthy tones.
             4:5 portrait aspect ratio optimized for mobile viewing.
+
+            IMPORTANT: Do NOT include any glasses, sunglasses, or eyewear of any kind - not on face, not on head.
+            No glasses, no sunglasses, no eyewear.
             """
             return enhanced
 
