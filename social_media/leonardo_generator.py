@@ -12,6 +12,7 @@ Features:
 
 import os
 import time
+import json
 import requests
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
@@ -228,15 +229,28 @@ class LeonardoGenerator:
 
         # Create generation
         try:
+            log_info(f"Leonardo API payload: {json.dumps(payload, indent=2)}")
+
             response = self.session.post(
                 f"{LEONARDO_API_BASE}/generations",
                 json=payload,
                 timeout=30,
             )
+
+            # Log full response for debugging
+            if not response.ok:
+                log_error(f"Leonardo API error status: {response.status_code}")
+                log_error(f"Leonardo API error response: {response.text}")
+
             response.raise_for_status()
             generation_data = response.json()
+            log_info(f"Leonardo API success response: {generation_data}")
+
         except requests.RequestException as e:
             log_error(f"Leonardo API request failed: {e}")
+            # Try to get response body if available
+            if hasattr(e, 'response') and e.response is not None:
+                log_error(f"Leonardo error details: {e.response.text}")
             raise LeonardoGenerationError(f"Failed to start generation: {e}")
 
         generation_id = generation_data.get("sdGenerationJob", {}).get("generationId")
