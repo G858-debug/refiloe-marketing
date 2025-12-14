@@ -148,6 +148,94 @@ def verify_supabase_connection():
         }
 
 
+def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -> dict:
+    """Parse a caption/content text into carousel slide structure.
+
+    Args:
+        caption: The post caption/content text
+        content_type: Content type for styling
+
+    Returns:
+        Dict with 'slides' key containing slide configurations
+    """
+    slides = []
+
+    # Extract title from first line or first sentence
+    lines = [l.strip() for l in caption.split('\n') if l.strip()]
+
+    if not lines:
+        # Fallback title
+        title = "Tips for Personal Trainers"
+    else:
+        # Use first line as title, truncate if needed
+        title = lines[0][:60]
+        if title.endswith(('...', '.', '!')):
+            pass
+        elif len(lines[0]) > 60:
+            title = title.rsplit(' ', 1)[0] + '...'
+
+    # Slide 1: COVER
+    slides.append({
+        "type": "COVER",
+        "title": title,
+        "avatar_path": ""
+    })
+
+    # Try to extract bullet points or key points from content
+    key_points = []
+
+    for line in lines[1:]:  # Skip title
+        # Skip very short lines or hashtag lines
+        if len(line) < 10 or line.startswith('#'):
+            continue
+        # Look for bullet-like patterns
+        clean_line = line.lstrip('•-*→✓✅1234567890.)')
+        clean_line = clean_line.strip()
+        if clean_line and len(clean_line) > 15:
+            key_points.append(clean_line)
+
+    # If no bullet points found, split content into chunks
+    if not key_points:
+        # Join all non-title content
+        content = ' '.join(lines[1:])
+        # Split into sentences
+        sentences = content.replace('!', '.').replace('?', '.').split('.')
+        key_points = [s.strip() for s in sentences if len(s.strip()) > 20][:5]
+
+    # Ensure we have at least 3 key points
+    default_points = [
+        "Automate your client communication",
+        "Save hours on admin tasks every week",
+        "Focus on what you do best - training clients"
+    ]
+    while len(key_points) < 3:
+        if default_points:
+            key_points.append(default_points.pop(0))
+        else:
+            key_points.append("More tips coming soon")
+
+    # Slides 2-4: CONTENT (3 content slides)
+    for i, point in enumerate(key_points[:3], 1):
+        # Truncate bullet text if too long
+        bullet_text = point[:80] if len(point) > 80 else point
+
+        slides.append({
+            "type": "CONTENT",
+            "step_title": f"Step {i}",
+            "bullets": [bullet_text]
+        })
+
+    # Slide 5: CTA
+    slides.append({
+        "type": "CTA",
+        "headline": "Ready to Save Time?",
+        "cta_text": "Follow for more tips!",
+        "subtext": "Save this post for later"
+    })
+
+    return {"slides": slides, "content_type": content_type}
+
+
 def init_scheduler():
     """Initialize social media scheduler"""
     global scheduler
