@@ -474,71 +474,120 @@ class CarouselTemplateGenerator:
 
         return lines
 
-    def _get_theme_icon(self, text: str) -> str:
-        """Get a relevant Unicode icon based on content keywords.
+    def _get_theme_shape(self, text: str) -> str:
+        """Get a relevant shape type based on content keywords.
 
         Args:
             text: The slide text to analyze
 
         Returns:
-            Unicode emoji/icon string
+            Shape type string: 'clock', 'money', 'chat', 'people', 'growth', 'star'
         """
         text_lower = text.lower()
 
-        # Map keywords to simple, professional icons
-        icon_map = {
-            # Time/Schedule related
-            'time': '⏰',
-            'schedule': '📅',
-            'calendar': '📅',
-            'hours': '⏱️',
-            'minute': '⏰',
+        # Map keywords to shapes
+        if any(word in text_lower for word in ['time', 'schedule', 'calendar', 'hours', 'minute']):
+            return 'clock'
+        elif any(word in text_lower for word in ['payment', 'money', 'invoice', 'paid', 'unpaid']):
+            return 'money'
+        elif any(word in text_lower for word in ['message', 'whatsapp', 'email', 'reply', 'chat']):
+            return 'chat'
+        elif any(word in text_lower for word in ['client', 'clients', 'customer']):
+            return 'people'
+        elif any(word in text_lower for word in ['business', 'growth', 'scale']):
+            return 'growth'
+        elif any(word in text_lower for word in ['exercise', 'workout', 'training', 'program', 'fitness', 'puzzle']):
+            return 'dumbbell'
+        else:
+            return 'star'
 
-            # Money/Payment related
-            'payment': '💳',
-            'money': '💰',
-            'invoice': '📄',
-            'paid': '💳',
-            'unpaid': '💳',
+    def _draw_theme_shape(self, draw: ImageDraw.Draw, shape: str, center_x: int, center_y: int, size: int, color: tuple):
+        """Draw a themed shape icon.
 
-            # Communication related
-            'message': '💬',
-            'whatsapp': '💬',
-            'email': '📧',
-            'reply': '💬',
-            'chat': '💬',
+        Args:
+            draw: ImageDraw object
+            shape: Shape type from _get_theme_shape
+            center_x, center_y: Center position
+            size: Size of the shape
+            color: RGB color tuple
+        """
+        half = size // 2
 
-            # Client related
-            'client': '👤',
-            'clients': '👥',
-            'customer': '👤',
+        if shape == 'clock':
+            # Circle with clock hands
+            draw.ellipse(
+                [(center_x - half, center_y - half), (center_x + half, center_y + half)],
+                outline=color, width=4
+            )
+            # Hour hand
+            draw.line([(center_x, center_y), (center_x, center_y - half + 15)], fill=color, width=4)
+            # Minute hand
+            draw.line([(center_x, center_y), (center_x + half - 20, center_y)], fill=color, width=3)
 
-            # Business/Growth related
-            'business': '📈',
-            'growth': '📈',
-            'scale': '🚀',
+        elif shape == 'money':
+            # Dollar sign circle
+            draw.ellipse(
+                [(center_x - half, center_y - half), (center_x + half, center_y + half)],
+                outline=color, width=4
+            )
+            # S shape (simplified)
+            draw.line([(center_x, center_y - half + 10), (center_x, center_y + half - 10)], fill=color, width=4)
+            draw.line([(center_x - 15, center_y - 10), (center_x + 15, center_y - 10)], fill=color, width=3)
+            draw.line([(center_x - 15, center_y + 10), (center_x + 15, center_y + 10)], fill=color, width=3)
 
-            # Fitness related
-            'exercise': '💪',
-            'workout': '🏋️',
-            'training': '💪',
-            'program': '📋',
-            'fitness': '💪',
+        elif shape == 'chat':
+            # Speech bubble
+            draw.ellipse(
+                [(center_x - half, center_y - half), (center_x + half, center_y + half - 15)],
+                outline=color, width=4
+            )
+            # Tail
+            draw.polygon([
+                (center_x - 10, center_y + half - 20),
+                (center_x - 25, center_y + half + 5),
+                (center_x + 5, center_y + half - 15)
+            ], outline=color, width=3)
 
-            # Admin/Organization related
-            'admin': '📁',
-            'organize': '📁',
-            'chaos': '🌪️',
-            'puzzle': '🧩',
-        }
+        elif shape == 'people':
+            # Simple person icon (head + body)
+            head_size = size // 4
+            draw.ellipse(
+                [(center_x - head_size, center_y - half), (center_x + head_size, center_y - half + head_size * 2)],
+                outline=color, width=4
+            )
+            # Body
+            draw.arc(
+                [(center_x - half + 10, center_y - 5), (center_x + half - 10, center_y + half)],
+                start=0, end=180, fill=color, width=4
+            )
 
-        # Find matching icon
-        for keyword, icon in icon_map.items():
-            if keyword in text_lower:
-                return icon
+        elif shape == 'growth':
+            # Upward arrow/chart
+            draw.line([(center_x - half, center_y + half - 10), (center_x, center_y - half + 10), (center_x + half, center_y)], fill=color, width=4)
+            # Arrow head
+            draw.polygon([
+                (center_x + half, center_y),
+                (center_x + half - 15, center_y - 10),
+                (center_x + half - 15, center_y + 10)
+            ], fill=color)
 
-        # Default icon
-        return '✨'
+        elif shape == 'dumbbell':
+            # Dumbbell shape
+            bar_y = center_y
+            draw.line([(center_x - half + 15, bar_y), (center_x + half - 15, bar_y)], fill=color, width=4)
+            # Left weight
+            draw.rectangle([(center_x - half, center_y - 20), (center_x - half + 15, center_y + 20)], outline=color, width=3)
+            # Right weight
+            draw.rectangle([(center_x + half - 15, center_y - 20), (center_x + half, center_y + 20)], outline=color, width=3)
+
+        else:  # star
+            # Simple star/sparkle
+            draw.line([(center_x, center_y - half), (center_x, center_y + half)], fill=color, width=3)
+            draw.line([(center_x - half, center_y), (center_x + half, center_y)], fill=color, width=3)
+            # Diagonal lines
+            offset = int(half * 0.7)
+            draw.line([(center_x - offset, center_y - offset), (center_x + offset, center_y + offset)], fill=color, width=2)
+            draw.line([(center_x + offset, center_y - offset), (center_x - offset, center_y + offset)], fill=color, width=2)
 
     def _generate_leonardo_cover(
         self,
@@ -724,22 +773,18 @@ class CarouselTemplateGenerator:
 
             current_y += 20  # Extra spacing between bullets
 
-        # Add themed icon to fill white space
+        # Add themed shape icon to fill white space
         header_title = data.get('step_title', '')
         bullets_text = ' '.join(data.get('bullets', []))
         combined_text = f"{header_title} {bullets_text}"
-        theme_icon = self._get_theme_icon(combined_text)
+        theme_shape = self._get_theme_shape(combined_text)
 
-        # Draw icon centered, between content and bottom line
-        icon_font = self._load_font(bold=False, size=80)
-        icon_y = self.SLIDE_HEIGHT - 300  # Position above the bottom line
+        # Draw shape centered, between content and bottom line
+        icon_center_x = self.SLIDE_WIDTH // 2
+        icon_center_y = self.SLIDE_HEIGHT - 280
+        icon_size = 70
 
-        bbox = draw.textbbox((0, 0), theme_icon, font=icon_font)
-        icon_width = bbox[2] - bbox[0]
-        icon_x = (self.SLIDE_WIDTH - icon_width) // 2
-
-        # Draw with slight transparency effect (use accent color)
-        draw.text((icon_x, icon_y), theme_icon, font=icon_font, fill=accent_color)
+        self._draw_theme_shape(draw, theme_shape, icon_center_x, icon_center_y, icon_size, accent_color)
 
         # Decorative accent line near bottom
         bottom_y = self.SLIDE_HEIGHT - 140
