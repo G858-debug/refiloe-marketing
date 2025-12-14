@@ -148,6 +148,94 @@ def verify_supabase_connection():
         }
 
 
+def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -> dict:
+    """Parse a caption/content text into carousel slide structure.
+
+    Args:
+        caption: The post caption/content text
+        content_type: Content type for styling
+
+    Returns:
+        Dict with 'slides' key containing slide configurations
+    """
+    slides = []
+
+    # Extract title from first line or first sentence
+    lines = [l.strip() for l in caption.split('\n') if l.strip()]
+
+    if not lines:
+        # Fallback title
+        title = "Tips for Personal Trainers"
+    else:
+        # Use first line as title, truncate if needed
+        title = lines[0][:60]
+        if title.endswith(('...', '.', '!')):
+            pass
+        elif len(lines[0]) > 60:
+            title = title.rsplit(' ', 1)[0] + '...'
+
+    # Slide 1: COVER
+    slides.append({
+        "type": "COVER",
+        "title": title,
+        "avatar_path": ""
+    })
+
+    # Try to extract bullet points or key points from content
+    key_points = []
+
+    for line in lines[1:]:  # Skip title
+        # Skip very short lines or hashtag lines
+        if len(line) < 10 or line.startswith('#'):
+            continue
+        # Look for bullet-like patterns
+        clean_line = line.lstrip('•-*→✓✅1234567890.)')
+        clean_line = clean_line.strip()
+        if clean_line and len(clean_line) > 15:
+            key_points.append(clean_line)
+
+    # If no bullet points found, split content into chunks
+    if not key_points:
+        # Join all non-title content
+        content = ' '.join(lines[1:])
+        # Split into sentences
+        sentences = content.replace('!', '.').replace('?', '.').split('.')
+        key_points = [s.strip() for s in sentences if len(s.strip()) > 20][:5]
+
+    # Ensure we have at least 3 key points
+    default_points = [
+        "Automate your client communication",
+        "Save hours on admin tasks every week",
+        "Focus on what you do best - training clients"
+    ]
+    while len(key_points) < 3:
+        if default_points:
+            key_points.append(default_points.pop(0))
+        else:
+            key_points.append("More tips coming soon")
+
+    # Slides 2-4: CONTENT (3 content slides)
+    for i, point in enumerate(key_points[:3], 1):
+        # Truncate bullet text if too long
+        bullet_text = point[:80] if len(point) > 80 else point
+
+        slides.append({
+            "type": "CONTENT",
+            "step_title": f"Step {i}",
+            "bullets": [bullet_text]
+        })
+
+    # Slide 5: CTA
+    slides.append({
+        "type": "CTA",
+        "headline": "Ready to Save Time?",
+        "cta_text": "Follow for more tips!",
+        "subtext": "Save this post for later"
+    })
+
+    return {"slides": slides, "content_type": content_type}
+
+
 def init_scheduler():
     """Initialize social media scheduler"""
     global scheduler
@@ -3746,69 +3834,91 @@ def api_generate_media(post_id):
         # ROUTE 3: CAROUSEL GENERATION (Multi-slide carousel)
         # ============================================================
         elif media_type == 'carousel':
-            from social_media.carousel_template_generator import CarouselTemplateGenerator
-
             log_info(f"📊 Using CAROUSEL generation workflow for post {post_id}")
 
-            carousel_gen = CarouselTemplateGenerator('social_media/config.yaml')
-
-            # Get carousel content from metadata
-            caption = post_data.get('content_text', '')
-            carousel_data = metadata.get('carousel_data', {})
-
-            if not carousel_data:
-                # Try to parse caption for carousel structure
-                log_warning(f"⚠️  No carousel_data in metadata, attempting to parse from caption")
-                # For now, return error - carousel data should be structured
-                return jsonify({'success': False, 'error': 'No carousel data found. Carousel posts require structured slide data.'}), 400
-
-            # Get content type from metadata and add to carousel_data for Leonardo AI cover generation
-            content_type = metadata.get('content_type', 'educational')
-            if 'content_type' not in carousel_data:
-                carousel_data['content_type'] = content_type
-
-            log_info(f"🎨 Generating carousel slides for post {post_id} (content_type: {content_type})")
-
             try:
-                # Generate carousel slides
-                slide_paths = carousel_gen.create_carousel(carousel_data)
+                from social_media.carousel_template_generator import CarouselTemplateGenerator
 
-                if slide_paths and len(slide_paths) > 0:
-                    # Store slide paths as comma-separated URLs
-                    media_urls_csv = ','.join(slide_paths)
+                # Get carousel content from metadata
+                caption = post_data.get('content_text', '')
+                carousel_data = metadata.get('carousel_data', {})
+                content_type = metadata.get('content_type', 'educational')
 
-                    # Update post with carousel image URLs
-                    supabase_client.table('social_posts').update({
-                        'status': 'pending_media_approval',
-                        'media_urls': media_urls_csv,
-                        'updated_at': datetime.now(SA_TZ).isoformat()
-                    }).eq('id', post_id).execute()
+                log_info(f"📝 Caption length: {len(caption)} chars")
+                log_info(f"🎨 Content type: {content_type}")
 
-                    log_info(f"✅ Carousel with {len(slide_paths)} slides generated for post {post_id}")
-                    return jsonify({
-                        'success': True,
-                        'message': f'Carousel generated successfully with {len(slide_paths)} slides',
-                        'slide_count': len(slide_paths),
-                        'slide_paths': slide_paths
-                    })
-                else:
-                    log_error(f"❌ Carousel generation failed for post {post_id}")
-                    # Reset status so user can retry
+                if not carousel_data or not carousel_data.get('slides'):
+                    log_warning(f"⚠️  No carousel_data in metadata, parsing from caption")
+
+                    # Parse caption to create carousel slides
+                    carousel_data = parse_caption_to_carousel(caption, content_type)
+                    log_info(f"✅ Parsed carousel with {len(carousel_data.get('slides', []))} slides")
+
+                # Validate we have slides
+                if not carousel_data or not carousel_data.get('slides'):
+                    log_error("❌ Failed to create carousel slides from caption")
                     supabase_client.table('social_posts').update({
                         'status': 'approved',
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': 'Carousel generation failed'}), 500
+                    return jsonify({
+                        'success': False,
+                        'error': 'Could not parse carousel data from caption. Please ensure the post has structured content.'
+                    }), 400
+
+                # Add content_type for Leonardo cover generation
+                carousel_data['content_type'] = content_type
+
+                # Initialize carousel generator
+                config_path = 'social_media/config.yaml'
+                log_info(f"🔧 Initializing CarouselTemplateGenerator with config: {config_path}")
+                carousel_gen = CarouselTemplateGenerator(config_path)
+
+                # Generate carousel slides
+                log_info(f"🎨 Generating {len(carousel_data['slides'])} carousel slides...")
+                slide_paths = carousel_gen.create_carousel(carousel_data)
+                log_info(f"✅ Generated {len(slide_paths)} slide images")
+
+                # For local files, we need to upload them or serve them
+                # For now, store the local paths and serve via static files
+                carousel_urls = []
+                for i, path in enumerate(slide_paths):
+                    # Convert local path to URL that can be served
+                    # The carousel generator saves to /tmp/carousel_slides/
+                    filename = os.path.basename(path)
+                    # Store the path - we'll serve these via a static route
+                    carousel_urls.append(path)
+                    log_info(f"   Slide {i+1}: {filename}")
+
+                # Update post with carousel URLs
+                supabase_client.table('social_posts').update({
+                    'status': 'pending_media_approval',
+                    'carousel_image_urls': carousel_urls,
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', post_id).execute()
+
+                log_info(f"✅ Carousel generated for post {post_id}")
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Carousel generated successfully',
+                    'post_id': post_id,
+                    'carousel_images': carousel_urls,
+                    'slide_count': len(carousel_urls)
+                }), 200
+
             except Exception as e:
                 log_error(f"❌ Carousel generation failed for {post_id}: {str(e)}")
                 import traceback
                 log_error(f"Traceback: {traceback.format_exc()}")
-                # Reset status so user can retry
                 supabase_client.table('social_posts').update({
                     'status': 'approved',
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }).eq('id', post_id).execute()
-                return jsonify({'error': f'Carousel generation failed: {str(e)}'}), 500
+                return jsonify({
+                    'success': False,
+                    'error': f'Carousel generation failed: {str(e)}'
+                }), 500
 
         else:
             return jsonify({'success': False, 'error': f'Unsupported media type: {media_type}'}), 400
