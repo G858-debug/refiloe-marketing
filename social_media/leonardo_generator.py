@@ -109,10 +109,11 @@ CONTENT_TYPE_PROMPTS = {
         "mood": "confident, professional, successful",
     },
     "motivational": {
-        "features_refiloe": False,
-        "style": "quote_graphic",
-        "background": "deep purple to dark gradient, modern minimalist",
-        "text_style": "clean white sans-serif font, bold and inspiring",
+        "features_refiloe": True,
+        "setting": "bright inspiring space with large windows, morning golden light, motivational wall art in background, green plants",
+        "outfit": "vibrant coral fitted athletic top, matching leggings, delicate gold layered necklaces, warm confident energy",
+        "pose": "confident empowering stance, hands on hips or arms raised in victory pose, genuine radiant smile, looking at camera",
+        "mood": "empowering, uplifting, energizing, you-can-do-this energy",
     },
     "educational": {
         "features_refiloe": True,
@@ -143,10 +144,11 @@ CONTENT_TYPE_PROMPTS = {
         "mood": "carefree, happy, approachable",
     },
     "announcement": {
-        "features_refiloe": False,
-        "style": "quote_graphic",
-        "background": "clean cream textured wall, subtle brand colors (warm beige, gold accents)",
-        "text_style": "modern bold typography, professional announcement style",
+        "features_refiloe": True,
+        "setting": "modern office or studio space with clean white walls, professional lighting, subtle brand elements",
+        "outfit": "professional blazer in bold color (fuchsia or emerald), crisp blouse, statement earrings",
+        "pose": "excited welcoming gesture, genuine smile, engaging with camera as if sharing good news",
+        "mood": "exciting, celebratory, professional, newsworthy",
     },
     "outdoor": {
         "features_refiloe": True,
