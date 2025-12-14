@@ -3743,72 +3743,170 @@ def api_generate_media(post_id):
                 }), 500
 
         # ============================================================
-        # ROUTE 3: CAROUSEL GENERATION (Multi-slide carousel)
+        # ROUTE 3: CAROUSEL GENERATION
         # ============================================================
         elif media_type == 'carousel':
-            from social_media.carousel_template_generator import CarouselTemplateGenerator
-
             log_info(f"📊 Using CAROUSEL generation workflow for post {post_id}")
 
-            carousel_gen = CarouselTemplateGenerator('social_media/config.yaml')
-
-            # Get carousel content from metadata
-            caption = post_data.get('content_text', '')
-            carousel_data = metadata.get('carousel_data', {})
-
-            if not carousel_data:
-                # Try to parse caption for carousel structure
-                log_warning(f"⚠️  No carousel_data in metadata, attempting to parse from caption")
-                # For now, return error - carousel data should be structured
-                return jsonify({'success': False, 'error': 'No carousel data found. Carousel posts require structured slide data.'}), 400
-
-            # Get content type from metadata and add to carousel_data for Leonardo AI cover generation
-            content_type = metadata.get('content_type', 'educational')
-            if 'content_type' not in carousel_data:
-                carousel_data['content_type'] = content_type
-
-            log_info(f"🎨 Generating carousel slides for post {post_id} (content_type: {content_type})")
-
             try:
-                # Generate carousel slides
-                slide_paths = carousel_gen.create_carousel(carousel_data)
+                # Step 1: Get carousel data from metadata or parse from caption
+                caption = post_data.get('content_text', '')
+                carousel_data = metadata.get('carousel_data')
+                content_type = metadata.get('content_type', 'educational')
 
-                if slide_paths and len(slide_paths) > 0:
-                    # Store slide paths as comma-separated URLs
+                log_info(f"📝 Caption length: {len(caption)} chars")
+                log_info(f"📝 Caption preview: {caption[:200] if caption else 'No caption'}...")
+                log_info(f"📊 Metadata keys: {list(metadata.keys())}")
+                log_info(f"🎨 Content type: {content_type}")
+
+                if not carousel_data:
+                    log_warning("⚠️  No carousel_data in metadata, attempting to parse from caption")
+
+                    # Log what we're working with
+                    log_info(f"📝 Full caption for parsing: {caption[:500]}...")
+
+                    # For now, return error - carousel data should be structured
+                    # TODO: Implement parse_carousel_from_caption function if needed
+                    log_error("❌ Carousel data missing and no parser implemented")
+                    return jsonify({
+                        'success': False,
+                        'error': 'No carousel data found. Carousel posts require structured slide data in metadata.'
+                    }), 400
+
+                # Step 2: Validate carousel data structure
+                log_info(f"🔍 Validating carousel_data structure...")
+                log_info(f"📊 carousel_data type: {type(carousel_data)}")
+                log_info(f"📊 carousel_data keys: {carousel_data.keys() if isinstance(carousel_data, dict) else 'Not a dict'}")
+
+                if not isinstance(carousel_data, dict):
+                    log_error(f"❌ carousel_data is not a dictionary: {type(carousel_data)}")
+                    raise ValueError(f"carousel_data must be a dictionary, got {type(carousel_data)}")
+
+                slides = carousel_data.get('slides', [])
+                if not slides:
+                    log_error("❌ No valid carousel slides found in carousel_data")
+                    log_error(f"📊 carousel_data content: {carousel_data}")
+                    raise ValueError("Carousel data must contain 'slides' array")
+
+                log_info(f"✅ Carousel has {len(slides)} slides")
+                for i, slide in enumerate(slides[:3]):  # Log first 3 slides
+                    log_info(f"   Slide {i+1} keys: {slide.keys() if isinstance(slide, dict) else type(slide)}")
+
+                # Step 3: Add content_type to carousel_data for Leonardo cover
+                if 'content_type' not in carousel_data:
+                    carousel_data['content_type'] = content_type
+                    log_info(f"✅ Added content_type '{content_type}' to carousel_data")
+                else:
+                    log_info(f"ℹ️  carousel_data already has content_type: {carousel_data['content_type']}")
+
+                # Step 4: Initialize carousel generator
+                log_info("🔧 Initializing CarouselTemplateGenerator...")
+                try:
+                    from social_media.carousel_template_generator import CarouselTemplateGenerator
+
+                    config_path = os.path.join(os.path.dirname(__file__), 'social_media', 'config', 'config.yaml')
+                    log_info(f"📁 Config path: {config_path}")
+
+                    if not os.path.exists(config_path):
+                        log_error(f"❌ Config file not found: {config_path}")
+                        log_error(f"📁 Current directory: {os.getcwd()}")
+                        log_error(f"📁 __file__: {__file__}")
+                        raise FileNotFoundError(f"Config not found: {config_path}")
+
+                    log_info(f"✅ Config file exists, file size: {os.path.getsize(config_path)} bytes")
+
+                    carousel_generator = CarouselTemplateGenerator(config_path)
+                    log_info("✅ CarouselTemplateGenerator initialized successfully")
+
+                except ImportError as import_error:
+                    log_error(f"❌ Failed to import CarouselTemplateGenerator: {import_error}")
+                    import traceback
+                    log_error(f"Import traceback: {traceback.format_exc()}")
+                    raise
+                except Exception as init_error:
+                    log_error(f"❌ Failed to initialize CarouselTemplateGenerator: {init_error}")
+                    import traceback
+                    log_error(f"Init traceback: {traceback.format_exc()}")
+                    raise
+
+                # Step 5: Generate carousel slides
+                log_info("🎨 Generating carousel slides...")
+                log_info(f"📊 Calling create_carousel with {len(carousel_data.get('slides', []))} slides")
+
+                try:
+                    slide_paths = carousel_generator.create_carousel(carousel_data)
+
+                    if not slide_paths:
+                        log_error("❌ create_carousel returned None or empty list")
+                        raise ValueError("Carousel generation returned no slides")
+
+                    log_info(f"✅ Generated {len(slide_paths)} carousel slides")
+                    for i, path in enumerate(slide_paths):
+                        log_info(f"   Slide {i+1}: {path}")
+                        # Verify file exists if it's a local path
+                        if path and not path.startswith('http'):
+                            if os.path.exists(path):
+                                log_info(f"      ✅ File exists, size: {os.path.getsize(path)} bytes")
+                            else:
+                                log_warning(f"      ⚠️  File not found at path: {path}")
+
+                except Exception as gen_error:
+                    log_error(f"❌ Carousel slide generation failed: {gen_error}")
+                    log_error(f"Error type: {type(gen_error).__name__}")
+                    import traceback
+                    log_error(f"Generation traceback: {traceback.format_exc()}")
+                    raise
+
+                # Step 6: Update post with carousel URLs
+                log_info("💾 Updating post with generated slides...")
+                try:
                     media_urls_csv = ','.join(slide_paths)
+                    log_info(f"📊 media_urls_csv length: {len(media_urls_csv)} chars")
 
-                    # Update post with carousel image URLs
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
                         'media_urls': media_urls_csv,
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
-                    log_info(f"✅ Carousel with {len(slide_paths)} slides generated for post {post_id}")
-                    return jsonify({
-                        'success': True,
-                        'message': f'Carousel generated successfully with {len(slide_paths)} slides',
-                        'slide_count': len(slide_paths),
-                        'slide_paths': slide_paths
-                    })
-                else:
-                    log_error(f"❌ Carousel generation failed for post {post_id}")
-                    # Reset status so user can retry
+                    log_info(f"✅ Post {post_id} updated with {len(slide_paths)} carousel slides")
+
+                except Exception as update_error:
+                    log_error(f"❌ Failed to update post in database: {update_error}")
+                    import traceback
+                    log_error(f"Update traceback: {traceback.format_exc()}")
+                    raise
+
+                # Step 7: Return success
+                log_info(f"🎉 Carousel generation complete for post {post_id}")
+                return jsonify({
+                    'success': True,
+                    'message': f'Carousel generated successfully with {len(slide_paths)} slides',
+                    'slide_count': len(slide_paths),
+                    'slide_paths': slide_paths
+                })
+
+            except Exception as e:
+                log_error(f"❌ CAROUSEL GENERATION FAILED for post {post_id}: {str(e)}")
+                log_error(f"Error type: {type(e).__name__}")
+                import traceback
+                log_error(f"Full traceback: {traceback.format_exc()}")
+
+                # Reset post to approved status so user can try again
+                try:
                     supabase_client.table('social_posts').update({
                         'status': 'approved',
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', post_id).execute()
-                    return jsonify({'success': False, 'error': 'Carousel generation failed'}), 500
-            except Exception as e:
-                log_error(f"❌ Carousel generation failed for {post_id}: {str(e)}")
-                import traceback
-                log_error(f"Traceback: {traceback.format_exc()}")
-                # Reset status so user can retry
-                supabase_client.table('social_posts').update({
-                    'status': 'approved',
-                    'updated_at': datetime.now(timezone.utc).isoformat()
-                }).eq('id', post_id).execute()
-                return jsonify({'error': f'Carousel generation failed: {str(e)}'}), 500
+                    log_info(f"✅ Post {post_id} status reset to 'approved' for retry")
+                except Exception as reset_error:
+                    log_error(f"❌ Failed to reset post status: {reset_error}")
+
+                return jsonify({
+                    'success': False,
+                    'error': f'Carousel generation failed: {str(e)}',
+                    'error_type': type(e).__name__
+                }), 500
 
         else:
             return jsonify({'success': False, 'error': f'Unsupported media type: {media_type}'}), 400
