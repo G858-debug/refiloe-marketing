@@ -237,8 +237,9 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         'avatar_path': ''
     })
 
-    # All raw slides become CONTENT slides (use text as header, description as bullet)
-    for i, slide in enumerate(raw_slides):
+    # Skip first slide for content (it's used for the COVER)
+    # All remaining raw slides become CONTENT slides
+    for i, slide in enumerate(raw_slides[1:]):  # Start from index 1, skip first
         text = clean_text(slide.get('text', ''))
         description = clean_text(slide.get('description', ''))
 
