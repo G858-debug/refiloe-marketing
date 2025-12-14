@@ -190,6 +190,81 @@ def convert_carousel_format(data: dict, content_type: str = 'educational') -> di
     return {"slides": slides, "content_type": content_type}
 
 
+def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
+    """Transform raw slide data from metadata into carousel generator format.
+
+    Raw slides have: slide_number, text, description
+    Carousel generator expects: type (COVER/CONTENT/CTA), title/step_title/headline, bullets, etc.
+
+    Args:
+        raw_slides: List of slides with slide_number, text, description
+
+    Returns:
+        List of slides in carousel generator format
+    """
+    if not raw_slides:
+        return []
+
+    transformed = []
+    total_slides = len(raw_slides)
+
+    for i, slide in enumerate(raw_slides):
+        slide_num = slide.get('slide_number', i + 1)
+        text = slide.get('text', '')
+        description = slide.get('description', '')
+
+        # First slide is COVER
+        if i == 0:
+            transformed.append({
+                'type': 'COVER',
+                'title': text[:60] if text else 'Tips for Personal Trainers',
+                'avatar_path': ''
+            })
+        # Last slide is CTA
+        elif i == total_slides - 1:
+            transformed.append({
+                'type': 'CTA',
+                'headline': text[:50] if text else 'Ready to Save Time?',
+                'cta_text': 'Follow for more tips!',
+                'subtext': description[:60] if description else 'Save this post for later'
+            })
+        # Middle slides are CONTENT
+        else:
+            # Parse text into step title and bullets
+            step_title = f"Step {slide_num}" if slide_num else f"Step {i}"
+
+            # Use text as the main bullet, description as additional context
+            bullets = []
+            if text:
+                # Split text into multiple bullets if it contains line breaks or is long
+                if '\n' in text:
+                    bullets = [line.strip() for line in text.split('\n') if line.strip()][:3]
+                elif len(text) > 100:
+                    # Long text - use as single bullet, truncated
+                    bullets = [text[:80]]
+                else:
+                    bullets = [text]
+
+            # Add description as additional bullet if available
+            if description and len(bullets) < 3:
+                if len(description) > 80:
+                    bullets.append(description[:80])
+                else:
+                    bullets.append(description)
+
+            # Ensure at least one bullet
+            if not bullets:
+                bullets = ['Tip coming soon']
+
+            transformed.append({
+                'type': 'CONTENT',
+                'step_title': step_title,
+                'bullets': bullets[:3]  # Max 3 bullets per slide
+            })
+
+    return transformed
+
+
 def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -> dict:
     """Parse a caption/content text into carousel slide structure.
 
@@ -3893,9 +3968,13 @@ def api_generate_media(post_id):
                 # Check if carousel_slides is a list (raw slides) vs dict with 'slides' key
                 if carousel_data:
                     if isinstance(carousel_data, list):
-                        # It's a raw list of slides, wrap it
+                        # It's a raw list of slides - need to transform to expected format
                         log_info(f"📊 Found carousel_slides as list with {len(carousel_data)} items")
-                        carousel_data = {'slides': carousel_data, 'content_type': content_type}
+
+                        # Transform slides to the format carousel_template_generator expects
+                        transformed_slides = transform_raw_slides_to_carousel_format(carousel_data)
+                        carousel_data = {'slides': transformed_slides, 'content_type': content_type}
+                        log_info(f"✅ Transformed {len(transformed_slides)} slides to carousel format")
                     elif isinstance(carousel_data, dict) and not carousel_data.get('slides'):
                         # It might have cover, content_slides, cta_slide format - convert it
                         log_info(f"📊 Found carousel_data dict, converting to slides format")
