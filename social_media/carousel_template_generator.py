@@ -742,9 +742,17 @@ class CarouselTemplateGenerator:
         current_y += 72 + 50  # Font height + gap
 
         # Draw subtext (centered, with wrapping)
-        # Clean the subtext
+        # Clean the subtext - allow longer text since we wrap it
         clean_subtext = ''.join(char for char in subtext if ord(char) < 128 and ord(char) >= 32)
-        clean_subtext = clean_subtext.strip()[:60]  # Truncate to 60 chars max
+        clean_subtext = clean_subtext.strip()[:80]  # Allow up to 80 chars
+
+        # If truncated, clean up the ending
+        if len(subtext) > 80:
+            # Remove incomplete words
+            clean_subtext = clean_subtext.rsplit(' ', 1)[0]
+            # Remove trailing punctuation
+            while clean_subtext and clean_subtext[-1] in '(,-:;':
+                clean_subtext = clean_subtext[:-1].strip()
 
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
         wrapped_subtext = self._wrap_text(clean_subtext, subtext_font, max_width)
