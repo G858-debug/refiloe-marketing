@@ -32,12 +32,12 @@ class CarouselTemplateGenerator:
     SLIDE_HEIGHT = 1350
     PADDING = 60
 
-    # Font sizes (optimized for mobile readability)
-    TITLE_FONT_SIZE = 72
-    BODY_FONT_SIZE = 48
-    SLIDE_NUMBER_FONT_SIZE = 32
-    CTA_FONT_SIZE = 64
-    SUBTEXT_FONT_SIZE = 44
+    # Font sizes (large for mobile - slides are 1080x1350)
+    TITLE_FONT_SIZE = 96
+    BODY_FONT_SIZE = 56
+    SLIDE_NUMBER_FONT_SIZE = 36
+    CTA_FONT_SIZE = 80
+    SUBTEXT_FONT_SIZE = 52
 
     # Avatar dimensions
     AVATAR_SIZE = (400, 400)
@@ -216,7 +216,7 @@ class CarouselTemplateGenerator:
 
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40  # Extra indent for bullet
         bullet_char = "\u2022"  # Unicode bullet character
-        line_height = self.BODY_FONT_SIZE + 20
+        line_height = self.BODY_FONT_SIZE + 40
 
         current_y = start_y
 
@@ -529,7 +529,7 @@ class CarouselTemplateGenerator:
         return image
 
     def _create_content_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CONTENT slide with enhanced visual styling
+        """Create a CONTENT slide with prominent visual styling
 
         Args:
             data: Slide data with 'step_title', 'bullets', and optional 'icon_path'
@@ -544,46 +544,63 @@ class CarouselTemplateGenerator:
 
         accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
         cream_color = self._hex_to_rgb(self.BACKGROUND_CREAM)
+        text_color = self._hex_to_rgb(self.TEXT_COLOR)
 
-        # Add thicker accent bar at top
-        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 12)], fill=accent_color)
+        # Thick accent bar at top
+        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 20)], fill=accent_color)
 
-        # Add subtle cream/beige sidebar on the left
-        draw.rectangle([(0, 0), (20, self.SLIDE_HEIGHT)], fill=cream_color)
-
-        # Add decorative circle in top-right corner (subtle)
-        circle_x = self.SLIDE_WIDTH - 150
-        circle_y = 80
-        circle_radius = 60
-        draw.ellipse(
-            [(circle_x - circle_radius, circle_y - circle_radius),
-             (circle_x + circle_radius, circle_y + circle_radius)],
-            outline=accent_color,
-            width=3
+        # Header banner background (cream colored box for step title)
+        header_height = 160
+        draw.rectangle(
+            [(0, 60), (self.SLIDE_WIDTH, 60 + header_height)],
+            fill=cream_color
         )
 
-        # Add step header at top with more space
+        # Step title - large and centered in the header banner
         step_title = data.get('step_title', f'Step {slide_number - 1}')
-        image = self._add_step_header(image, step_title)
 
-        # Add bullet points with adjusted starting position
+        # Draw step title centered in header banner
+        title_y = 60 + (header_height - self.TITLE_FONT_SIZE) // 2
+        bbox = draw.textbbox((0, 0), step_title, font=self._title_font)
+        text_width = bbox[2] - bbox[0]
+        title_x = (self.SLIDE_WIDTH - text_width) // 2
+        draw.text((title_x, title_y), step_title, font=self._title_font, fill=text_color)
+
+        # Bullet points - larger and more prominent
         bullets = data.get('bullets', [])
-        bullet_start_y = self.PADDING + 180  # More space below header
-        image = self._add_bullet_points(image, bullets, bullet_start_y)
+        bullet_start_y = 60 + header_height + 80  # Below header with spacing
 
-        # Add optional icon
-        icon_path = data.get('icon_path', '')
-        if icon_path:
-            image = self._add_icon(image, icon_path)
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 60
+        bullet_char = "●"  # Solid bullet
+        line_height = self.BODY_FONT_SIZE + 40  # More line spacing
 
-        # Add decorative element at bottom
-        bottom_y = self.SLIDE_HEIGHT - 100
-        line_width = 200
+        current_y = bullet_start_y
+
+        for bullet in bullets[:4]:  # Max 4 bullets for readability
+            # Wrap the bullet text
+            wrapped = self._wrap_text(bullet, self._body_font, max_width)
+
+            for i, line in enumerate(wrapped[:2]):  # Max 2 lines per bullet
+                x = self.PADDING + 20
+                if i == 0:
+                    # First line gets colored bullet point
+                    draw.text((x, current_y), bullet_char, font=self._body_font, fill=accent_color)
+                    draw.text((x + 50, current_y), line, font=self._body_font, fill=text_color)
+                else:
+                    # Continuation lines are indented
+                    draw.text((x + 50, current_y), line, font=self._body_font, fill=text_color)
+                current_y += line_height
+
+            current_y += 20  # Extra spacing between bullets
+
+        # Decorative accent line near bottom
+        bottom_y = self.SLIDE_HEIGHT - 120
+        line_width = 300
         line_x = (self.SLIDE_WIDTH - line_width) // 2
         draw.line([(line_x, bottom_y), (line_x + line_width, bottom_y)],
-                  fill=accent_color, width=3)
+                  fill=accent_color, width=6)
 
-        # Add slide number
+        # Slide number - larger
         image = self._add_slide_number(image, slide_number, total_slides)
 
         return image
