@@ -687,7 +687,7 @@ class CarouselTemplateGenerator:
 
         # Header banner background - positioned lower
         header_top = 120  # Moved down from 60
-        header_height = 240
+        header_height = 280
         draw.rectangle(
             [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
@@ -781,7 +781,7 @@ class CarouselTemplateGenerator:
 
         # Draw shape centered, between content and bottom line
         icon_center_x = self.SLIDE_WIDTH // 2
-        icon_center_y = self.SLIDE_HEIGHT - 290
+        icon_center_y = self.SLIDE_HEIGHT - 320
         icon_size = 125  # Increased from 70
 
         self._draw_theme_shape(draw, theme_shape, icon_center_x, icon_center_y, icon_size, accent_color)
