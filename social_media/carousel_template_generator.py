@@ -32,12 +32,12 @@ class CarouselTemplateGenerator:
     SLIDE_HEIGHT = 1350
     PADDING = 60
 
-    # Font sizes
-    TITLE_FONT_SIZE = 48
-    BODY_FONT_SIZE = 32
-    SLIDE_NUMBER_FONT_SIZE = 24
-    CTA_FONT_SIZE = 40
-    SUBTEXT_FONT_SIZE = 28
+    # Font sizes (optimized for mobile readability)
+    TITLE_FONT_SIZE = 72
+    BODY_FONT_SIZE = 48
+    SLIDE_NUMBER_FONT_SIZE = 32
+    CTA_FONT_SIZE = 64
+    SUBTEXT_FONT_SIZE = 44
 
     # Avatar dimensions
     AVATAR_SIZE = (400, 400)
