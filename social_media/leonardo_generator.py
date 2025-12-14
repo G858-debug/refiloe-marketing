@@ -22,8 +22,12 @@ from utils.logger import log_info, log_error, log_warning, log_debug
 
 LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
 
-# Leonardo Phoenix model ID
+# Leonardo model IDs
 PHOENIX_MODEL_ID = "6b645e3a-d64f-4341-a6d8-7a3690fbf042"
+FLUX_DEV_MODEL_ID = "aa77f04e-3eec-4034-9c07-d0f619684628"  # Flux Dev - required for Elements
+
+# Default model - use Flux Dev for Element support
+DEFAULT_MODEL_ID = FLUX_DEV_MODEL_ID
 
 # Default generation settings
 # Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
@@ -198,7 +202,11 @@ class LeonardoGenerator:
             raise ValueError("LEONARDO_API_KEY environment variable required")
 
         self.reference_image_id = reference_image_id or os.getenv("LEONARDO_REFILOE_REFERENCE_ID")
-        self.model_id = os.getenv("LEONARDO_MODEL_ID", PHOENIX_MODEL_ID)
+        self.model_id = os.getenv("LEONARDO_MODEL_ID", DEFAULT_MODEL_ID)
+
+        # Element configuration for Refiloe character
+        self.refiloe_element_id = os.getenv("LEONARDO_REFILOE_ELEMENT_ID")
+        self.element_strength = 0.80  # Recommended strength for Refiloe 2.0
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -211,9 +219,12 @@ class LeonardoGenerator:
         self.poll_interval = 5  # seconds
         self.poll_timeout = 120  # seconds
 
-        log_info(f"LeonardoGenerator initialized with model: {self.model_id}")
-        if self.reference_image_id:
-            log_info(f"Using Refiloe reference image: {self.reference_image_id}")
+        model_name = "Flux Dev" if self.model_id == FLUX_DEV_MODEL_ID else "Phoenix" if self.model_id == PHOENIX_MODEL_ID else "Unknown"
+        log_info(f"LeonardoGenerator initialized with model: {model_name} ({self.model_id})")
+        if self.refiloe_element_id:
+            log_info(f"Refiloe 2.0 Element configured: {self.refiloe_element_id} (strength: {self.element_strength})")
+        else:
+            log_warning("LEONARDO_REFILOE_ELEMENT_ID not configured - character consistency may vary")
 
     def generate_image(
         self,
@@ -262,14 +273,16 @@ class LeonardoGenerator:
             "public": False,
         }
 
-        # Add reference image for character consistency if available and needed
-        if use_reference and self.reference_image_id and self._content_type_features_refiloe(content_type):
-            payload["controlnets"] = [{
-                "initImageId": self.reference_image_id,
-                "initImageType": "UPLOADED",
-                "strengthType": "Mid",
+        # Add Refiloe Element for character consistency
+        if use_reference and self.refiloe_element_id and self._content_type_features_refiloe(content_type):
+            # Use Elements feature with Flux Dev model
+            payload["elements"] = [{
+                "akUUID": self.refiloe_element_id,
+                "weight": self.element_strength,
             }]
-            log_info("Using Refiloe reference image for character consistency")
+            log_info(f"Using Refiloe 2.0 Element (ID: {self.refiloe_element_id}) with strength {self.element_strength}")
+        elif use_reference and self._content_type_features_refiloe(content_type):
+            log_warning("LEONARDO_REFILOE_ELEMENT_ID not set - using text description only for character")
 
         # Create generation
         try:
