@@ -277,7 +277,7 @@ class LeonardoGenerator:
 
         # Add Refiloe 2.0 user-trained LoRA for character consistency
         if use_reference and self.refiloe_lora_id and self._content_type_features_refiloe(content_type):
-            payload["userLoras"] = [{
+            payload["loras"] = [{
                 "loraId": self.refiloe_lora_id,
                 "weight": self.lora_weight,
             }]
