@@ -263,57 +263,86 @@ class CarouselTemplateGenerator:
 
         return image
 
-    def _add_cta_section(self, image: Image.Image, headline: str, cta_text: str, subtext: str) -> Image.Image:
-        """Add CTA section to slide (headline, CTA text, subtext)
+    def _add_slide_number_white(self, image: Image.Image, current: int, total: int) -> Image.Image:
+        """Add slide number in white to bottom right corner
+
+        Args:
+            image: Image to add slide number to
+            current: Current slide number
+            total: Total number of slides
+
+        Returns:
+            PIL.Image: Image with slide number added
+        """
+        draw = ImageDraw.Draw(image)
+        text_color = (255, 255, 255)  # White
+
+        slide_text = f"{current}/{total}"
+        bbox = draw.textbbox((0, 0), slide_text, font=self._slide_number_font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        x = self.SLIDE_WIDTH - self.PADDING - text_width
+        y = self.SLIDE_HEIGHT - self.PADDING - text_height
+
+        draw.text((x, y), slide_text, font=self._slide_number_font, fill=text_color)
+
+        return image
+
+    def _add_cta_section(self, image: Image.Image, headline: str, cta_text: str, subtext: str, use_white_text: bool = False) -> Image.Image:
+        """Add CTA section to slide
 
         Args:
             image: Image to add CTA to
             headline: Main headline text (48pt, centered)
             cta_text: Call-to-action text (bold, 40pt)
             subtext: Supporting text below CTA (28pt)
+            use_white_text: Whether to use white text for contrast
 
         Returns:
             PIL.Image: Image with CTA section added
         """
         draw = ImageDraw.Draw(image)
-        text_color = self._hex_to_rgb(self.TEXT_COLOR)
 
-        max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
-        vertical_center = self.SLIDE_HEIGHT // 2
+        # Choose text color based on background
+        if use_white_text:
+            text_color = (255, 255, 255)  # White
+            secondary_color = (255, 255, 255, 200)  # Slightly transparent white
+        else:
+            text_color = self._hex_to_rgb(self.TEXT_COLOR)
+            secondary_color = text_color
 
-        # Draw headline at top area (adjusted for taller slide)
-        headline_y = self.PADDING + 200
-        headline_lines = self._wrap_text(headline, self._title_font, max_width)[:2]
-        current_y = headline_y
+        # Center content vertically
+        total_height = self.TITLE_FONT_SIZE + 40 + self.CTA_FONT_SIZE + 30 + self.SUBTEXT_FONT_SIZE
+        start_y = (self.SLIDE_HEIGHT - total_height) // 2
 
-        for line in headline_lines:
-            bbox = draw.textbbox((0, 0), line, font=self._title_font)
+        # Draw headline (centered)
+        if headline:
+            max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
+            wrapped = self._wrap_text(headline, self._title_font, max_width)[:2]
+            current_y = start_y
+            for line in wrapped:
+                bbox = draw.textbbox((0, 0), line, font=self._title_font)
+                text_width = bbox[2] - bbox[0]
+                x = (self.SLIDE_WIDTH - text_width) // 2
+                draw.text((x, current_y), line, font=self._title_font, fill=text_color)
+                current_y += self.TITLE_FONT_SIZE + 10
+            start_y = current_y + 30
+
+        # Draw CTA text (centered, larger)
+        if cta_text:
+            bbox = draw.textbbox((0, 0), cta_text, font=self._cta_font)
             text_width = bbox[2] - bbox[0]
             x = (self.SLIDE_WIDTH - text_width) // 2
-            draw.text((x, current_y), line, font=self._title_font, fill=text_color)
-            current_y += self.TITLE_FONT_SIZE + 10
+            draw.text((x, start_y), cta_text, font=self._cta_font, fill=text_color)
+            start_y += self.CTA_FONT_SIZE + 30
 
-        # Draw CTA text in the middle (bold, larger) - centered on slide
-        cta_y = vertical_center - 40
-        cta_lines = self._wrap_text(cta_text, self._cta_font, max_width)[:2]
-
-        for line in cta_lines:
-            bbox = draw.textbbox((0, 0), line, font=self._cta_font)
+        # Draw subtext (centered)
+        if subtext:
+            bbox = draw.textbbox((0, 0), subtext, font=self._subtext_font)
             text_width = bbox[2] - bbox[0]
             x = (self.SLIDE_WIDTH - text_width) // 2
-            draw.text((x, cta_y), line, font=self._cta_font, fill=text_color)
-            cta_y += self.CTA_FONT_SIZE + 10
-
-        # Draw subtext below CTA
-        subtext_y = cta_y + 40
-        subtext_lines = self._wrap_text(subtext, self._subtext_font, max_width)[:3]
-
-        for line in subtext_lines:
-            bbox = draw.textbbox((0, 0), line, font=self._subtext_font)
-            text_width = bbox[2] - bbox[0]
-            x = (self.SLIDE_WIDTH - text_width) // 2
-            draw.text((x, subtext_y), line, font=self._subtext_font, fill=text_color)
-            subtext_y += self.SUBTEXT_FONT_SIZE + 8
+            draw.text((x, start_y), subtext, font=self._subtext_font, fill=text_color)
 
         return image
 
@@ -522,7 +551,7 @@ class CarouselTemplateGenerator:
         return image
 
     def _create_cta_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CTA (call-to-action) slide
+        """Create a CTA (call-to-action) slide with modern styling
 
         Args:
             data: Slide data with 'headline', 'cta_text', and 'subtext'
@@ -532,18 +561,36 @@ class CarouselTemplateGenerator:
         Returns:
             PIL.Image: Generated CTA slide
         """
-        image = self._create_base_template()
+        # Create base with accent color background instead of neutral
+        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
+        image = Image.new('RGB', (self.SLIDE_WIDTH, self.SLIDE_HEIGHT), accent_color)
+        draw = ImageDraw.Draw(image)
 
-        # Add CTA section
+        # Add decorative circle pattern in slightly darker shade
+        darker_accent = tuple(max(0, c - 20) for c in accent_color)
+        center_x = self.SLIDE_WIDTH // 2
+        center_y = self.SLIDE_HEIGHT // 2
+
+        # Draw decorative circles
+        for radius in [400, 350, 300]:
+            draw.ellipse(
+                [(center_x - radius, center_y - radius),
+                 (center_x + radius, center_y + radius)],
+                outline=darker_accent,
+                width=2
+            )
+
+        # Add CTA section with white text for contrast
         image = self._add_cta_section(
             image,
             headline=data.get('headline', ''),
             cta_text=data.get('cta_text', ''),
-            subtext=data.get('subtext', '')
+            subtext=data.get('subtext', ''),
+            use_white_text=True  # New parameter
         )
 
-        # Add slide number
-        image = self._add_slide_number(image, slide_number, total_slides)
+        # Add slide number in white
+        image = self._add_slide_number_white(image, slide_number, total_slides)
 
         return image
 
