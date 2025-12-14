@@ -474,6 +474,72 @@ class CarouselTemplateGenerator:
 
         return lines
 
+    def _get_theme_icon(self, text: str) -> str:
+        """Get a relevant Unicode icon based on content keywords.
+
+        Args:
+            text: The slide text to analyze
+
+        Returns:
+            Unicode emoji/icon string
+        """
+        text_lower = text.lower()
+
+        # Map keywords to simple, professional icons
+        icon_map = {
+            # Time/Schedule related
+            'time': '⏰',
+            'schedule': '📅',
+            'calendar': '📅',
+            'hours': '⏱️',
+            'minute': '⏰',
+
+            # Money/Payment related
+            'payment': '💳',
+            'money': '💰',
+            'invoice': '📄',
+            'paid': '💳',
+            'unpaid': '💳',
+
+            # Communication related
+            'message': '💬',
+            'whatsapp': '💬',
+            'email': '📧',
+            'reply': '💬',
+            'chat': '💬',
+
+            # Client related
+            'client': '👤',
+            'clients': '👥',
+            'customer': '👤',
+
+            # Business/Growth related
+            'business': '📈',
+            'growth': '📈',
+            'scale': '🚀',
+
+            # Fitness related
+            'exercise': '💪',
+            'workout': '🏋️',
+            'training': '💪',
+            'program': '📋',
+            'fitness': '💪',
+
+            # Admin/Organization related
+            'admin': '📁',
+            'organize': '📁',
+            'chaos': '🌪️',
+            'puzzle': '🧩',
+        }
+
+        # Find matching icon
+        for keyword, icon in icon_map.items():
+            if keyword in text_lower:
+                return icon
+
+        # Default icon
+        return '✨'
+
     def _generate_leonardo_cover(
         self,
         title: str,
@@ -657,6 +723,23 @@ class CarouselTemplateGenerator:
                 current_y += line_height
 
             current_y += 20  # Extra spacing between bullets
+
+        # Add themed icon to fill white space
+        header_title = data.get('step_title', '')
+        bullets_text = ' '.join(data.get('bullets', []))
+        combined_text = f"{header_title} {bullets_text}"
+        theme_icon = self._get_theme_icon(combined_text)
+
+        # Draw icon centered, between content and bottom line
+        icon_font = self._load_font(bold=False, size=80)
+        icon_y = self.SLIDE_HEIGHT - 300  # Position above the bottom line
+
+        bbox = draw.textbbox((0, 0), theme_icon, font=icon_font)
+        icon_width = bbox[2] - bbox[0]
+        icon_x = (self.SLIDE_WIDTH - icon_width) // 2
+
+        # Draw with slight transparency effect (use accent color)
+        draw.text((icon_x, icon_y), theme_icon, font=icon_font, fill=accent_color)
 
         # Decorative accent line near bottom
         bottom_y = self.SLIDE_HEIGHT - 140
