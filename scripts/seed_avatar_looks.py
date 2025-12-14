@@ -98,7 +98,7 @@ AVATAR_LOOKS = [
         "content_type": "educational",
         "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
         "label": "Educational",
-        "outfit_description": "Cozy oversized mustard yellow knit cardigan over fitted white tank top, delicate gold pendant necklace with small charm, small gold stud earrings, loose natural curls with side part, reading glasses on head",
+        "outfit_description": "Cozy oversized mustard yellow knit cardigan over fitted white tank top, delicate gold pendant necklace with small charm, small gold stud earrings, loose natural curls with side part",
         "environment_description": "Warm home office with light oak desk, beige ergonomic chair, open laptop and notebook, wooden floating shelves with books and succulents, cork pinboard with quotes, fairy lights along shelf edge",
         "is_active": True,
         "is_default": True,  # Educational is the default
@@ -125,7 +125,7 @@ AVATAR_LOOKS = [
         "content_type": "casual",
         "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
         "label": "Casual",
-        "outfit_description": "Vibrant yellow linen button-up shirt tied at waist over white fitted tank, gold layered delicate necklaces, tortoiseshell sunglasses on head, statement gold cuff bracelet, loose beachy waves",
+        "outfit_description": "Vibrant yellow linen button-up shirt tied at waist over white fitted tank, gold layered delicate necklaces, statement gold cuff bracelet, loose beachy waves",
         "environment_description": "Outdoor café terrace with wrought iron bistro table, espresso and croissant, potted lavender and olive trees in terracotta pots, cobblestone floor, cream canvas umbrella, pink bougainvillea on cream stucco wall",
         "is_active": True,
         "is_default": False,
