@@ -22,7 +22,6 @@ from config import config
 
 # Import utilities
 from utils.logger import log_info, log_error, log_warning
-from utils.heygen_avatars import collect_avatar_env_values, check_avatar_availability
 from utils.whatsapp_notifier import get_whatsapp_notifier
 
 from social_media.approval_routes import approval_bp
@@ -202,89 +201,6 @@ def stop_scheduler():
             scheduler.stop()
         except Exception as e:
             log_error(f"Error stopping scheduler: {str(e)}")
-
-
-def validate_heygen_configuration():
-    """Validate HeyGen avatar environment and API availability."""
-
-    global heygen_avatar_status
-
-    log_info("Validating HeyGen avatar configuration...")
-
-    heygen_avatar_status = {
-        "checked": True,
-        "available": None,
-        "details": [],
-    }
-
-    avatars, missing = collect_avatar_env_values()
-    if missing:
-        log_warning(
-            "Missing HeyGen avatar environment variables: " + ", ".join(sorted(missing))
-        )
-        heygen_avatar_status["details"].append(
-            {
-                "type": "missing_env",
-                "variables": sorted(missing),
-            }
-        )
-    else:
-        log_info("All HeyGen avatar environment variables are set.")
-
-    api_key = os.getenv(HEYGEN_API_KEY_ENV)
-    if not api_key:
-        log_warning("HEYGEN_API_KEY is not configured; skipping avatar availability check.")
-        heygen_avatar_status["details"].append(
-            {
-                "type": "missing_api_key",
-                "message": "HEYGEN_API_KEY is not configured; availability not checked.",
-            }
-        )
-        return
-
-    if not avatars:
-        log_warning("No HeyGen avatar IDs configured; skipping availability check.")
-        heygen_avatar_status["details"].append(
-            {
-                "type": "missing_ids",
-                "message": "No HeyGen avatar IDs available for validation.",
-            }
-        )
-        return
-
-    try:
-        results = check_avatar_availability(api_key, avatars)
-    except Exception as exc:  # pragma: no cover - network errors
-        log_warning(f"HeyGen availability check encountered an error: {exc}")
-        heygen_avatar_status["details"].append(
-            {
-                "type": "error",
-                "message": str(exc),
-            }
-        )
-        return
-
-    failures = {key: status for key, status in results.items() if not status.get("ok")}
-    if failures:
-        for env_key, status in failures.items():
-            detail = status.get("detail", "Unknown error")
-            avatar_id = status.get("avatar_id", "unknown")
-            log_warning(
-                f"HeyGen avatar unavailable: {env_key} ({avatar_id}) -> {detail}"
-            )
-            heygen_avatar_status["details"].append(
-                {
-                    "type": "unavailable",
-                    "env": env_key,
-                    "avatar_id": avatar_id,
-                    "detail": detail,
-                }
-            )
-        heygen_avatar_status["available"] = False
-        log_warning("Some HeyGen avatars are unavailable. Video generation may fail until resolved.")
-    else:
-        log_info("HeyGen avatar availability verified.")
-        heygen_avatar_status["available"] = True
 
 
 # Health check endpoint
@@ -4126,9 +4042,6 @@ def initialize_app():
     except Exception as e:
         log_error(f"❌ Configuration validation failed: {str(e)}")
         return False
-    
-    # Validate HeyGen avatars
-    validate_heygen_configuration()
 
     # Initialize Supabase
     log_info("Initializing Supabase connection...")
