@@ -24,7 +24,7 @@ LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
 
 # Leonardo model IDs
 PHOENIX_MODEL_ID = "6b645e3a-d64f-4341-a6d8-7a3690fbf042"
-FLUX_DEV_MODEL_ID = "aa77f04e-3eec-4034-9c07-d0f619684628"  # Flux Dev - required for user LoRAs
+FLUX_DEV_MODEL_ID = "b2614463-296c-462a-9586-aafdb8f00e36"  # Flux Dev - from Leonardo docs
 
 # Default model - use Flux Dev for LoRA/Element support
 DEFAULT_MODEL_ID = FLUX_DEV_MODEL_ID
@@ -288,9 +288,7 @@ class LeonardoGenerator:
                 "userLoraId": self.refiloe_lora_id,
                 "weight": self.lora_weight,
             }]
-            # Flux Dev Elements require explicit sdVersion
-            payload["sdVersion"] = "FLUX_DEV"
-            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight} on FLUX_DEV")
+            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight}")
 
         # Create generation
         try:
