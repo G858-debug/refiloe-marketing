@@ -26,9 +26,48 @@ LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
 PHOENIX_MODEL_ID = "6b645e3a-d64f-4341-a6d8-7a3690fbf042"
 
 # Default generation settings
-DEFAULT_WIDTH = 1080
-DEFAULT_HEIGHT = 1350  # 4:5 portrait ratio for mobile
+# Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
+# Using 832x1024 for approximately 4:5 portrait ratio
+DEFAULT_WIDTH = 832
+DEFAULT_HEIGHT = 1024
+
+# Alternative supported dimensions for reference:
+# 1024x1024 (1:1 square)
+# 832x1024 (~4:5 portrait)
+# 1024x832 (~5:4 landscape)
+# 768x1024 (3:4 portrait)
+# 1152x896 (~4:3 landscape)
+
 DEFAULT_NUM_IMAGES = 1
+
+
+def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
+    """Adjust dimensions to Leonardo-supported values.
+
+    Leonardo requires dimensions divisible by 8, preferably 64.
+    This function rounds to nearest valid dimensions.
+
+    Args:
+        width: Requested width
+        height: Requested height
+
+    Returns:
+        Tuple of (valid_width, valid_height)
+    """
+    # Round to nearest multiple of 64 for best results
+    valid_width = round(width / 64) * 64
+    valid_height = round(height / 64) * 64
+
+    # Ensure minimum dimensions
+    valid_width = max(valid_width, 512)
+    valid_height = max(valid_height, 512)
+
+    # Ensure maximum dimensions (Leonardo limit)
+    valid_width = min(valid_width, 1536)
+    valid_height = min(valid_height, 1536)
+
+    return valid_width, valid_height
+
 
 # Character description for Refiloe (used when no reference image available)
 REFILOE_CHARACTER_DESCRIPTION = """
@@ -206,12 +245,17 @@ class LeonardoGenerator:
         log_info(f"Starting Leonardo image generation for content_type: {content_type}")
         log_debug(f"Enhanced prompt: {enhanced_prompt[:200]}...")
 
+        # Validate dimensions for Leonardo
+        valid_width, valid_height = _get_valid_leonardo_dimensions(width, height)
+        if valid_width != width or valid_height != height:
+            log_info(f"Adjusted dimensions from {width}x{height} to {valid_width}x{valid_height} for Leonardo compatibility")
+
         # Build generation payload
         payload = {
             "modelId": self.model_id,
             "prompt": enhanced_prompt,
-            "width": width,
-            "height": height,
+            "width": valid_width,
+            "height": valid_height,
             "num_images": num_images,
             "promptMagic": True,  # Enhance prompt automatically
             "public": False,
@@ -268,8 +312,8 @@ class LeonardoGenerator:
             "generation_id": generation_id,
             "prompt": enhanced_prompt,
             "content_type": content_type,
-            "width": width,
-            "height": height,
+            "width": valid_width,
+            "height": valid_height,
         }
 
     def generate_quote_graphic(
