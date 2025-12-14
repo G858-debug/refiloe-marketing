@@ -260,6 +260,12 @@ class LeonardoGenerator:
         log_info(f"Starting Leonardo image generation for content_type: {content_type}")
         log_debug(f"Enhanced prompt: {enhanced_prompt[:200]}...")
 
+        # Leonardo has a 1500 character limit for prompts
+        MAX_PROMPT_LENGTH = 1450  # Leave some buffer
+        if len(enhanced_prompt) > MAX_PROMPT_LENGTH:
+            log_warning(f"Prompt too long ({len(enhanced_prompt)} chars), truncating to {MAX_PROMPT_LENGTH}")
+            enhanced_prompt = enhanced_prompt[:MAX_PROMPT_LENGTH - 3] + "..."
+
         # Validate dimensions for Leonardo
         valid_width, valid_height = _get_valid_leonardo_dimensions(width, height)
         if valid_width != width or valid_height != height:
