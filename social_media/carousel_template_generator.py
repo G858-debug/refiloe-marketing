@@ -23,9 +23,9 @@ class CarouselTemplateGenerator:
     BACKGROUND_COLOR = "#F5E6D3"  # Beige
     TEXT_COLOR = "#8B7355"  # Dark brown
 
-    # Slide dimensions
+    # Slide dimensions (4:5 portrait ratio for mobile optimization)
     SLIDE_WIDTH = 1080
-    SLIDE_HEIGHT = 1080
+    SLIDE_HEIGHT = 1350
     PADDING = 60
 
     # Font sizes
@@ -278,8 +278,8 @@ class CarouselTemplateGenerator:
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
         vertical_center = self.SLIDE_HEIGHT // 2
 
-        # Draw headline at top area
-        headline_y = self.PADDING + 100
+        # Draw headline at top area (adjusted for taller slide)
+        headline_y = self.PADDING + 200
         headline_lines = self._wrap_text(headline, self._title_font, max_width)[:2]
         current_y = headline_y
 
@@ -290,8 +290,8 @@ class CarouselTemplateGenerator:
             draw.text((x, current_y), line, font=self._title_font, fill=text_color)
             current_y += self.TITLE_FONT_SIZE + 10
 
-        # Draw CTA text in the middle (bold, larger)
-        cta_y = vertical_center - 20
+        # Draw CTA text in the middle (bold, larger) - centered on slide
+        cta_y = vertical_center - 40
         cta_lines = self._wrap_text(cta_text, self._cta_font, max_width)[:2]
 
         for line in cta_lines:
