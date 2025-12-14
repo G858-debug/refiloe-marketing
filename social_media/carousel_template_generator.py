@@ -529,7 +529,7 @@ class CarouselTemplateGenerator:
         return image
 
     def _create_content_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CONTENT slide with prominent visual styling
+        """Create a CONTENT slide with large, readable text
 
         Args:
             data: Slide data with 'step_title', 'bullets', and optional 'icon_path'
@@ -546,67 +546,78 @@ class CarouselTemplateGenerator:
         cream_color = self._hex_to_rgb(self.BACKGROUND_CREAM)
         text_color = self._hex_to_rgb(self.TEXT_COLOR)
 
+        # Load LARGE fonts directly (not using cached fonts)
+        large_title_font = self._load_font(bold=True, size=100)
+        large_body_font = self._load_font(bold=False, size=64)
+
         # Thick accent bar at top
-        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 20)], fill=accent_color)
+        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 24)], fill=accent_color)
 
         # Header banner background (cream colored box for step title)
-        header_height = 160
+        header_top = 80
+        header_height = 180
         draw.rectangle(
-            [(0, 60), (self.SLIDE_WIDTH, 60 + header_height)],
+            [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
         )
 
-        # Step title - large and centered in the header banner
+        # Step title - LARGE and centered in the header banner
         step_title = data.get('step_title', f'Step {slide_number - 1}')
 
         # Draw step title centered in header banner
-        title_y = 60 + (header_height - self.TITLE_FONT_SIZE) // 2
-        bbox = draw.textbbox((0, 0), step_title, font=self._title_font)
+        title_y = header_top + (header_height - 100) // 2
+        bbox = draw.textbbox((0, 0), step_title, font=large_title_font)
         text_width = bbox[2] - bbox[0]
         title_x = (self.SLIDE_WIDTH - text_width) // 2
-        draw.text((title_x, title_y), step_title, font=self._title_font, fill=text_color)
+        draw.text((title_x, title_y), step_title, font=large_title_font, fill=text_color)
 
-        # Bullet points - larger and more prominent
+        # Bullet points - LARGE and prominent
         bullets = data.get('bullets', [])
-        bullet_start_y = 60 + header_height + 80  # Below header with spacing
+        bullet_start_y = header_top + header_height + 100
 
-        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 60
-        bullet_char = "●"  # Solid bullet
-        line_height = self.BODY_FONT_SIZE + 40  # More line spacing
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 80
+        line_height = 64 + 50  # Font size + spacing
 
         current_y = bullet_start_y
 
-        for bullet in bullets[:4]:  # Max 4 bullets for readability
+        for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets for readability
             # Wrap the bullet text
-            wrapped = self._wrap_text(bullet, self._body_font, max_width)
+            wrapped = self._wrap_text(bullet, large_body_font, max_width)
 
             for i, line in enumerate(wrapped[:2]):  # Max 2 lines per bullet
-                x = self.PADDING + 20
+                x = self.PADDING + 30
                 if i == 0:
-                    # First line gets colored bullet point
-                    draw.text((x, current_y), bullet_char, font=self._body_font, fill=accent_color)
-                    draw.text((x + 50, current_y), line, font=self._body_font, fill=text_color)
+                    # Draw number instead of bullet for visual variety
+                    number_text = f"{idx + 1}."
+                    draw.text((x, current_y), number_text, font=large_body_font, fill=accent_color)
+                    draw.text((x + 60, current_y), line, font=large_body_font, fill=text_color)
                 else:
                     # Continuation lines are indented
-                    draw.text((x + 50, current_y), line, font=self._body_font, fill=text_color)
+                    draw.text((x + 60, current_y), line, font=large_body_font, fill=text_color)
                 current_y += line_height
 
-            current_y += 20  # Extra spacing between bullets
+            current_y += 30  # Extra spacing between bullets
 
         # Decorative accent line near bottom
-        bottom_y = self.SLIDE_HEIGHT - 120
-        line_width = 300
+        bottom_y = self.SLIDE_HEIGHT - 140
+        line_width = 350
         line_x = (self.SLIDE_WIDTH - line_width) // 2
         draw.line([(line_x, bottom_y), (line_x + line_width, bottom_y)],
-                  fill=accent_color, width=6)
+                  fill=accent_color, width=8)
 
-        # Slide number - larger
-        image = self._add_slide_number(image, slide_number, total_slides)
+        # Slide number
+        slide_font = self._load_font(bold=False, size=40)
+        slide_text = f"{slide_number}/{total_slides}"
+        bbox = draw.textbbox((0, 0), slide_text, font=slide_font)
+        text_width = bbox[2] - bbox[0]
+        x = self.SLIDE_WIDTH - self.PADDING - text_width
+        y = self.SLIDE_HEIGHT - self.PADDING - 40
+        draw.text((x, y), slide_text, font=slide_font, fill=text_color)
 
         return image
 
     def _create_cta_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CTA (call-to-action) slide with modern styling
+        """Create a CTA (call-to-action) slide with large text
 
         Args:
             data: Slide data with 'headline', 'cta_text', and 'subtext'
@@ -616,37 +627,72 @@ class CarouselTemplateGenerator:
         Returns:
             PIL.Image: Generated CTA slide
         """
-        # Create base with accent color background instead of neutral
+        # Create base with accent color background
         accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
         image = Image.new('RGB', (self.SLIDE_WIDTH, self.SLIDE_HEIGHT), accent_color)
         draw = ImageDraw.Draw(image)
 
-        # Add decorative circle pattern in slightly darker shade
-        # Darker sage for decorative elements
-        darker_accent = tuple(max(0, c - 30) for c in accent_color)
-        center_x = self.SLIDE_WIDTH // 2
-        center_y = self.SLIDE_HEIGHT // 2
+        # Load LARGE fonts for CTA
+        headline_font = self._load_font(bold=True, size=90)
+        cta_font = self._load_font(bold=True, size=72)
+        subtext_font = self._load_font(bold=False, size=52)
+        slide_font = self._load_font(bold=False, size=40)
 
-        # Draw decorative circles
-        for radius in [400, 350, 300]:
-            draw.ellipse(
-                [(center_x - radius, center_y - radius),
-                 (center_x + radius, center_y + radius)],
-                outline=darker_accent,
-                width=2
-            )
+        text_color = (255, 255, 255)  # White text on sage background
 
-        # Add CTA section with white text for contrast
-        image = self._add_cta_section(
-            image,
-            headline=data.get('headline', ''),
-            cta_text=data.get('cta_text', ''),
-            subtext=data.get('subtext', ''),
-            use_white_text=True  # New parameter
-        )
+        # Add decorative circles (subtle branding)
+        circle_color = self._hex_to_rgb(self.BACKGROUND_BEIGE)
+        # Large circle
+        draw.ellipse([(self.SLIDE_WIDTH//2 - 350, self.SLIDE_HEIGHT//2 - 350),
+                      (self.SLIDE_WIDTH//2 + 350, self.SLIDE_HEIGHT//2 + 350)],
+                     outline=circle_color, width=3)
+        # Medium circle
+        draw.ellipse([(self.SLIDE_WIDTH//2 - 250, self.SLIDE_HEIGHT//2 - 250),
+                      (self.SLIDE_WIDTH//2 + 250, self.SLIDE_HEIGHT//2 + 250)],
+                     outline=circle_color, width=2)
 
-        # Add slide number in white
-        image = self._add_slide_number_white(image, slide_number, total_slides)
+        # Get text content
+        headline = data.get('headline', 'Ready to Save Time?')
+        cta_text = data.get('cta_text', 'Follow for more tips!')
+        subtext = data.get('subtext', 'Save this post for later')
+
+        # Calculate vertical centering
+        total_text_height = 90 + 60 + 72 + 50 + 52  # headline + gap + cta + gap + subtext
+        start_y = (self.SLIDE_HEIGHT - total_text_height) // 2
+
+        # Draw headline (centered)
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
+        wrapped = self._wrap_text(headline, headline_font, max_width)[:2]
+        current_y = start_y
+        for line in wrapped:
+            bbox = draw.textbbox((0, 0), line, font=headline_font)
+            text_width = bbox[2] - bbox[0]
+            x = (self.SLIDE_WIDTH - text_width) // 2
+            draw.text((x, current_y), line, font=headline_font, fill=text_color)
+            current_y += 100
+
+        current_y += 40  # Gap
+
+        # Draw CTA text (centered)
+        bbox = draw.textbbox((0, 0), cta_text, font=cta_font)
+        text_width = bbox[2] - bbox[0]
+        x = (self.SLIDE_WIDTH - text_width) // 2
+        draw.text((x, current_y), cta_text, font=cta_font, fill=text_color)
+        current_y += 72 + 50  # Font height + gap
+
+        # Draw subtext (centered)
+        bbox = draw.textbbox((0, 0), subtext, font=subtext_font)
+        text_width = bbox[2] - bbox[0]
+        x = (self.SLIDE_WIDTH - text_width) // 2
+        draw.text((x, current_y), subtext, font=subtext_font, fill=text_color)
+
+        # Add slide number (white on sage)
+        slide_text = f"{slide_number}/{total_slides}"
+        bbox = draw.textbbox((0, 0), slide_text, font=slide_font)
+        text_width = bbox[2] - bbox[0]
+        x = self.SLIDE_WIDTH - self.PADDING - text_width
+        y = self.SLIDE_HEIGHT - self.PADDING - 40
+        draw.text((x, y), slide_text, font=slide_font, fill=text_color)
 
         return image
 
