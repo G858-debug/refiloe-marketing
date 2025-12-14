@@ -1190,8 +1190,29 @@
                 `;
             }
 
-            // Carousel preview
-            if (post.carousel_slides && post.carousel_slides.length > 0) {
+            // Carousel preview - show images if available, otherwise show text content
+            if (post.carousel_image_urls && post.carousel_image_urls.length > 0) {
+                // Show actual generated carousel images
+                const imagesHtml = post.carousel_image_urls.map((url, idx) => `
+                    <div class="carousel-slide-image" style="display:inline-block; margin:5px; text-align:center;">
+                        <div class="slide-number" style="font-weight:bold; margin-bottom:5px;">Slide ${idx + 1}</div>
+                        <img src="${url}" alt="Slide ${idx + 1}" style="max-width:200px; max-height:250px; border-radius:8px; border:1px solid #ddd; cursor:pointer;" onclick="window.open('${url}', '_blank')">
+                    </div>
+                `).join('');
+
+                preview = `
+                    <div class="media-preview-section">
+                        <div class="media-label">
+                            🎨 Carousel Images (${post.carousel_image_urls.length} slides)
+                            <span style="font-size:0.8em; color:#666;">(Click to enlarge)</span>
+                        </div>
+                        <div class="carousel-images-preview" style="display:flex; flex-wrap:wrap; gap:10px; padding:10px; background:#f9f9f9; border-radius:8px;">
+                            ${imagesHtml}
+                        </div>
+                    </div>
+                `;
+            } else if (post.carousel_slides && post.carousel_slides.length > 0) {
+                // Fallback to text content preview
                 const slidesHtml = post.carousel_slides.map((slide, idx) => `
                     <div class="carousel-slide">
                         <div class="slide-number">Slide ${idx + 1}</div>
@@ -1202,7 +1223,8 @@
                 preview = `
                     <div class="media-preview-section">
                         <div class="media-label">
-                            📊 Carousel Preview (${post.carousel_slides.length} slides)
+                            📊 Carousel Text Preview (${post.carousel_slides.length} slides)
+                            <span style="font-size:0.8em; color:#888;">(Images not yet generated)</span>
                         </div>
                         <div class="carousel-preview">
                             ${slidesHtml}
