@@ -781,8 +781,8 @@ class CarouselTemplateGenerator:
 
         # Draw shape centered, between content and bottom line
         icon_center_x = self.SLIDE_WIDTH // 2
-        icon_center_y = self.SLIDE_HEIGHT - 260
-        icon_size = 100  # Increased from 70
+        icon_center_y = self.SLIDE_HEIGHT - 290
+        icon_size = 125  # Increased from 70
 
         self._draw_theme_shape(draw, theme_shape, icon_center_x, icon_center_y, icon_size, accent_color)
 
