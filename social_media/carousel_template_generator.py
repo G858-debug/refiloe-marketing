@@ -687,7 +687,7 @@ class CarouselTemplateGenerator:
 
         # Header banner background - positioned lower
         header_top = 120  # Moved down from 60
-        header_height = 220
+        header_height = 240
         draw.rectangle(
             [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
