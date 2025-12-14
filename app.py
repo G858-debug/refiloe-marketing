@@ -202,6 +202,14 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     Returns:
         List of slides in carousel generator format
     """
+    def clean_text(text: str) -> str:
+        """Remove non-ASCII and special characters from text."""
+        if not text:
+            return ""
+        # Keep only printable ASCII characters
+        cleaned = ''.join(char for char in text if 32 <= ord(char) < 128)
+        return cleaned.strip()
+
     if not raw_slides:
         return []
 
@@ -210,8 +218,8 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
 
     for i, slide in enumerate(raw_slides):
         slide_num = slide.get('slide_number', i + 1)
-        text = slide.get('text', '')
-        description = slide.get('description', '')
+        text = clean_text(slide.get('text', ''))
+        description = clean_text(slide.get('description', ''))
 
         # First slide is COVER
         if i == 0:
