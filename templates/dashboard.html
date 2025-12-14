@@ -1660,28 +1660,54 @@
             }
         }
 
-        // Regenerate media for a post
+        // Regenerate media for a post - resets and immediately generates new media
         async function regenerateMedia(postId) {
             // Get post type for better messaging
             const postCard = event.target.closest('.post-card');
             const postTypeSpan = postCard.querySelector('.post-type');
             const mediaType = postTypeSpan ? postTypeSpan.textContent : 'media';
 
-            if (!confirm(`Regenerate ${mediaType} for this post? The current ${mediaType} will be discarded and you can generate a new one.`)) return;
+            if (!confirm(`Regenerate ${mediaType} for this post? The current ${mediaType} will be discarded and a new one will be generated immediately.`)) return;
 
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, { method: 'POST' });
+                // Step 1: Reset the post (clears old media)
+                const resetResponse = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, { method: 'POST' });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    alert(`✅ Post reset! You can now generate new ${mediaType}.`);
+                if (!resetResponse.ok) {
+                    const error = await resetResponse.json();
+                    alert('Failed to reset post: ' + (error.error || 'Unknown error'));
+                    return;
+                }
+
+                // Step 2: Immediately trigger media generation
+                const generateResponse = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, { method: 'POST' });
+
+                if (generateResponse.ok) {
+                    const data = await generateResponse.json();
+
+                    if (data.video_id) {
+                        // Video generation started
+                        alert('✅ Video regeneration started!\n\n' +
+                              'Your new video is being created by HeyGen (30-60 seconds).\n' +
+                              'It will appear in the approval queue when ready.');
+                    } else if (data.image_url) {
+                        // Image generated immediately
+                        alert('✅ New image generated successfully!');
+                    } else if (data.carousel_images) {
+                        // Carousel generated
+                        alert('✅ New carousel generated successfully!');
+                    } else {
+                        alert('✅ Media regeneration started!');
+                    }
                     location.reload();
                 } else {
-                    const error = await response.json();
-                    alert('Failed to reset post: ' + (error.error || 'Unknown error'));
+                    const error = await generateResponse.json();
+                    alert('Failed to generate new media: ' + (error.error || 'Unknown error'));
+                    location.reload(); // Still reload to show reset state
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
+                location.reload();
             }
         }
 
