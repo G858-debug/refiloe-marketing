@@ -76,7 +76,7 @@ class CarouselTemplateGenerator:
             raise ValueError(f"Failed to load config from {config_path}: {str(e)}")
 
     def _load_font(self, bold: bool = False, size: int = 32) -> ImageFont.FreeTypeFont:
-        """Load Arial font with specified style and size
+        """Load font with specified style and size
 
         Args:
             bold: Whether to use bold font
@@ -85,24 +85,41 @@ class CarouselTemplateGenerator:
         Returns:
             ImageFont.FreeTypeFont: Loaded font
         """
-        # Try common font paths
+        # Try common font paths (including apt-installed fonts on Railway/Ubuntu)
         font_paths = [
+            # DejaVu fonts (commonly available on Linux)
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            # Liberation fonts
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            # Ubuntu fonts
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf" if bold else "/usr/share/fonts/truetype/ubuntu/Ubuntu-Regular.ttf",
+            # FreeFonts
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf" if bold else "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+            # Noto fonts (very common)
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            # Alternative paths
             "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "Arial Bold.ttf" if bold else "Arial.ttf",
+            # macOS
             "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf",
+            # Windows
             "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
         ]
 
         for font_path in font_paths:
             try:
-                return ImageFont.truetype(font_path, size)
+                font = ImageFont.truetype(font_path, size)
+                return font
             except (OSError, IOError):
                 continue
 
-        # Fallback to default font
-        return ImageFont.load_default()
+        # Fallback: Try Pillow's built-in default with size (Pillow 10.1+)
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            # Older Pillow version - load_default doesn't accept size
+            # Use a workaround: create scaled bitmap font simulation
+            log_warning(f"No TrueType fonts available, using default font (text will be small)")
+            return ImageFont.load_default()
 
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple
