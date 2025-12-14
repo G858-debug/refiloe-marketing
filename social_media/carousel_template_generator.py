@@ -598,8 +598,14 @@ class CarouselTemplateGenerator:
         current_y = bullet_start_y
 
         for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets for readability
+            # Clean the bullet text - remove non-ASCII and special characters
+            clean_bullet = ''.join(char for char in bullet if ord(char) < 128 and ord(char) >= 32)
+            clean_bullet = clean_bullet.strip()
+            if not clean_bullet:
+                clean_bullet = "Tip"
+
             # Wrap the bullet text
-            wrapped = self._wrap_text(bullet, large_body_font, max_width)
+            wrapped = self._wrap_text(clean_bullet, large_body_font, max_width)
 
             for i, line in enumerate(wrapped[:2]):  # Max 2 lines per bullet
                 x = self.PADDING + 30
