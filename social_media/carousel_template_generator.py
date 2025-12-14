@@ -582,7 +582,8 @@ class CarouselTemplateGenerator:
         draw = ImageDraw.Draw(image)
 
         # Add decorative circle pattern in slightly darker shade
-        darker_accent = tuple(max(0, c - 20) for c in accent_color)
+        # Darker sage for decorative elements
+        darker_accent = tuple(max(0, c - 30) for c in accent_color)
         center_x = self.SLIDE_WIDTH // 2
         center_y = self.SLIDE_HEIGHT // 2
 
