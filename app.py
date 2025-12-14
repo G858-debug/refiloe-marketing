@@ -3941,7 +3941,7 @@ def api_generate_media(post_id):
                 try:
                     from social_media.carousel_template_generator import CarouselTemplateGenerator
 
-                    config_path = os.path.join(os.path.dirname(__file__), 'social_media', 'config', 'config.yaml')
+                    config_path = os.path.join(os.path.dirname(__file__), 'social_media', 'config.yaml')
                     log_info(f"📁 Config path: {config_path}")
 
                     if not os.path.exists(config_path):
