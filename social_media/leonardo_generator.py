@@ -267,7 +267,6 @@ class LeonardoGenerator:
             payload["controlnets"] = [{
                 "initImageId": self.reference_image_id,
                 "initImageType": "UPLOADED",
-                "preprocessorId": None,
                 "strengthType": "Mid",
             }]
             log_info("Using Refiloe reference image for character consistency")
