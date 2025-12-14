@@ -23,6 +23,7 @@ from config import config
 # Import utilities
 from utils.logger import log_info, log_error, log_warning
 from utils.whatsapp_notifier import get_whatsapp_notifier
+from utils.supabase_storage import upload_carousel_slide
 
 from social_media.approval_routes import approval_bp
 from social_media.analytics_routes import analytics_bp
@@ -3994,18 +3995,45 @@ def api_generate_media(post_id):
                     log_error(f"Generation traceback: {traceback.format_exc()}")
                     raise
 
-                # Step 6: Update post with carousel URLs
+                # Step 6: Upload slides to Supabase Storage
+                carousel_urls = []
+                upload_errors = []
+
+                log_info(f"📤 Uploading {len(slide_paths)} slides to Supabase Storage...")
+
+                for i, path in enumerate(slide_paths):
+                    slide_num = i + 1
+                    success, public_url, error = upload_carousel_slide(path, post_id, slide_num)
+
+                    if success and public_url:
+                        carousel_urls.append(public_url)
+                        log_info(f"   ✅ Slide {slide_num}: {public_url}")
+                    else:
+                        log_error(f"   ❌ Slide {slide_num} upload failed: {error}")
+                        upload_errors.append(f"Slide {slide_num}: {error}")
+
+                if not carousel_urls:
+                    raise ValueError(f"All slide uploads failed: {upload_errors}")
+
+                if upload_errors:
+                    log_warning(f"⚠️  Some slides failed to upload: {upload_errors}")
+
+                log_info(f"📊 Successfully uploaded {len(carousel_urls)} slides")
+
+                # Step 7: Update post with carousel URLs
                 log_info("💾 Updating post with generated slides...")
                 try:
-                    log_info(f"📊 Saving {len(slide_paths)} slide paths to carousel_image_urls")
+                    log_info(f"📊 Saving {len(carousel_urls)} carousel URLs to database")
+                    for i, url in enumerate(carousel_urls):
+                        log_info(f"   Slide {i+1}: {url}")
 
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
-                        'carousel_image_urls': slide_paths,  # Use the correct column name and pass the list directly
+                        'carousel_image_urls': carousel_urls,  # Use the correct column name and pass the list directly
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
-                    log_info(f"✅ Post {post_id} updated with {len(slide_paths)} carousel slides")
+                    log_info(f"✅ Post {post_id} updated with {len(carousel_urls)} carousel slides")
 
                 except Exception as update_error:
                     log_error(f"❌ Failed to update post in database: {update_error}")
@@ -4013,13 +4041,13 @@ def api_generate_media(post_id):
                     log_error(f"Update traceback: {traceback.format_exc()}")
                     raise
 
-                # Step 7: Return success
+                # Step 8: Return success
                 log_info(f"🎉 Carousel generation complete for post {post_id}")
                 return jsonify({
                     'success': True,
-                    'message': f'Carousel generated successfully with {len(slide_paths)} slides',
-                    'slide_count': len(slide_paths),
-                    'slide_paths': slide_paths
+                    'message': f'Carousel generated successfully with {len(carousel_urls)} slides',
+                    'slide_count': len(carousel_urls),
+                    'slide_paths': carousel_urls
                 })
 
             except Exception as e:
