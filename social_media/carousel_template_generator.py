@@ -607,7 +607,29 @@ class CarouselTemplateGenerator:
             # Wrap the bullet text
             wrapped = self._wrap_text(clean_bullet, large_body_font, max_width)
 
-            for i, line in enumerate(wrapped[:2]):  # Max 2 lines per bullet
+            # Get wrapped lines, max 3 lines per bullet
+            max_lines = 3
+            lines_to_draw = wrapped[:max_lines]
+
+            # If we truncated and the last line ends badly, clean it up
+            if len(wrapped) > max_lines or (lines_to_draw and lines_to_draw[-1]):
+                last_line = lines_to_draw[-1] if lines_to_draw else ""
+                # Remove trailing open brackets, incomplete words
+                if last_line.endswith('('):
+                    last_line = last_line[:-1].strip()
+                # If ends with open bracket and content, remove the bracket part
+                if '(' in last_line and ')' not in last_line.split('(')[-1]:
+                    last_line = last_line.rsplit('(', 1)[0].strip()
+                # Remove trailing punctuation that looks incomplete
+                while last_line and last_line[-1] in '(,-:;':
+                    last_line = last_line[:-1].strip()
+                # Add ellipsis if we truncated content
+                if len(wrapped) > max_lines and last_line and not last_line.endswith('...'):
+                    last_line = last_line.rstrip('.') + '...'
+                if lines_to_draw:
+                    lines_to_draw[-1] = last_line
+
+            for i, line in enumerate(lines_to_draw):
                 x = self.PADDING + 30
                 if i == 0:
                     # Draw number instead of bullet for visual variety
