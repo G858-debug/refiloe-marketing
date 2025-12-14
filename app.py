@@ -148,6 +148,47 @@ def verify_supabase_connection():
         }
 
 
+def convert_carousel_format(data: dict, content_type: str = 'educational') -> dict:
+    """Convert carousel data from cover/content_slides/cta format to slides format.
+
+    Args:
+        data: Carousel data with 'cover', 'content_slides', 'cta_slide' keys
+        content_type: Content type for styling
+
+    Returns:
+        Dict with 'slides' key in the format carousel_template_generator expects
+    """
+    slides = []
+
+    # Cover slide
+    cover = data.get('cover', {})
+    slides.append({
+        "type": "COVER",
+        "title": cover.get('title', 'Tips for Personal Trainers'),
+        "avatar_path": ""
+    })
+
+    # Content slides
+    content_slides = data.get('content_slides', [])
+    for i, slide in enumerate(content_slides, 1):
+        slides.append({
+            "type": "CONTENT",
+            "step_title": slide.get('title', f"Step {i}"),
+            "bullets": slide.get('bullets', [])
+        })
+
+    # CTA slide
+    cta = data.get('cta_slide', {})
+    slides.append({
+        "type": "CTA",
+        "headline": cta.get('headline', 'Ready to Save Time?'),
+        "cta_text": cta.get('cta_text', 'Follow for more tips!'),
+        "subtext": cta.get('subtext', 'Save this post for later')
+    })
+
+    return {"slides": slides, "content_type": content_type}
+
+
 def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -> dict:
     """Parse a caption/content text into carousel slide structure.
 
@@ -3839,27 +3880,35 @@ def api_generate_media(post_id):
             try:
                 # Step 1: Get carousel data from metadata or parse from caption
                 caption = post_data.get('content_text', '')
-                carousel_data = metadata.get('carousel_data')
+
+                # Get carousel content from metadata
+                # Note: metadata may use 'carousel_data' OR 'carousel_slides' depending on how it was created
+                carousel_data = metadata.get('carousel_data') or metadata.get('carousel_slides')
                 content_type = metadata.get('content_type', 'educational')
 
                 log_info(f"📝 Caption length: {len(caption)} chars")
-                log_info(f"📝 Caption preview: {caption[:200] if caption else 'No caption'}...")
-                log_info(f"📊 Metadata keys: {list(metadata.keys())}")
                 log_info(f"🎨 Content type: {content_type}")
 
-                if not carousel_data:
-                    log_warning("⚠️  No carousel_data in metadata, attempting to parse from caption")
+                # Check if carousel_slides is a list (raw slides) vs dict with 'slides' key
+                if carousel_data:
+                    if isinstance(carousel_data, list):
+                        # It's a raw list of slides, wrap it
+                        log_info(f"📊 Found carousel_slides as list with {len(carousel_data)} items")
+                        carousel_data = {'slides': carousel_data, 'content_type': content_type}
+                    elif isinstance(carousel_data, dict) and not carousel_data.get('slides'):
+                        # It might have cover, content_slides, cta_slide format - convert it
+                        log_info(f"📊 Found carousel_data dict, converting to slides format")
+                        carousel_data = convert_carousel_format(carousel_data, content_type)
+                    else:
+                        log_info(f"📊 Found carousel_data with {len(carousel_data.get('slides', []))} slides")
 
-                    # Log what we're working with
-                    log_info(f"📝 Full caption for parsing: {caption[:500]}...")
+                if not carousel_data or not carousel_data.get('slides'):
+                    log_warning(f"⚠️  No valid carousel_data in metadata, parsing from caption")
+                    carousel_data = parse_caption_to_carousel(caption, content_type)
+                    log_info(f"✅ Parsed carousel from caption with {len(carousel_data.get('slides', []))} slides")
 
-                    # For now, return error - carousel data should be structured
-                    # TODO: Implement parse_carousel_from_caption function if needed
-                    log_error("❌ Carousel data missing and no parser implemented")
-                    return jsonify({
-                        'success': False,
-                        'error': 'No carousel data found. Carousel posts require structured slide data in metadata.'
-                    }), 400
+                # Ensure content_type is set
+                carousel_data['content_type'] = content_type
 
                 # Step 2: Validate carousel data structure
                 log_info(f"🔍 Validating carousel_data structure...")
