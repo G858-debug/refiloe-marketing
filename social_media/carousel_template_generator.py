@@ -470,8 +470,10 @@ class CarouselTemplateGenerator:
             URL of generated image, or None if generation fails.
         """
         if not LEONARDO_AVAILABLE:
-            log_warning("Leonardo AI not available, using local cover generation")
+            log_warning("Leonardo AI not available for carousel cover, using local fallback")
             return None
+
+        log_info(f"🎨 Generating Leonardo carousel cover for title: '{title[:50]}...' (content_type: {content_type})")
 
         try:
             leonardo = LeonardoGenerator()
@@ -481,9 +483,20 @@ class CarouselTemplateGenerator:
                 width=1080,
                 height=1350,
             )
-            return result.get("image_url")
+
+            image_url = result.get("image_url")
+            if image_url:
+                log_info(f"✅ Leonardo carousel cover generated: {image_url}")
+                return image_url
+            else:
+                log_warning("Leonardo returned no image URL for carousel cover")
+                return None
+
+        except LeonardoGenerationError as e:
+            log_warning(f"Leonardo carousel cover generation failed: {e}, using local fallback")
+            return None
         except Exception as e:
-            log_warning(f"Leonardo cover generation failed: {e}, using local fallback")
+            log_warning(f"Unexpected error generating Leonardo carousel cover: {e}, using local fallback")
             return None
 
     def _create_cover_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
