@@ -546,7 +546,7 @@ class CarouselTemplateGenerator:
         return image
 
     def _create_content_slide(self, data: Dict, slide_number: int, total_slides: int) -> Image.Image:
-        """Create a CONTENT slide with large, readable text
+        """Create a CONTENT slide with large, readable, centered text
 
         Args:
             data: Slide data with 'step_title', 'bullets', and optional 'icon_path'
@@ -563,97 +563,102 @@ class CarouselTemplateGenerator:
         cream_color = self._hex_to_rgb(self.BACKGROUND_CREAM)
         text_color = self._hex_to_rgb(self.TEXT_COLOR)
 
-        # Load LARGE fonts directly (not using cached fonts)
-        large_title_font = self._load_font(bold=True, size=100)
-        large_body_font = self._load_font(bold=False, size=64)
+        # Load LARGE fonts directly
+        large_title_font = self._load_font(bold=True, size=72)  # Slightly smaller for padding
+        large_body_font = self._load_font(bold=False, size=56)
 
         # Thick accent bar at top
         draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 24)], fill=accent_color)
 
-        # Header banner background (cream colored box for step title)
+        # Header banner background (cream colored box for title)
         header_top = 80
-        header_height = 180
+        header_height = 160
         draw.rectangle(
             [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
         )
 
-        # Header title - contextual (e.g., "The Schedule Shuffle" not "Step 2")
+        # Header title - with proper padding
         header_title = data.get('step_title', f'Tip {slide_number - 1}')
 
-        # Truncate if too long and add ellipsis
-        max_header_chars = 35
-        if len(header_title) > max_header_chars:
-            header_title = header_title[:max_header_chars-3].strip() + '...'
+        # Calculate max width with padding (60px padding on each side)
+        header_padding = 60
+        max_header_width = self.SLIDE_WIDTH - (2 * header_padding)
+
+        # Wrap the header if needed
+        wrapped_header = self._wrap_text(header_title, large_title_font, max_header_width)
+
+        # Use first line only, truncate with ellipsis if needed
+        if wrapped_header:
+            header_display = wrapped_header[0]
+            if len(wrapped_header) > 1:
+                # Truncate and add ellipsis
+                header_display = header_display.rstrip() + '...'
+        else:
+            header_display = header_title[:25] + '...'
 
         # Draw header title centered in header banner
-        # Use slightly smaller font if title is long
-        if len(header_title) > 25:
-            header_font = self._load_font(bold=True, size=80)
-            title_y = header_top + (header_height - 80) // 2
-        else:
-            header_font = large_title_font
-            title_y = header_top + (header_height - 100) // 2
-
-        bbox = draw.textbbox((0, 0), header_title, font=header_font)
+        title_y = header_top + (header_height - 72) // 2
+        bbox = draw.textbbox((0, 0), header_display, font=large_title_font)
         text_width = bbox[2] - bbox[0]
         title_x = (self.SLIDE_WIDTH - text_width) // 2
-        draw.text((title_x, title_y), header_title, font=header_font, fill=text_color)
+        draw.text((title_x, title_y), header_display, font=large_title_font, fill=text_color)
 
-        # Bullet points - LARGE and prominent
+        # Bullet points - CENTER ALIGNED, no numbering for single items
         bullets = data.get('bullets', [])
-        bullet_start_y = header_top + header_height + 100
+        content_start_y = header_top + header_height + 100
 
-        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 80
-        line_height = 64 + 50  # Font size + spacing
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
+        line_height = 56 + 45  # Font size + spacing
 
-        current_y = bullet_start_y
+        current_y = content_start_y
 
-        for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets for readability
-            # Clean the bullet text - remove non-ASCII and special characters
+        # Determine if we should use numbers (only if multiple bullets)
+        use_numbers = len(bullets) > 1
+
+        for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets
+            # Clean the bullet text
             clean_bullet = ''.join(char for char in bullet if ord(char) < 128 and ord(char) >= 32)
             clean_bullet = clean_bullet.strip()
             if not clean_bullet:
-                clean_bullet = "Tip"
+                continue
 
             # Wrap the bullet text
             wrapped = self._wrap_text(clean_bullet, large_body_font, max_width)
 
-            # Get wrapped lines, max 3 lines per bullet
+            # Get lines, max 3 per bullet
             max_lines = 3
             lines_to_draw = wrapped[:max_lines]
 
-            # If we truncated and the last line ends badly, clean it up
-            if len(wrapped) > max_lines or (lines_to_draw and lines_to_draw[-1]):
-                last_line = lines_to_draw[-1] if lines_to_draw else ""
-                # Remove trailing open brackets, incomplete words
-                if last_line.endswith('('):
-                    last_line = last_line[:-1].strip()
-                # If ends with open bracket and content, remove the bracket part
+            # Clean up truncation
+            if len(wrapped) > max_lines and lines_to_draw:
+                last_line = lines_to_draw[-1]
                 if '(' in last_line and ')' not in last_line.split('(')[-1]:
                     last_line = last_line.rsplit('(', 1)[0].strip()
-                # Remove trailing punctuation that looks incomplete
                 while last_line and last_line[-1] in '(,-:;':
                     last_line = last_line[:-1].strip()
-                # Add ellipsis if we truncated content
-                if len(wrapped) > max_lines and last_line and not last_line.endswith('...'):
+                if not last_line.endswith('...'):
                     last_line = last_line.rstrip('.') + '...'
-                if lines_to_draw:
-                    lines_to_draw[-1] = last_line
+                lines_to_draw[-1] = last_line
 
             for i, line in enumerate(lines_to_draw):
-                x = self.PADDING + 30
-                if i == 0:
-                    # Draw number instead of bullet for visual variety
-                    number_text = f"{idx + 1}."
-                    draw.text((x, current_y), number_text, font=large_body_font, fill=accent_color)
-                    draw.text((x + 60, current_y), line, font=large_body_font, fill=text_color)
+                # CENTER ALIGN all text
+                if use_numbers and i == 0:
+                    # Add number prefix for multiple bullets
+                    display_line = f"{idx + 1}. {line}"
                 else:
-                    # Continuation lines are indented
-                    draw.text((x + 60, current_y), line, font=large_body_font, fill=text_color)
+                    display_line = line
+
+                # Calculate center position
+                bbox = draw.textbbox((0, 0), display_line, font=large_body_font)
+                text_width = bbox[2] - bbox[0]
+                x = (self.SLIDE_WIDTH - text_width) // 2
+
+                # Draw text centered
+                draw.text((x, current_y), display_line, font=large_body_font, fill=text_color)
                 current_y += line_height
 
-            current_y += 30  # Extra spacing between bullets
+            current_y += 20  # Extra spacing between bullets
 
         # Decorative accent line near bottom
         bottom_y = self.SLIDE_HEIGHT - 140
