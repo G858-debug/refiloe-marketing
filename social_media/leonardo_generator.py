@@ -275,13 +275,14 @@ class LeonardoGenerator:
             "public": False,
         }
 
-        # Add Refiloe 2.0 user-trained LoRA for character consistency
+        # Add Refiloe 2.0 user-trained Element for character consistency
+        # Per Leonardo AI docs: userElements with userLoraId for user-trained LoRAs
         if use_reference and self.refiloe_lora_id and self._content_type_features_refiloe(content_type):
-            payload["loras"] = [{
-                "loraId": self.refiloe_lora_id,
+            payload["userElements"] = [{
+                "userLoraId": self.refiloe_lora_id,
                 "weight": self.lora_weight,
             }]
-            log_info(f"Using Refiloe 2.0 LoRA (ID: {self.refiloe_lora_id}) with weight {self.lora_weight}")
+            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight}")
 
         # Create generation
         try:
