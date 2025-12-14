@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 import pytz
 
 from utils.logger import log_info, log_warning
+from utils.text_helpers import filter_banned_words
 
 try:  # pragma: no cover - allow absolute or package-relative import
     from content_generator import ContentGenerator as _LegacyContentGenerator  # type: ignore
@@ -582,7 +583,7 @@ Generate the carousel content now:"""
 
         # Validate cover slide
         cover = data.get("cover", {})
-        cover_title = str(cover.get("title", ""))[:60]
+        cover_title = filter_banned_words(str(cover.get("title", "")))[:60]
         validated["cover"] = {"title": cover_title}
 
         # Validate content slides
@@ -591,13 +592,13 @@ Generate the carousel content now:"""
 
         for i, slide in enumerate(content_slides[:num_content_slides]):
             step_number = slide.get("step_number", i + 1)
-            title = str(slide.get("title", f"Step {step_number}"))[:40]
+            title = filter_banned_words(str(slide.get("title", f"Step {step_number}")))[:40]
 
             # Validate bullets (3-5 per slide, 80 chars each)
             raw_bullets = slide.get("bullets", [])
             bullets = []
             for bullet in raw_bullets[:5]:
-                truncated_bullet = str(bullet)[:80]
+                truncated_bullet = filter_banned_words(str(bullet))[:80]
                 bullets.append(truncated_bullet)
 
             # Ensure minimum 3 bullets
@@ -627,16 +628,16 @@ Generate the carousel content now:"""
         # Validate CTA slide
         cta = data.get("cta_slide", {})
         validated["cta_slide"] = {
-            "headline": str(cta.get("headline", "Ready to Get Started?"))[:50],
-            "cta_text": str(cta.get("cta_text", "Try It Free"))[:30],
-            "subtext": str(cta.get("subtext", "Join trainers automating their admin"))[:60],
+            "headline": filter_banned_words(str(cta.get("headline", "Ready to Get Started?")))[:50],
+            "cta_text": filter_banned_words(str(cta.get("cta_text", "Try It Free")))[:30],
+            "subtext": filter_banned_words(str(cta.get("subtext", "Join trainers automating their admin")))[:60],
         }
 
         # Validate caption
         caption = str(data.get("caption", ""))
         if not caption:
             caption = f"Learn how to master {validated['cover']['title'].lower()}. Swipe through for actionable tips!"
-        validated["caption"] = caption
+        validated["caption"] = filter_banned_words(caption)
 
         # Validate hashtags
         hashtags = data.get("hashtags", [])
