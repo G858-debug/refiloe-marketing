@@ -194,7 +194,7 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     """Transform raw slide data from metadata into carousel generator format.
 
     Raw slides have: slide_number, text, description
-    Carousel generator expects: type (COVER/CONTENT/CTA), title/step_title/headline, bullets, etc.
+    Creates: COVER (1) + CONTENT slides (all items) + CTA (1)
 
     Args:
         raw_slides: List of slides with slide_number, text, description
@@ -202,73 +202,77 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     Returns:
         List of slides in carousel generator format
     """
+    import random
+
     def clean_text(text: str) -> str:
         """Remove non-ASCII and special characters from text."""
         if not text:
             return ""
-        # Keep only printable ASCII characters
         cleaned = ''.join(char for char in text if 32 <= ord(char) < 128)
         return cleaned.strip()
 
     if not raw_slides:
         return []
 
-    transformed = []
-    total_slides = len(raw_slides)
+    # CTA messages to rotate through
+    cta_messages = [
+        {"headline": "Ready to scale?", "cta_text": "Hit follow 📈", "subtext": "Tips to grow your PT business"},
+        {"headline": "Stop the admin chaos", "cta_text": "Follow now!", "subtext": "Reclaim your time"},
+        {"headline": "Want 2x growth?", "cta_text": "Follow for the blueprint", "subtext": "Without 2x the hours"},
+        {"headline": "Time is money", "cta_text": "Follow to gain both 💰", "subtext": "Smart strategies for PTs"},
+        {"headline": "Build your dream business", "cta_text": "Follow me!", "subtext": "Transform exhausting to effortless"},
+        {"headline": "One step closer", "cta_text": "Follow for more!", "subtext": "To the business you actually want"},
+    ]
 
+    transformed = []
+
+    # Extract an overall title from the first slide for the COVER
+    first_text = clean_text(raw_slides[0].get('text', ''))
+    cover_title = first_text[:60] if first_text else 'Tips for Personal Trainers'
+
+    # Slide 1: COVER
+    transformed.append({
+        'type': 'COVER',
+        'title': cover_title,
+        'avatar_path': ''
+    })
+
+    # All raw slides become CONTENT slides (use text as header, description as bullet)
     for i, slide in enumerate(raw_slides):
-        slide_num = slide.get('slide_number', i + 1)
         text = clean_text(slide.get('text', ''))
         description = clean_text(slide.get('description', ''))
 
-        # First slide is COVER
-        if i == 0:
-            transformed.append({
-                'type': 'COVER',
-                'title': text[:60] if text else 'Tips for Personal Trainers',
-                'avatar_path': ''
-            })
-        # Last slide is CTA
-        elif i == total_slides - 1:
-            transformed.append({
-                'type': 'CTA',
-                'headline': text[:50] if text else 'Ready to Save Time?',
-                'cta_text': 'Follow for more tips!',
-                'subtext': description[:60] if description else 'Save this post for later'
-            })
-        # Middle slides are CONTENT
-        else:
-            # Parse text into step title and bullets
-            step_title = f"Step {slide_num}" if slide_num else f"Step {i}"
+        # Use the text as the contextual header
+        header = text if text else f"Tip {i + 1}"
 
-            # Use text as the main bullet, description as additional context
-            bullets = []
-            if text:
-                # Split text into multiple bullets if it contains line breaks or is long
-                if '\n' in text:
-                    bullets = [line.strip() for line in text.split('\n') if line.strip()][:3]
-                elif len(text) > 100:
-                    # Long text - use as single bullet, truncated
-                    bullets = [text[:80]]
-                else:
-                    bullets = [text]
+        # Build bullets from description
+        bullets = []
+        if description:
+            # Split description into sentences or use as single bullet
+            if '. ' in description:
+                sentences = [s.strip() for s in description.split('. ') if s.strip()]
+                bullets = sentences[:3]
+            else:
+                bullets = [description]
 
-            # Add description as additional bullet if available
-            if description and len(bullets) < 3:
-                if len(description) > 80:
-                    bullets.append(description[:80])
-                else:
-                    bullets.append(description)
+        # If no description, create a placeholder
+        if not bullets:
+            bullets = [text] if text else ["More details coming soon"]
 
-            # Ensure at least one bullet
-            if not bullets:
-                bullets = ['Tip coming soon']
+        transformed.append({
+            'type': 'CONTENT',
+            'step_title': header,  # Contextual header instead of "Step N"
+            'bullets': bullets
+        })
 
-            transformed.append({
-                'type': 'CONTENT',
-                'step_title': step_title,
-                'bullets': bullets[:3]  # Max 3 bullets per slide
-            })
+    # Final slide: CTA (random selection from messages)
+    cta = random.choice(cta_messages)
+    transformed.append({
+        'type': 'CTA',
+        'headline': cta['headline'],
+        'cta_text': cta['cta_text'],
+        'subtext': cta['subtext']
+    })
 
     return transformed
 
