@@ -564,49 +564,47 @@ class CarouselTemplateGenerator:
         text_color = self._hex_to_rgb(self.TEXT_COLOR)
 
         # Load LARGE fonts directly
-        large_title_font = self._load_font(bold=True, size=72)  # Slightly smaller for padding
+        header_font = self._load_font(bold=True, size=80)  # Larger, bold header
         large_body_font = self._load_font(bold=False, size=56)
 
         # Thick accent bar at top
         draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 24)], fill=accent_color)
 
-        # Header banner background (cream colored box for title)
-        header_top = 80
-        header_height = 160
+        # Header banner background - taller to fit 2 lines
+        header_top = 60
+        header_height = 220  # Increased from 160
         draw.rectangle(
             [(0, header_top), (self.SLIDE_WIDTH, header_top + header_height)],
             fill=cream_color
         )
 
-        # Header title - with proper padding
+        # Header title - with proper padding, support 2 lines
         header_title = data.get('step_title', f'Tip {slide_number - 1}')
 
-        # Calculate max width with padding (60px padding on each side)
-        header_padding = 60
+        # Calculate max width with padding
+        header_padding = 80
         max_header_width = self.SLIDE_WIDTH - (2 * header_padding)
 
-        # Wrap the header if needed
-        wrapped_header = self._wrap_text(header_title, large_title_font, max_header_width)
+        # Wrap the header - allow up to 2 lines
+        wrapped_header = self._wrap_text(header_title, header_font, max_header_width)[:2]
 
-        # Use first line only, truncate with ellipsis if needed
-        if wrapped_header:
-            header_display = wrapped_header[0]
-            if len(wrapped_header) > 1:
-                # Truncate and add ellipsis
-                header_display = header_display.rstrip() + '...'
-        else:
-            header_display = header_title[:25] + '...'
+        # Calculate total text height for vertical centering
+        line_height = 90  # Font size + spacing
+        total_text_height = len(wrapped_header) * line_height
+        start_y = header_top + (header_height - total_text_height) // 2
 
-        # Draw header title centered in header banner
-        title_y = header_top + (header_height - 72) // 2
-        bbox = draw.textbbox((0, 0), header_display, font=large_title_font)
-        text_width = bbox[2] - bbox[0]
-        title_x = (self.SLIDE_WIDTH - text_width) // 2
-        draw.text((title_x, title_y), header_display, font=large_title_font, fill=text_color)
+        # Draw each line centered
+        current_y = start_y
+        for line in wrapped_header:
+            bbox = draw.textbbox((0, 0), line, font=header_font)
+            text_width = bbox[2] - bbox[0]
+            title_x = (self.SLIDE_WIDTH - text_width) // 2
+            draw.text((title_x, current_y), line, font=header_font, fill=text_color)
+            current_y += line_height
 
         # Bullet points - CENTER ALIGNED, no numbering for single items
         bullets = data.get('bullets', [])
-        content_start_y = header_top + header_height + 100
+        content_start_y = header_top + header_height + 80  # Adjusted for taller header
 
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
         line_height = 56 + 45  # Font size + spacing
