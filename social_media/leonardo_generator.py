@@ -257,7 +257,6 @@ class LeonardoGenerator:
             "width": valid_width,
             "height": valid_height,
             "num_images": num_images,
-            "promptMagic": True,  # Enhance prompt automatically
             "public": False,
         }
 
