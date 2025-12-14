@@ -19,9 +19,11 @@ except ImportError:
 class CarouselTemplateGenerator:
     """Generates branded Facebook carousel templates for Refiloe"""
 
-    # Brand colors
-    BACKGROUND_COLOR = "#F5E6D3"  # Beige
-    TEXT_COLOR = "#8B7355"  # Dark brown
+    # Brand colors - modern warm palette
+    BACKGROUND_COLOR = "#FBF7F4"  # Warm off-white
+    TEXT_COLOR = "#2D2D2D"  # Near black for readability
+    ACCENT_COLOR = "#E07A5F"  # Coral accent (matches Refiloe's brand)
+    SECONDARY_COLOR = "#81B29A"  # Sage green accent
 
     # Slide dimensions (4:5 portrait ratio for mobile optimization)
     SLIDE_WIDTH = 1080
@@ -208,6 +210,7 @@ class CarouselTemplateGenerator:
         """
         draw = ImageDraw.Draw(image)
         text_color = self._hex_to_rgb(self.TEXT_COLOR)
+        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
 
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40  # Extra indent for bullet
         bullet_char = "\u2022"  # Unicode bullet character
@@ -222,8 +225,8 @@ class CarouselTemplateGenerator:
             for i, line in enumerate(wrapped):
                 x = self.PADDING
                 if i == 0:
-                    # First line gets bullet point
-                    draw.text((x, current_y), bullet_char, font=self._body_font, fill=text_color)
+                    # First line gets colored bullet point
+                    draw.text((x, current_y), bullet_char, font=self._body_font, fill=accent_color)
                     draw.text((x + 30, current_y), line, font=self._body_font, fill=text_color)
                 else:
                     # Continuation lines are indented
@@ -326,16 +329,36 @@ class CarouselTemplateGenerator:
         """
         draw = ImageDraw.Draw(image)
         text_color = self._hex_to_rgb(self.TEXT_COLOR)
-
-        max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
-        wrapped = self._wrap_text(step_title, self._title_font, max_width)[:1]
+        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
 
         y = self.PADDING + 40
-        for line in wrapped:
-            bbox = draw.textbbox((0, 0), line, font=self._title_font)
+
+        # Check if title has step format (e.g., "Step 1: Setup")
+        if step_title.startswith('Step '):
+            parts = step_title.split(':', 1)
+            step_num = parts[0]  # "Step 1"
+            step_rest = parts[1].strip() if len(parts) > 1 else ""
+
+            # Calculate widths for centering
+            full_text = step_title
+            full_bbox = draw.textbbox((0, 0), full_text, font=self._title_font)
+            full_width = full_bbox[2] - full_bbox[0]
+            start_x = (self.SLIDE_WIDTH - full_width) // 2
+
+            # Draw step number in accent color
+            draw.text((start_x, y), step_num + ":", font=self._title_font, fill=accent_color)
+
+            # Draw rest of title in normal color if present
+            if step_rest:
+                step_num_bbox = draw.textbbox((0, 0), step_num + ": ", font=self._title_font)
+                step_num_width = step_num_bbox[2] - step_num_bbox[0]
+                draw.text((start_x + step_num_width, y), step_rest, font=self._title_font, fill=text_color)
+        else:
+            # No step format, just center the title
+            bbox = draw.textbbox((0, 0), step_title, font=self._title_font)
             text_width = bbox[2] - bbox[0]
             x = (self.SLIDE_WIDTH - text_width) // 2
-            draw.text((x, y), line, font=self._title_font, fill=text_color)
+            draw.text((x, y), step_title, font=self._title_font, fill=text_color)
 
         return image
 
@@ -473,6 +496,11 @@ class CarouselTemplateGenerator:
             PIL.Image: Generated content slide
         """
         image = self._create_base_template()
+        draw = ImageDraw.Draw(image)
+
+        # Add accent bar at top
+        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
+        draw.rectangle([(0, 0), (self.SLIDE_WIDTH, 8)], fill=accent_color)
 
         # Add step header at top
         step_title = data.get('step_title', f'Step {slide_number - 1}')
