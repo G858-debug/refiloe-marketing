@@ -20,11 +20,12 @@ class CarouselTemplateGenerator:
     """Generates branded Facebook carousel templates for Refiloe"""
 
     # Official Refiloe Brand Colors
-    BACKGROUND_COLOR = "#FFF8E8"  # Cream - primary background
-    BACKGROUND_SECONDARY = "#F7EED3"  # Warm Beige - secondary background
-    ACCENT_COLOR = "#AAB396"  # Sage Green - accent color
-    TEXT_COLOR = "#674636"  # Dark Brown - primary text
-    TEXT_LIGHT = "#FFFFFF"  # White - for dark backgrounds
+    BACKGROUND_COLOR = "#FFFFFF"  # White - primary background (clean, modern)
+    BACKGROUND_CREAM = "#FFF8E8"  # Cream - alternative warm background
+    BACKGROUND_BEIGE = "#F7EED3"  # Warm Beige - accent background
+    ACCENT_COLOR = "#AAB396"  # Sage Green - primary accent
+    TEXT_COLOR = "#674636"  # Dark Brown - primary text (warmer than black)
+    TEXT_WHITE = "#FFFFFF"  # White - for dark/colored backgrounds
 
     # Slide dimensions (4:5 portrait ratio for mobile optimization)
     SLIDE_WIDTH = 1080
