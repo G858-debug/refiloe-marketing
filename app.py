@@ -3997,12 +3997,11 @@ def api_generate_media(post_id):
                 # Step 6: Update post with carousel URLs
                 log_info("💾 Updating post with generated slides...")
                 try:
-                    media_urls_csv = ','.join(slide_paths)
-                    log_info(f"📊 media_urls_csv length: {len(media_urls_csv)} chars")
+                    log_info(f"📊 Saving {len(slide_paths)} slide paths to carousel_image_urls")
 
                     supabase_client.table('social_posts').update({
                         'status': 'pending_media_approval',
-                        'media_urls': media_urls_csv,
+                        'carousel_image_urls': slide_paths,  # Use the correct column name and pass the list directly
                         'updated_at': datetime.now(SA_TZ).isoformat()
                     }).eq('id', post_id).execute()
 
