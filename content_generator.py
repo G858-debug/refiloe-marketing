@@ -452,6 +452,8 @@ CONTENT GENERATION PROCESS:
 3. Select the variation with the highest combined score
 4. Ensure the chosen content includes viral elements (numbers, emotions, controversy)
 
+IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
+
 OUTPUT FORMAT:
 Please provide your response in the following JSON format:
 {{
@@ -1306,6 +1308,8 @@ CALL-TO-ACTION OPTIONS:
 - "Save this for your next client"
 - "Which tip will you try first?"
 - "Follow for more trainer hacks"
+
+IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
 
 OUTPUT FORMAT:
 Please provide your response in the following JSON format:

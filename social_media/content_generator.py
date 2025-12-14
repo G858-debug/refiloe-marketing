@@ -507,6 +507,8 @@ IMPORTANT:
 - Use numbers and specific examples where possible
 - Hashtags should be relevant to fitness business and admin automation
 
+IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
+
 Generate the carousel content now:"""
 
         return prompt
