@@ -31,7 +31,7 @@ DEFAULT_MODEL_ID = FLUX_DEV_MODEL_ID
 
 # Refiloe 2.0 LoRA configuration
 DEFAULT_REFILOE_LORA_ID = 169703  # User-trained Refiloe 2.0 character
-DEFAULT_LORA_WEIGHT = 0.80  # Recommended strength
+DEFAULT_LORA_WEIGHT = 0.90  # Recommended strength
 
 # Default generation settings
 # Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
