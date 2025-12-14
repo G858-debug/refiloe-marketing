@@ -684,8 +684,12 @@ class CarouselTemplateGenerator:
         start_y = (self.SLIDE_HEIGHT - total_text_height) // 2
 
         # Draw headline (centered)
-        max_width = self.SLIDE_WIDTH - (2 * self.PADDING)
-        wrapped = self._wrap_text(headline, headline_font, max_width)[:2]
+        # Clean the headline
+        clean_headline = ''.join(char for char in headline if ord(char) < 128 and ord(char) >= 32)
+        clean_headline = clean_headline.strip()[:50]  # Truncate to 50 chars max
+
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
+        wrapped = self._wrap_text(clean_headline, headline_font, max_width)[:2]
         current_y = start_y
         for line in wrapped:
             bbox = draw.textbbox((0, 0), line, font=headline_font)
@@ -703,11 +707,20 @@ class CarouselTemplateGenerator:
         draw.text((x, current_y), cta_text, font=cta_font, fill=text_color)
         current_y += 72 + 50  # Font height + gap
 
-        # Draw subtext (centered)
-        bbox = draw.textbbox((0, 0), subtext, font=subtext_font)
-        text_width = bbox[2] - bbox[0]
-        x = (self.SLIDE_WIDTH - text_width) // 2
-        draw.text((x, current_y), subtext, font=subtext_font, fill=text_color)
+        # Draw subtext (centered, with wrapping)
+        # Clean the subtext
+        clean_subtext = ''.join(char for char in subtext if ord(char) < 128 and ord(char) >= 32)
+        clean_subtext = clean_subtext.strip()[:60]  # Truncate to 60 chars max
+
+        max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
+        wrapped_subtext = self._wrap_text(clean_subtext, subtext_font, max_width)
+
+        for line in wrapped_subtext[:2]:  # Max 2 lines
+            bbox = draw.textbbox((0, 0), line, font=subtext_font)
+            text_width = bbox[2] - bbox[0]
+            x = (self.SLIDE_WIDTH - text_width) // 2
+            draw.text((x, current_y), line, font=subtext_font, fill=text_color)
+            current_y += 60
 
         # Add slide number (white on sage)
         slide_text = f"{slide_number}/{total_slides}"
