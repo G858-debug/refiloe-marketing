@@ -288,7 +288,9 @@ class LeonardoGenerator:
                 "userLoraId": self.refiloe_lora_id,
                 "weight": self.lora_weight,
             }]
-            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight}")
+            # Flux Dev Elements require explicit sdVersion
+            payload["sdVersion"] = "FLUX_DEV"
+            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight} on FLUX_DEV")
 
         # Create generation
         try:
