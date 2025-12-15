@@ -9,9 +9,9 @@ posting_schedule:
     times: ["08:00", "12:00", "16:00", "20:00"]
     timezone: "SAST"
     content_mix:
-      video: 50%
-      carousel: 30%
-      single_image: 20%
+      video: 60%
+      static_image: 25%
+      carousel: 15%
 
   week_2_to_4:
     enabled: true
