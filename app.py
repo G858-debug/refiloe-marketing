@@ -4742,6 +4742,123 @@ def api_generate_launch_content():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
+def api_generate_weekly_content():
+    """Generate 7 posts for the upcoming week (1 post per day) for global audience."""
+    log_info("📥 Request: /api/dashboard/generate-weekly-content")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.content_generator import ContentGenerator
+        from database import SocialMediaDatabase
+        import os
+        import json
+        from datetime import datetime, timedelta
+        import pytz
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Step 1: Clear existing pending posts
+        log_info("🗑️ Clearing existing pending posts...")
+        from social_media.launch_content import clear_all_test_posts
+        deleted_count = clear_all_test_posts(supabase_client)
+        log_info(f"✅ Deleted {deleted_count} existing posts")
+
+        # Step 2: Generate 7 posts for the next 7 days
+        log_info("📅 Generating weekly content (7 posts) for global audience...")
+
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        generator = ContentGenerator(config_path, supabase_client)
+        db = SocialMediaDatabase(supabase_client)
+
+        # Content themes to rotate through the week (universal themes)
+        weekly_themes = [
+            {"theme": "motivation", "post_type": "video", "description": "Monday Motivation"},
+            {"theme": "admin_hacks", "post_type": "video", "description": "Tips Tuesday"},
+            {"theme": "client_management", "post_type": "carousel", "description": "Wisdom Wednesday"},
+            {"theme": "relatable_trainer_life", "post_type": "video", "description": "Throwback Thursday"},
+            {"theme": "relatable_trainer_life", "post_type": "image", "description": "Fun Friday"},
+            {"theme": "growth_mindset", "post_type": "video", "description": "Saturday Strategy"},
+            {"theme": "community_engagement", "post_type": "image", "description": "Sunday Engagement"},
+        ]
+
+        # Global hashtags to use
+        global_hashtags = [
+            "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
+            "#PTLife", "#FitnessBusiness", "#TrainerTips",
+            "#FitnessIndustry", "#OnlineTrainer"
+        ]
+
+        # Start tomorrow at 14:00 SAST (optimal global time)
+        tomorrow = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        created_ids = []
+
+        for day_offset, theme_config in enumerate(weekly_themes):
+            scheduled_time = tomorrow + timedelta(days=day_offset)
+
+            try:
+                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']}")
+
+                # Generate content based on post type
+                if theme_config['post_type'] == 'video':
+                    content = generator.generate_video_script(
+                        theme=theme_config['theme'],
+                        duration=45,
+                        style='educational'
+                    )
+                    content_text = content.get('caption', content.get('script', ''))
+                    video_script = content.get('script', '')
+                else:
+                    content = generator.generate_single_post(
+                        theme=theme_config['theme'],
+                        post_format='single_image_with_caption'
+                    )
+                    content_text = content.get('caption', '')
+                    video_script = None
+
+                metadata = {
+                    "day": day_offset + 1,
+                    "theme_description": theme_config['description'],
+                    "video_script": video_script,
+                    "weekly_content": True,
+                    "target_audience": "global"
+                }
+
+                post_id = db.save_post(
+                    platform="facebook",
+                    content=content_text,
+                    post_type=theme_config['post_type'],
+                    scheduled_time=scheduled_time.isoformat(),
+                    content_theme=theme_config['theme'],
+                    hashtags=global_hashtags,
+                    generation_prompt=json.dumps(metadata)
+                )
+
+                if post_id:
+                    created_ids.append(post_id)
+                    log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
+
+            except Exception as e:
+                log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
+                continue
+
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'created_count': len(created_ids),
+            'post_ids': created_ids,
+            'message': f'✅ Created {len(created_ids)} posts for the next 7 days (global audience, 14:00 SAST daily)'
+        })
+
+    except Exception as e:
+        log_error(f"❌ Generate weekly content failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
