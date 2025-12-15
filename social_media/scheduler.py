@@ -121,12 +121,42 @@ class SocialMediaScheduler:
             log_info(f"📊 Found {len(posts)} posts with video_id in 'generating' status")
             log_info(f"📊 Found {len(posts_without_video_id)} posts stuck in 'generating' without video_id")
 
-            # Reset stuck posts without video_id back to approved
-            if posts_without_video_id:
-                log_warning(f"⚠️  Resetting {len(posts_without_video_id)} stuck posts to 'approved' status")
+            # Filter posts that have been stuck for MORE than 5 minutes
+            # This prevents race conditions where we reset posts while video generation is still in progress
+            stuck_threshold = datetime.now(SA_TIMEZONE) - timedelta(minutes=5)
+            truly_stuck_posts = []
 
-                for stuck_post in posts_without_video_id:
+            for post in posts_without_video_id:
+                created_at_str = post.get('created_at')
+                if created_at_str:
+                    try:
+                        # Parse the created_at timestamp (assumes ISO format with timezone)
+                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        # Convert to SA timezone for comparison
+                        if created_at.tzinfo is None:
+                            created_at = created_at.replace(tzinfo=timezone.utc)
+                        created_at_sa = created_at.astimezone(SA_TIMEZONE)
+
+                        # Check if post has been stuck for more than 5 minutes
+                        if created_at_sa < stuck_threshold:
+                            time_stuck = datetime.now(SA_TIMEZONE) - created_at_sa
+                            minutes_stuck = int(time_stuck.total_seconds() / 60)
+                            post['_minutes_stuck'] = minutes_stuck
+                            truly_stuck_posts.append(post)
+                    except Exception as e:
+                        log_warning(f"⚠️  Could not parse created_at for post {post.get('id')}: {e}")
+                        # Include post if we can't parse timestamp (defensive fallback)
+                        truly_stuck_posts.append(post)
+
+            log_info(f"📊 Found {len(truly_stuck_posts)} posts stuck for >5 minutes (filtered from {len(posts_without_video_id)} total)")
+
+            # Reset stuck posts without video_id back to approved
+            if truly_stuck_posts:
+                log_warning(f"⚠️  Resetting {len(truly_stuck_posts)} stuck posts to 'approved' status")
+
+                for stuck_post in truly_stuck_posts:
                     post_id = stuck_post.get('id')
+                    minutes_stuck = stuck_post.get('_minutes_stuck', 'unknown')
                     try:
                         self.supabase_client.table('social_posts').update({
                             'status': 'approved',
@@ -134,7 +164,7 @@ class SocialMediaScheduler:
                             'updated_at': datetime.now(timezone.utc).isoformat()
                         }).eq('id', post_id).execute()
 
-                        log_info(f"✅ Reset stuck post {post_id} to approved status")
+                        log_info(f"✅ Reset stuck post {post_id} to approved status (stuck for {minutes_stuck} minutes)")
                     except Exception as e:
                         log_error(f"❌ Failed to reset post {post_id}: {e}")
 
@@ -142,7 +172,7 @@ class SocialMediaScheduler:
             if not posts:
                 log_info("✅ No videos with video_id to check")
                 log_info("=" * 60)
-                log_info(f"✅ Fetch job complete: 0 videos retrieved, {len(posts_without_video_id)} stuck posts reset")
+                log_info(f"✅ Fetch job complete: 0 videos retrieved, {len(truly_stuck_posts)} stuck posts reset")
                 log_info("=" * 60)
                 return
 
