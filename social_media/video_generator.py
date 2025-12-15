@@ -106,6 +106,7 @@ class VideoGenerator:
         metadata: Optional[Dict[str, Any]] = None,
         content_text: Optional[str] = None,
         content_type: Optional[str] = None,
+        wait_for_completion: bool = True,
     ) -> Dict[str, Any]:
         """Generate a talking avatar video using HeyGen with dynamic avatar selection.
 
@@ -118,9 +119,11 @@ class VideoGenerator:
             metadata: Optional metadata to persist with the video record.
             content_text: Optional free-form content text used to influence avatar selection.
             content_type: Optional content category used by avatar mapping logic.
+            wait_for_completion: If True (default), poll until video completes. If False, return immediately after submission.
 
         Returns:
-            Dict with video metadata including video_url on success.
+            Dict with video metadata. When wait_for_completion=True, includes video_url on success.
+            When wait_for_completion=False, returns with status='processing' and video_url=None.
         """
 
         log_info("Starting HeyGen avatar video generation")
@@ -242,6 +245,19 @@ class VideoGenerator:
                     "HeyGen video request accepted (video_id=%s, avatar=%s)"
                     % (video_id, current_avatar_id)
                 )
+
+                # If wait_for_completion=False, return immediately with video_id
+                if not wait_for_completion:
+                    log_info(
+                        "Returning immediately with video_id (wait_for_completion=False)"
+                    )
+                    return {
+                        "video_id": video_id,
+                        "status": "processing",
+                        "video_url": None,
+                        "thumbnail_url": None,
+                        "duration": None,
+                    }
 
                 video_data = self._poll_video_status(video_id)
 
