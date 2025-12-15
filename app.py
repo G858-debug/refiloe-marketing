@@ -4683,14 +4683,27 @@ def api_generate_launch_content():
 
         # Generate introduction video script directly
         log_info("📝 Generating introduction video script...")
-        content = generator.generate_video_script(
+        content = generator.create_video_script(
             theme='introduction',
             duration=60,
             style='introduction'
         )
 
-        video_script = content.get('script', '')
-        content_text = content.get('caption', video_script)
+        # Extract video script from the response
+        # The script is returned as a list of segments with 'text' fields
+        script_segments = content.get('script', [])
+        if isinstance(script_segments, list):
+            video_script = "\n\n".join([
+                segment.get('text', '')
+                for segment in script_segments
+                if isinstance(segment, dict) and segment.get('text', '').strip()
+            ])
+        else:
+            video_script = str(script_segments) if script_segments else ''
+
+        # Use hook as caption intro if available
+        hook = content.get('hook', '')
+        content_text = f"{hook}\n\n{video_script[:200]}..." if hook else video_script[:300]
 
         if not video_script:
             log_error("❌ Failed to generate video script")
