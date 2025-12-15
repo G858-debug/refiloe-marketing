@@ -84,14 +84,14 @@ PHOTO_AVATAR_REGISTRY = {
     "educational": "55bdbaaa7ded40458bfc0e498ff24ae6",
     "community": "6a7f86c8c60544d497ae63695af00425",
     "relatable": "b6bb73219ff54f5eb2934b3047bf028f",
-    "casual": "a33ab8bbeff5499a96ae613e5497247c",
+    "casual": "eb23e1d4a0f44fbd81c358ef2f69dfa6",
     "announcement": "e4fc74c588ba45ec9eb49020bd95417d",
     "outdoor": "79938b6165b649b9b724d1af99a3b4b5",
     "studio": "4a5842d1f4de4d0ab4d0cb832b71a1d3",
-    "lifestyle": "4c621fd3eae84def9dfcc5f25bd83c93",
+    "lifestyle": "9c515838973e45b192f9ee90d386f68f",
 }
 
-DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
+DEFAULT_PHOTO_AVATAR_ID = "eb23e1d4a0f44fbd81c358ef2f69dfa6"  # casual as default
 
 
 CONTENT_KEYWORDS = {
