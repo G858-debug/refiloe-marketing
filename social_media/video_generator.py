@@ -70,6 +70,8 @@ class VideoGenerator:
 
         self.default_avatar_id = DEFAULT_PHOTO_AVATAR_ID
         self.monthly_limit = int(os.getenv("HEYGEN_MONTHLY_LIMIT", "120"))
+        # Avatar IV: 90 credits per month, 1 credit = 60 seconds
+        self.avatar_iv_monthly_limit = int(os.getenv("AVATAR_IV_MONTHLY_LIMIT_CREDITS", "90"))
 
         self.sa_tz = pytz.timezone("Africa/Johannesburg")
         self.max_retries = 5
@@ -392,6 +394,7 @@ class VideoGenerator:
         aspect_ratio: str = "9:16",
         title: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        wait_for_completion: bool = False,
     ) -> Dict[str, Any]:
         """Generate video using Avatar IV API with automatic gestures.
 
@@ -408,6 +411,7 @@ class VideoGenerator:
             aspect_ratio: Video aspect ratio ("16:9", "9:16", "1:1")
             title: Optional video title
             metadata: Optional metadata dict
+            wait_for_completion: If True, poll until video completes and record actual duration
 
         Returns:
             Dict containing video_id and status
@@ -415,6 +419,7 @@ class VideoGenerator:
         Raises:
             ValueError: If neither image_url nor image_key provided
             VideoGenerationError: If video generation fails
+            UsageLimitExceeded: If Avatar IV monthly credits are exhausted
         """
         if not image_url and not image_key:
             raise ValueError("Either image_url or image_key must be provided")
@@ -424,6 +429,16 @@ class VideoGenerator:
 
         if len(script) > 5000:
             raise ValueError("Script exceeds 5000 character limit")
+
+        # Estimate duration based on script length (rough estimate: ~150 words per minute)
+        # Average word length is ~5 characters, so chars/5 = words, words/150 = minutes
+        estimated_duration_seconds = max(10, int((len(script) / 5) / 150 * 60))
+
+        # Check Avatar IV credit availability
+        can_generate, reason = self.can_generate_avatar_iv(estimated_duration_seconds)
+        if not can_generate:
+            log_warning(f"Avatar IV credit limit reached: {reason}")
+            raise UsageLimitExceeded(reason)
 
         # Prepare script for proper pronunciation in narration
         narration_script = self._prepare_script_for_narration(script)
@@ -490,13 +505,38 @@ class VideoGenerator:
 
             log_info(f"Avatar IV video generation started (video_id={video_id})")
 
+            # If wait_for_completion=True, poll for video completion and get actual duration
+            actual_duration = None
+            if wait_for_completion:
+                try:
+                    video_data = self._poll_video_status(video_id)
+                    if video_data.get("status") == "completed":
+                        actual_duration = video_data.get("duration")
+                        log_info(f"Avatar IV video completed with duration: {actual_duration}s")
+                    else:
+                        log_warning(f"Avatar IV video finished with status: {video_data.get('status')}")
+                except Exception as poll_exc:
+                    log_warning(f"Failed to poll Avatar IV video status: {poll_exc}")
+
+            # Record usage with actual duration if available, otherwise use estimate
+            duration_for_tracking = actual_duration if actual_duration is not None else estimated_duration_seconds
+            self._record_usage(
+                video_id,
+                success=True,
+                style="avatar_iv",
+                duration_seconds=duration_for_tracking,
+                avatar_type="avatar_iv",
+            )
+
             result = {
                 "video_id": video_id,
-                "status": "processing",
+                "status": "completed" if wait_for_completion and actual_duration else "processing",
                 "api_type": "avatar_iv",
                 "script": script,
                 "voice_id": resolved_voice_id,
                 "aspect_ratio": aspect_ratio,
+                "duration": actual_duration,
+                "estimated_duration": estimated_duration_seconds,
             }
 
             if title:
@@ -512,6 +552,14 @@ class VideoGenerator:
 
         except requests.RequestException as exc:
             log_error(f"Avatar IV video generation failed: {exc}")
+            # Record failed usage attempt
+            self._record_usage(
+                str(uuid.uuid4()),  # Generate a unique ID for failed attempt
+                success=False,
+                style="avatar_iv",
+                duration_seconds=None,
+                avatar_type="avatar_iv",
+            )
             raise VideoGenerationError(f"Failed to generate Avatar IV video: {exc}") from exc
 
     def _build_avatar_candidate_chain(
@@ -1261,6 +1309,7 @@ class VideoGenerator:
         success: bool,
         style: str,
         duration_seconds: Optional[int] = None,
+        avatar_type: str = "photo_avatar",
     ) -> None:
         if not self.supabase_client:
             log_debug("Supabase client not configured; skipping usage tracking")
@@ -1273,15 +1322,106 @@ class VideoGenerator:
             "success": success,
             "duration_seconds": duration_seconds,
             "credits_used": 1,
+            "avatar_type": avatar_type,
             "requested_at": datetime.now(self.sa_tz).isoformat(),
         }
 
         try:
             # Insert into database (SupabaseRestClient.insert() already executes and returns ExecuteResult)
             self.supabase_client.table(self.usage_table).insert(record)
-            log_debug(f"Recorded HeyGen usage for video {video_id}")
+            log_debug(f"Recorded HeyGen usage for video {video_id} (type={avatar_type})")
         except Exception as exc:  # pylint: disable=broad-except
             log_warning(f"Failed to record HeyGen usage: {exc}")
+
+    def get_avatar_iv_usage_this_month(self) -> int:
+        """Get total Avatar IV usage in seconds for the current month.
+
+        Returns:
+            Total seconds of Avatar IV video generated this month
+        """
+        if not self.supabase_client:
+            return 0
+
+        now = datetime.now(self.sa_tz)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        try:
+            result = (
+                self.supabase_client.table(self.usage_table)
+                .select("duration_seconds, success")
+                .eq("avatar_type", "avatar_iv")
+                .gte("requested_at", month_start.isoformat())
+                .lte("requested_at", now.isoformat())
+                .execute()
+            )
+
+            records = result.data or []
+            total_seconds = 0
+            for record in records:
+                # Only count successful generations
+                if record.get("success") is not False:
+                    duration = record.get("duration_seconds")
+                    if duration is not None:
+                        total_seconds += duration
+
+            log_debug(f"Avatar IV usage this month: {total_seconds} seconds")
+            return total_seconds
+
+        except Exception as exc:  # pylint: disable=broad-except
+            log_warning(f"Unable to fetch Avatar IV usage from Supabase: {exc}")
+            return 0
+
+    def get_avatar_iv_remaining_credits(self) -> Dict[str, Any]:
+        """Get Avatar IV credits remaining for the current month.
+
+        Returns:
+            Dict with:
+                - used_seconds: Total seconds used this month
+                - limit_seconds: Total seconds available (90 credits × 60 seconds)
+                - remaining_seconds: Seconds remaining
+                - used_credits: Credits used (seconds / 60)
+                - limit_credits: Total credits available (90)
+                - remaining_credits: Credits remaining
+        """
+        used_seconds = self.get_avatar_iv_usage_this_month()
+        limit_seconds = self.avatar_iv_monthly_limit * 60  # 90 credits × 60 seconds = 5400 seconds
+        remaining_seconds = max(0, limit_seconds - used_seconds)
+
+        return {
+            "used_seconds": used_seconds,
+            "limit_seconds": limit_seconds,
+            "remaining_seconds": remaining_seconds,
+            "used_credits": round(used_seconds / 60, 2),
+            "limit_credits": self.avatar_iv_monthly_limit,
+            "remaining_credits": round(remaining_seconds / 60, 2),
+        }
+
+    def can_generate_avatar_iv(self, estimated_duration_seconds: int) -> Tuple[bool, Optional[str]]:
+        """Check if Avatar IV video can be generated within credit limits.
+
+        Args:
+            estimated_duration_seconds: Estimated video duration in seconds
+
+        Returns:
+            Tuple of (can_generate: bool, reason: Optional[str])
+            - If can generate: (True, None)
+            - If cannot: (False, reason_message)
+        """
+        if self.avatar_iv_monthly_limit <= 0:
+            # No limit configured, allow generation
+            return True, None
+
+        credits_info = self.get_avatar_iv_remaining_credits()
+        remaining_seconds = credits_info["remaining_seconds"]
+
+        if estimated_duration_seconds > remaining_seconds:
+            return False, (
+                f"Insufficient Avatar IV credits. "
+                f"Need {estimated_duration_seconds}s ({estimated_duration_seconds/60:.1f} credits), "
+                f"but only {remaining_seconds}s ({remaining_seconds/60:.1f} credits) remaining this month."
+            )
+
+        return True, None
 
     def _store_video_record(
         self,

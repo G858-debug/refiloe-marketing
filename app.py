@@ -897,6 +897,48 @@ def trigger_weekly_report():
         }), 500
 
 
+@app.route('/api/avatar-iv-credits')
+def avatar_iv_credits():
+    """Get Avatar IV credit usage and availability for current month.
+
+    Returns:
+        JSON with:
+        - used: Total seconds used this month
+        - limit: Total seconds available (90 credits × 60 seconds = 5400)
+        - remaining: Seconds remaining
+        - remaining_videos_estimate: Estimated number of videos remaining (based on 90s avg)
+    """
+    if not scheduler:
+        return jsonify({'error': 'Scheduler not initialized'}), 503
+
+    try:
+        video_generator = scheduler.video_generator
+        if not video_generator:
+            return jsonify({'error': 'Video generator not initialized'}), 503
+
+        credits_info = video_generator.get_avatar_iv_remaining_credits()
+
+        # Estimate remaining videos (assuming average 90-second video)
+        avg_video_duration = 90
+        remaining_videos_estimate = int(credits_info['remaining_seconds'] / avg_video_duration)
+
+        return jsonify({
+            'used': credits_info['used_seconds'],
+            'limit': credits_info['limit_seconds'],
+            'remaining': credits_info['remaining_seconds'],
+            'remaining_videos_estimate': remaining_videos_estimate,
+            'used_credits': credits_info['used_credits'],
+            'limit_credits': credits_info['limit_credits'],
+            'remaining_credits': credits_info['remaining_credits'],
+        }), 200
+    except Exception as e:
+        log_error(f"Error fetching Avatar IV credits: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/reports/latest')
 def get_latest_report():
     """Get the most recent weekly report"""
