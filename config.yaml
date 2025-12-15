@@ -8,29 +8,27 @@
 # Defines when and how often Refiloe posts content
 # Times are in SAST (South African Standard Time)
 posting_schedule:
-  # Week 1: High engagement phase - 6 posts per day
+  # All weeks: 1 quality post per day
   week_1:
     enabled: true
-    posts_per_day: 6
-    times: ["05:30", "08:00", "12:00", "15:00", "18:00", "21:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
-    description: "Initial engagement phase to build audience"
-  
-  # Week 2-4: Steady growth phase - 5 posts per day
+    description: "Launch phase - 1 quality post daily at noon"
+
   week_2_to_4:
     enabled: true
-    posts_per_day: 5
-    times: ["06:00", "09:00", "13:00", "17:00", "20:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
-    description: "Maintaining momentum with focused posting"
-  
-  # Week 5+: Maintenance phase - 4 posts per day
+    description: "Growth phase - consistent daily posting"
+
   week_5_plus:
     enabled: true
-    posts_per_day: 4
-    times: ["07:00", "12:00", "16:00", "20:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
-    description: "Sustained presence with quality content"
+    description: "Sustained phase - quality over quantity"
 
 # =============================================================================
 # CONTENT HOOKS
