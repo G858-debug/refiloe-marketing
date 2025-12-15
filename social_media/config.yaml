@@ -3,27 +3,27 @@
 
 # Posting Schedule Configuration
 posting_schedule:
+  # All weeks: 1 quality post per day
   week_1:
     enabled: true
-    posts_per_day: 4
-    times: ["08:00", "12:00", "16:00", "20:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
-    content_mix:
-      video: 60%
-      static_image: 25%
-      carousel: 15%
+    description: "Launch phase - 1 quality post daily at noon"
 
   week_2_to_4:
     enabled: true
-    posts_per_day: 3
-    times: ["08:00", "13:00", "18:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
+    description: "Growth phase - consistent daily posting"
 
   week_5_plus:
     enabled: true
-    posts_per_day: 3
-    times: ["07:00", "12:00", "19:00"]
+    posts_per_day: 1
+    times: ["12:00"]
     timezone: "SAST"
+    description: "Sustained phase - quality over quantity"
 
 # Stories Configuration
 stories:
