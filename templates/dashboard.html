@@ -709,10 +709,20 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="actions">
-            <button class="btn btn-primary" onclick="seedLaunchContent()">
-                Generate Launch Content
+        <div class="action-buttons" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn" onclick="generateLaunchContent()" style="background-color: #D4A574; border-color: #D4A574; color: white;">
+                🚀 Generate Launch Content
             </button>
+            <button class="btn btn-success" onclick="generateWeeklyContent()">
+                📅 Generate Weekly Content (7 days)
+            </button>
+            <button class="btn btn-primary" onclick="approveAll()">
+                ✅ Approve All Pending
+            </button>
+        </div>
+
+        <!-- Other Actions -->
+        <div class="actions">
             <button class="btn btn-secondary" onclick="refreshPosts()">
                 Refresh
             </button>
@@ -724,12 +734,6 @@
             </a>
             <button class="btn btn-info" onclick="fetchVideosNow()">
                 🎥 Fetch Videos Now
-            </button>
-            <button class="btn btn-success" onclick="approveAll()">
-                Approve All Pending
-            </button>
-            <button class="btn btn-danger" onclick="freshStart()">
-                Fresh Start (Delete Old & Create New)
             </button>
         </div>
 
@@ -1456,6 +1460,66 @@
                     } catch (error) {
                         console.error('Error seeding content:', error);
                         showToast('Failed to generate content', 'error');
+                    }
+                }
+            );
+        }
+
+        // Generate launch content (1 introduction post for global audience)
+        async function generateLaunchContent() {
+            showModal(
+                'Generate Launch Content',
+                'This will clear pending posts and create 1 introduction post ("Meet Refiloe") scheduled for 14:00 SAST. Continue?',
+                async () => {
+                    try {
+                        showToast('Generating introduction post...', 'info');
+
+                        const response = await fetch(`${API_BASE}/api/dashboard/generate-launch-content`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showToast(data.message || 'Introduction post created!', 'success');
+                            refreshPosts();
+                        } else {
+                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showToast('Failed to generate launch content', 'error');
+                    }
+                }
+            );
+        }
+
+        // Generate weekly content (7 posts for next 7 days at 14:00 SAST)
+        async function generateWeeklyContent() {
+            showModal(
+                'Generate Weekly Content',
+                'This will clear pending posts and generate 7 posts (1 per day at 14:00 SAST for global reach). This takes about 2 minutes. Continue?',
+                async () => {
+                    try {
+                        showToast('Generating weekly content... Please wait ~2 minutes.', 'info');
+
+                        const response = await fetch(`${API_BASE}/api/dashboard/generate-weekly-content`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showToast(data.message || `Created ${data.created_count} posts!`, 'success');
+                            refreshPosts();
+                        } else {
+                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showToast('Failed to generate weekly content', 'error');
                     }
                 }
             );
