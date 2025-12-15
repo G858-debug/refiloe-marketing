@@ -324,7 +324,8 @@
         <!-- Action Buttons -->
         <div class="actions">
             <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
-            <button class="btn btn-primary" onclick="location.reload()">🔄 Refresh</button>
+            <a href="/upload-video" class="btn btn-primary">📤 Upload Video</a>
+            <button class="btn btn-secondary" onclick="location.reload()">🔄 Refresh</button>
         </div>
 
         <!-- Section Title -->
@@ -401,6 +402,13 @@
                 <div class="caption-text">{{ post.content_text }}</div>
             </div>
             {% endif %}
+
+            <!-- Upload Action -->
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                <a href="/upload-video" class="btn btn-primary" style="text-decoration: none;">
+                    📤 Upload Video for This Post
+                </a>
+            </div>
         </div>
         {% endfor %}
         {% endif %}

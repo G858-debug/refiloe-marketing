@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Manual Video - Refiloe Content</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        /* Action Buttons */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Form Card */
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-input[type="file"] {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        /* Preview Section */
+        .preview-section {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .preview-section.visible {
+            display: block;
+        }
+
+        .preview-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .preview-item {
+            margin-bottom: 15px;
+        }
+
+        .preview-label {
+            font-weight: 600;
+            color: #6b7280;
+            font-size: 13px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .preview-content {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #1f2937;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            border: 1px solid #e5e7eb;
+        }
+
+        .preview-meta {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 10px;
+        }
+
+        .preview-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .theme-badge {
+            background: #fef3c7;
+            color: #b45309;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Messages */
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .message-success {
+            background: #dcfce7;
+            border: 2px solid #10b981;
+            color: #065f46;
+        }
+
+        .message-error {
+            background: #fee2e2;
+            border: 2px solid #dc2626;
+            color: #991b1b;
+        }
+
+        .message-info {
+            background: #dbeafe;
+            border: 2px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        /* File Upload Requirements */
+        .upload-requirements {
+            background: #fffbeb;
+            border: 1px solid #fbbf24;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #78350f;
+        }
+
+        .upload-requirements ul {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+
+        .upload-requirements li {
+            margin-bottom: 3px;
+        }
+
+        /* Loading State */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container { padding: 15px; }
+            .form-card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎥 Upload Manual Video</h1>
+        <p>Upload manually-created Avatar IV videos</p>
+    </div>
+
+    <div class="container">
+        <!-- Action Buttons -->
+        <div class="actions">
+            <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+            <a href="/dashboard/pending-scripts" class="btn btn-secondary">📝 View Pending Scripts</a>
+        </div>
+
+        <!-- Success/Error Messages -->
+        {% if success %}
+        <div class="message message-success">
+            <strong>✅ Success!</strong> Video uploaded and post updated successfully.
+            <div style="margin-top: 10px;">
+                <a href="/dashboard" class="btn btn-primary btn-sm" style="font-size: 13px; padding: 8px 16px;">Go to Dashboard</a>
+                <a href="/upload-video" class="btn btn-secondary btn-sm" style="font-size: 13px; padding: 8px 16px; margin-left: 10px;">Upload Another</a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="message message-error">
+            <strong>❌ Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Upload Form -->
+        <div class="form-card">
+            <h2 style="margin-bottom: 20px; color: #1f2937;">Upload Video</h2>
+
+            <form method="POST" enctype="multipart/form-data" id="upload-form">
+                <!-- Post Selection -->
+                <div class="form-group">
+                    <label for="post_id">
+                        Select Pending Post *
+                    </label>
+                    <select name="post_id" id="post_id" class="form-select" required onchange="updatePreview()">
+                        <option value="">-- Select a post --</option>
+                        {% for post in pending_posts %}
+                        <option value="{{ post.id }}"
+                                data-theme="{{ post.content_theme }}"
+                                data-scheduled="{{ post.scheduled_formatted }}"
+                                data-script="{{ post.video_script }}"
+                                data-caption="{{ post.content_text }}">
+                            Post #{{ post.id }} - {{ post.scheduled_formatted }} - {{ post.content_theme }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not pending_posts %}
+                    <div class="message message-info" style="margin-top: 10px;">
+                        <strong>ℹ️ No pending posts:</strong> All video posts have been uploaded or there are no video posts awaiting manual upload.
+                        <div style="margin-top: 10px;">
+                            <a href="/dashboard/pending-scripts" class="btn btn-secondary btn-sm" style="font-size: 13px; padding: 8px 16px;">View All Pending Scripts</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Post Preview -->
+                <div class="preview-section" id="post-preview">
+                    <div class="preview-title">📋 Post Preview</div>
+
+                    <div class="preview-meta">
+                        <div class="preview-meta-item">
+                            <span style="font-weight: 600;">📅 Scheduled:</span>
+                            <span id="preview-scheduled">-</span>
+                        </div>
+                        <div class="preview-meta-item">
+                            <span style="font-weight: 600;">🎨 Theme:</span>
+                            <span class="theme-badge" id="preview-theme">-</span>
+                        </div>
+                    </div>
+
+                    <div class="preview-item" style="margin-top: 15px;">
+                        <div class="preview-label">📜 Video Script</div>
+                        <div class="preview-content" id="preview-script">Select a post to see the script</div>
+                    </div>
+
+                    <div class="preview-item">
+                        <div class="preview-label">📝 Caption</div>
+                        <div class="preview-content" id="preview-caption">Select a post to see the caption</div>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div class="form-group">
+                    <label for="video_file">
+                        Upload Video File (MP4) *
+                    </label>
+                    <input type="file"
+                           name="video_file"
+                           id="video_file"
+                           class="form-input"
+                           accept=".mp4,video/mp4"
+                           required>
+                    <div class="upload-requirements">
+                        <strong>📋 Requirements:</strong>
+                        <ul>
+                            <li>Format: MP4 only</li>
+                            <li>Maximum size: 100 MB</li>
+                            <li>Video should match the script shown above</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="form-group" style="margin-bottom: 0;">
+                    <button type="submit" class="btn btn-success" id="submit-btn" {% if not pending_posts %}disabled{% endif %}>
+                        <span id="btn-text">📤 Upload Video</span>
+                        <span id="btn-spinner" style="display: none;" class="spinner"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function updatePreview() {
+            const select = document.getElementById('post_id');
+            const selectedOption = select.options[select.selectedIndex];
+            const preview = document.getElementById('post-preview');
+
+            if (selectedOption.value) {
+                // Show preview
+                preview.classList.add('visible');
+
+                // Update preview content
+                document.getElementById('preview-scheduled').textContent = selectedOption.dataset.scheduled || '-';
+                document.getElementById('preview-theme').textContent = selectedOption.dataset.theme || '-';
+                document.getElementById('preview-script').textContent = selectedOption.dataset.script || 'No script available';
+                document.getElementById('preview-caption').textContent = selectedOption.dataset.caption || 'No caption available';
+            } else {
+                // Hide preview
+                preview.classList.remove('visible');
+            }
+        }
+
+        // Form submission handling
+        document.getElementById('upload-form').addEventListener('submit', function(e) {
+            const postId = document.getElementById('post_id').value;
+            const videoFile = document.getElementById('video_file').files[0];
+
+            // Validate post selection
+            if (!postId) {
+                alert('Please select a post');
+                e.preventDefault();
+                return;
+            }
+
+            // Validate file
+            if (!videoFile) {
+                alert('Please select a video file');
+                e.preventDefault();
+                return;
+            }
+
+            // Check file type
+            if (!videoFile.type.includes('mp4') && !videoFile.name.endsWith('.mp4')) {
+                alert('Please upload an MP4 file');
+                e.preventDefault();
+                return;
+            }
+
+            // Check file size (100 MB = 100 * 1024 * 1024 bytes)
+            const maxSize = 100 * 1024 * 1024;
+            if (videoFile.size > maxSize) {
+                alert('File size exceeds 100 MB limit. Please compress your video.');
+                e.preventDefault();
+                return;
+            }
+
+            // Show loading state
+            const btn = document.getElementById('submit-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnSpinner = document.getElementById('btn-spinner');
+
+            btn.disabled = true;
+            btnText.textContent = 'Uploading... Please wait';
+            btnSpinner.style.display = 'inline-block';
+
+            // Form will submit normally
+        });
+
+        // File input change handler - show file info
+        document.getElementById('video_file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                console.log(`Selected file: ${file.name} (${sizeMB} MB)`);
+            }
+        });
+    </script>
+</body>
+</html>
