@@ -4729,15 +4729,17 @@ def api_generate_launch_content():
 
         # Save the post
         log_info("💾 Saving introduction post to database...")
-        post_id = db.save_post(
-            platform="facebook",
-            content=content_text,
-            post_type="video",
-            scheduled_time=scheduled_time.isoformat(),
-            content_theme="introduction",
-            hashtags=global_hashtags,
-            generation_prompt=json.dumps(metadata)
-        )
+        post_data = {
+            'platform': 'facebook',
+            'content_text': content_text,
+            'post_type': 'video',
+            'scheduled_time': scheduled_time.isoformat(),
+            'content_theme': 'introduction',
+            'hashtags': global_hashtags,
+            'generation_prompt': json.dumps(metadata),
+            'status': 'pending_approval'
+        }
+        post_id = db.save_post(post_data)
 
         if not post_id:
             log_error("❌ Failed to save post to database")
