@@ -109,7 +109,7 @@ class SocialMediaScheduler:
             # Find posts with status='generating' then filter for video_id not null
             # Note: The custom Supabase REST client doesn't support .not_ chaining
             result = self.supabase_client.table('social_posts').select(
-                'id, video_id, post_type, content_text, created_at'
+                'id, video_id, post_type, content_text, created_at, updated_at'
             ).eq('status', 'generating').execute()
 
             # Filter in Python for posts that have video_id
@@ -127,24 +127,24 @@ class SocialMediaScheduler:
             truly_stuck_posts = []
 
             for post in posts_without_video_id:
-                created_at_str = post.get('created_at')
-                if created_at_str:
+                updated_at_str = post.get('updated_at')
+                if updated_at_str:
                     try:
-                        # Parse the created_at timestamp (assumes ISO format with timezone)
-                        created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        # Parse the updated_at timestamp (assumes ISO format with timezone)
+                        updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
                         # Convert to SA timezone for comparison
-                        if created_at.tzinfo is None:
-                            created_at = created_at.replace(tzinfo=timezone.utc)
-                        created_at_sa = created_at.astimezone(SA_TIMEZONE)
+                        if updated_at.tzinfo is None:
+                            updated_at = updated_at.replace(tzinfo=timezone.utc)
+                        updated_at_sa = updated_at.astimezone(SA_TIMEZONE)
 
                         # Check if post has been stuck for more than 5 minutes
-                        if created_at_sa < stuck_threshold:
-                            time_stuck = datetime.now(SA_TIMEZONE) - created_at_sa
+                        if updated_at_sa < stuck_threshold:
+                            time_stuck = datetime.now(SA_TIMEZONE) - updated_at_sa
                             minutes_stuck = int(time_stuck.total_seconds() / 60)
                             post['_minutes_stuck'] = minutes_stuck
                             truly_stuck_posts.append(post)
                     except Exception as e:
-                        log_warning(f"⚠️  Could not parse created_at for post {post.get('id')}: {e}")
+                        log_warning(f"⚠️  Could not parse updated_at for post {post.get('id')}: {e}")
                         # Include post if we can't parse timestamp (defensive fallback)
                         truly_stuck_posts.append(post)
 
