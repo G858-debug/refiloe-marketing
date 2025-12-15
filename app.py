@@ -4642,6 +4642,106 @@ def api_fresh_start():
         }), 500
 
 
+@app.route('/api/dashboard/generate-launch-content', methods=['POST'])
+def api_generate_launch_content():
+    """Generate single introduction post for global launch."""
+    log_info("📥 Request: /api/dashboard/generate-launch-content")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.launch_content import clear_all_test_posts, LaunchContentGenerator
+        from database import SocialMediaDatabase
+        import os
+        import json
+        from datetime import datetime
+        import pytz
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Step 1: Clear existing pending posts
+        log_info("🗑️ Clearing existing pending posts...")
+        deleted_count = clear_all_test_posts(supabase_client)
+        log_info(f"✅ Deleted {deleted_count} existing posts")
+
+        # Step 2: Generate only the first introduction post
+        log_info("🚀 Generating introduction post for global audience...")
+
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        generator = LaunchContentGenerator(supabase_client=supabase_client, config_path=config_path)
+
+        # Use today as start date, post at 14:00 SAST for global reach
+        today = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0)
+
+        # If it's already past 14:00, schedule for tomorrow
+        if datetime.now(SA_TZ).hour >= 14:
+            from datetime import timedelta
+            today = today + timedelta(days=1)
+
+        # Generate all posts but only save Day 1 Post 1 (the introduction)
+        all_posts = generator.generate_all_posts(start_date=today.replace(hour=0, minute=0))
+        intro_post = next((p for p in all_posts if p.get('day') == 1 and p.get('post_number') == 1), None)
+
+        if not intro_post:
+            return jsonify({'success': False, 'error': 'Failed to generate introduction post'}), 500
+
+        # Override scheduled time to 14:00 SAST
+        intro_post['scheduled_time'] = today.isoformat()
+
+        log_info(f"📝 Generated introduction post: {intro_post.get('content_theme')}")
+
+        # Save the introduction post
+        db = SocialMediaDatabase(supabase_client)
+
+        metadata = {
+            "day": intro_post["day"],
+            "post_number": intro_post["post_number"],
+            "video_script": intro_post.get("video_script"),
+            "avatar_id_env": intro_post.get("avatar_id_env"),
+            "carousel_slides": intro_post.get("carousel_slides"),
+            "image_prompt": intro_post.get("image_prompt"),
+            "launch_content": True,
+            "target_audience": "global"
+        }
+
+        # Use global hashtags
+        global_hashtags = [
+            "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
+            "#PTLife", "#FitnessBusiness", "#TrainerTips"
+        ]
+
+        post_id = db.save_post(
+            platform=intro_post.get("platform", "facebook"),
+            content=intro_post.get("content_text", ""),
+            post_type=intro_post.get("post_type", "video"),
+            scheduled_time=intro_post.get("scheduled_time"),
+            content_theme=intro_post.get("content_theme"),
+            hashtags=global_hashtags,
+            generation_prompt=json.dumps(metadata)
+        )
+
+        if not post_id:
+            return jsonify({'success': False, 'error': 'Failed to save introduction post'}), 500
+
+        log_info(f"✅ Saved introduction post: {post_id}")
+
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'created_count': 1,
+            'post_ids': [post_id],
+            'scheduled_time': intro_post.get('scheduled_time'),
+            'message': '✅ Introduction post created for global audience! Review and approve to start posting.'
+        })
+
+    except Exception as e:
+        log_error(f"❌ Generate launch content failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
