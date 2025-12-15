@@ -3331,6 +3331,195 @@ def pending_scripts_dashboard():
         return f"Error: {str(e)}", 500
 
 
+@app.route('/api/pending-video-posts')
+def api_pending_video_posts():
+    """API endpoint to get posts awaiting manual video upload"""
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        # Query posts where post_type = 'video' AND video_url IS NULL
+        result = supabase_client.table('social_posts').select('*').eq('post_type', 'video').is_('video_url', 'null').order('scheduled_time', desc=False).execute()
+
+        pending_posts = []
+        for post in result.data if result.data else []:
+            # Get script preview (first 50 chars)
+            script_preview = ''
+            if post.get('generation_prompt'):
+                try:
+                    metadata = json.loads(post['generation_prompt'])
+                    video_script = metadata.get('video_script', '')
+                    if video_script:
+                        script_preview = video_script[:50] + ('...' if len(video_script) > 50 else '')
+                except Exception:
+                    pass
+
+            pending_posts.append({
+                'id': post.get('id'),
+                'scheduled_time': post.get('scheduled_time'),
+                'content_theme': post.get('content_theme', 'General'),
+                'script_preview': script_preview
+            })
+
+        return jsonify({
+            'success': True,
+            'posts': pending_posts,
+            'count': len(pending_posts)
+        })
+
+    except Exception as e:
+        log_error(f"Error fetching pending video posts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/upload-video', methods=['GET', 'POST'])
+def upload_video():
+    """Upload manually-created Avatar IV videos"""
+    if not supabase_client:
+        return "Database not connected", 503
+
+    # Handle GET request - show upload form
+    if request.method == 'GET':
+        try:
+            # Get pending posts (video posts without video_url)
+            result = supabase_client.table('social_posts').select('*').eq('post_type', 'video').is_('video_url', 'null').order('scheduled_time', desc=False).execute()
+
+            pending_posts = []
+            for post in result.data if result.data else []:
+                # Parse generation_prompt to get video_script
+                video_script = ''
+                if post.get('generation_prompt'):
+                    try:
+                        metadata = json.loads(post['generation_prompt'])
+                        video_script = metadata.get('video_script', '')
+                    except Exception:
+                        pass
+
+                # Format scheduled time
+                scheduled_formatted = 'Not scheduled'
+                if post.get('scheduled_time'):
+                    try:
+                        dt = datetime.fromisoformat(post['scheduled_time'].replace('Z', '+00:00'))
+                        scheduled_formatted = dt.strftime('%a, %b %d, %Y at %H:%M')
+                    except Exception:
+                        scheduled_formatted = post['scheduled_time']
+
+                pending_posts.append({
+                    'id': post.get('id'),
+                    'content_theme': post.get('content_theme', 'General'),
+                    'content_text': post.get('content_text', ''),
+                    'video_script': video_script,
+                    'scheduled_time': post.get('scheduled_time'),
+                    'scheduled_formatted': scheduled_formatted
+                })
+
+            return render_template('upload_video.html', pending_posts=pending_posts)
+
+        except Exception as e:
+            log_error(f"Error loading upload video page: {e}")
+            import traceback
+            log_error(traceback.format_exc())
+            return f"Error: {str(e)}", 500
+
+    # Handle POST request - process file upload
+    if request.method == 'POST':
+        try:
+            # Get form data
+            post_id = request.form.get('post_id')
+            video_file = request.files.get('video_file')
+
+            # Validate inputs
+            if not post_id:
+                return render_template('upload_video.html', pending_posts=[], error='Post ID is required')
+
+            if not video_file:
+                return render_template('upload_video.html', pending_posts=[], error='Video file is required')
+
+            # Validate file type
+            if not video_file.filename.lower().endswith('.mp4'):
+                return render_template('upload_video.html', pending_posts=[], error='Only MP4 files are allowed')
+
+            # Validate file size (100 MB)
+            video_file.seek(0, 2)  # Seek to end
+            file_size = video_file.tell()
+            video_file.seek(0)  # Reset to beginning
+
+            max_size = 100 * 1024 * 1024  # 100 MB
+            if file_size > max_size:
+                return render_template('upload_video.html', pending_posts=[], error='File size exceeds 100 MB limit')
+
+            # Get post details
+            post_result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+            if not post_result.data or len(post_result.data) == 0:
+                return render_template('upload_video.html', pending_posts=[], error='Post not found')
+
+            post = post_result.data[0]
+
+            # Upload to Supabase Storage
+            from utils.supabase_storage import get_storage_client
+
+            storage_client = get_storage_client()
+            if not storage_client:
+                return render_template('upload_video.html', pending_posts=[], error='Storage client not available')
+
+            # Create destination path: manual-videos/post_id/video.mp4
+            destination_path = f"manual-videos/{post_id}/video.mp4"
+
+            # Save file temporarily
+            import tempfile
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+            video_file.save(temp_file.name)
+            temp_file.close()
+
+            try:
+                # Upload to Supabase Storage
+                success, public_url, error_msg = storage_client.upload_file(
+                    bucket='media',
+                    file_path=temp_file.name,
+                    destination_path=destination_path,
+                    content_type='video/mp4'
+                )
+
+                # Clean up temp file
+                os.unlink(temp_file.name)
+
+                if not success:
+                    log_error(f"Failed to upload video to Supabase: {error_msg}")
+                    return render_template('upload_video.html', pending_posts=[], error=f'Upload failed: {error_msg}')
+
+                # Update the social_posts record
+                update_data = {
+                    'video_url': public_url,
+                    'status': 'pending_media_approval'
+                }
+
+                # Update the post
+                update_result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+                if not update_result.data:
+                    log_error(f"Failed to update post {post_id} in database")
+                    return render_template('upload_video.html', pending_posts=[], error='Failed to update post in database')
+
+                log_info(f"✅ Successfully uploaded manual video for post {post_id}")
+                log_info(f"   Video URL: {public_url}")
+
+                # Success - redirect to upload page with success message
+                return render_template('upload_video.html', pending_posts=[], success=True)
+
+            except Exception as upload_error:
+                # Clean up temp file on error
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                raise upload_error
+
+        except Exception as e:
+            log_error(f"Error uploading video: {e}")
+            import traceback
+            log_error(traceback.format_exc())
+            return render_template('upload_video.html', pending_posts=[], error=str(e))
+
+
 # =============================================================================
 # API Helper Functions
 # =============================================================================
