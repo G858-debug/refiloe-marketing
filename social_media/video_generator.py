@@ -29,7 +29,7 @@ if _avatar_mapping_module is not None:
     get_photo_avatar_for_content = getattr(_avatar_mapping_module, "get_photo_avatar_for_content", None)
     get_photo_avatar_for_content_with_db = getattr(_avatar_mapping_module, "get_photo_avatar_for_content_with_db", None)
     PHOTO_AVATAR_REGISTRY = getattr(_avatar_mapping_module, "PHOTO_AVATAR_REGISTRY", {})
-    DEFAULT_PHOTO_AVATAR_ID = getattr(_avatar_mapping_module, "DEFAULT_PHOTO_AVATAR_ID", "55bdbaaa7ded40458bfc0e498ff24ae6")
+    DEFAULT_PHOTO_AVATAR_ID = getattr(_avatar_mapping_module, "DEFAULT_PHOTO_AVATAR_ID", "eb23e1d4a0f44fbd81c358ef2f69dfa6")
     AvatarSelectionError = getattr(
         _avatar_mapping_module,
         "AvatarSelectionError",
@@ -39,7 +39,7 @@ else:  # pragma: no cover - defensive defaults when module missing
     get_photo_avatar_for_content = None
     get_photo_avatar_for_content_with_db = None
     PHOTO_AVATAR_REGISTRY = {}
-    DEFAULT_PHOTO_AVATAR_ID = "55bdbaaa7ded40458bfc0e498ff24ae6"  # educational as default
+    DEFAULT_PHOTO_AVATAR_ID = "eb23e1d4a0f44fbd81c358ef2f69dfa6"  # casual as default
 
     class AvatarSelectionError(Exception):
         """Raised when dynamic avatar selection fails."""
