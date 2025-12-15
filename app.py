@@ -3773,16 +3773,17 @@ def api_generate_media(post_id):
             log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
-                # Call VideoGenerator - it will handle the HeyGen API correctly
-                # The VideoGenerator.generate_avatar_video waits for completion by default
-                # We'll accept this for now since it works reliably
+                # Call VideoGenerator with async mode
+                # wait_for_completion=False returns immediately with video_id
+                # fetch_orphaned_videos_job will check for completion later
                 result = video_gen.generate_avatar_video(
                     script_text=script,
                     avatar_id=avatar_id,
                     voice_id=None,
                     style='educational',
                     background_music=True,
-                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'}
+                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'},
+                    wait_for_completion=False
                 )
 
                 log_info(f"📹 HeyGen response received: {result}")
