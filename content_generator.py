@@ -1115,44 +1115,75 @@ Make this content impossible to scroll past!"""
             log_error(f"Error generating post with specific hook: {str(e)}")
             return {}
     
-    def create_video_script(self, theme: str, duration: int = 60, style: str = "educational") -> Dict:
+    def create_video_script(self, theme: str, duration: int = 60, style: str = "educational", target_duration_seconds: int = 55) -> Dict:
         """Generate time-coded video scripts with exact wording and visual cues
-        
+
         Args:
             theme: Content theme for the video
             duration: Video duration in seconds (30, 60, 90, 120)
             style: Video style (educational, motivational, behind_scenes, tutorial, story)
-            
+            target_duration_seconds: Target duration for optimal video length (default: 55 for 50-60s range)
+
         Returns:
             Dict: Structured video script with time codes, visual cues, and CTAs
         """
-        log_info(f"Creating video script - Theme: {theme}, Duration: {duration}s, Style: {style}")
-        
+        log_info(f"Creating video script - Theme: {theme}, Duration: {duration}s, Target: {target_duration_seconds}s, Style: {style}")
+
         try:
             # Get video-specific hooks
             video_hooks = self._get_video_hooks()
             selected_hook = random.choice(video_hooks)
-            
+
+            # Calculate target word count (assuming ~150 words per minute speaking rate)
+            # For 50-60 seconds, that's 75-100 words
+            target_word_count_min = int((target_duration_seconds - 5) / 60 * 150 * 0.9)  # Lower bound
+            target_word_count_max = int((target_duration_seconds + 5) / 60 * 150 * 1.1)  # Upper bound
+
             # Create video script prompt
-            prompt = self._create_video_script_prompt(theme, duration, style, selected_hook)
-            
+            prompt = self._create_video_script_prompt(
+                theme, duration, style, selected_hook,
+                target_duration_seconds, target_word_count_min, target_word_count_max
+            )
+
             # Call Claude API
             response = self._call_claude_with_retry(prompt)
-            
+
             if not response:
                 log_error("Failed to get response from Claude API for video script")
                 return {}
-            
+
             # Parse video script response
             script_data = self._parse_video_script_response(response, theme, duration, style)
-            
+
             if script_data:
-                log_info(f"Successfully generated video script: {theme} - {duration}s - {style}")
+                # Validate word count
+                script_text = " ".join([segment.get("text", "") for segment in script_data.get("script", [])])
+                word_count = len(script_text.split())
+
+                if word_count > 100:
+                    log_warning(
+                        f"Video script exceeds 100 words (actual: {word_count} words). "
+                        f"This may exceed the target duration of 50-60 seconds. "
+                        f"Consider requesting a shorter version."
+                    )
+                    script_data["word_count_warning"] = {
+                        "actual_words": word_count,
+                        "max_recommended": 100,
+                        "exceeded_by": word_count - 100
+                    }
+
+                script_data["word_count"] = word_count
+                script_data["target_duration_seconds"] = target_duration_seconds
+
+                log_info(
+                    f"Successfully generated video script: {theme} - {duration}s - {style} "
+                    f"(word count: {word_count}, target: {target_word_count_min}-{target_word_count_max})"
+                )
                 return script_data
             else:
                 log_error("Failed to parse video script response")
                 return {}
-                
+
         except Exception as e:
             log_error(f"Error creating video script: {str(e)}")
             return {}
@@ -1230,15 +1261,21 @@ Make this content impossible to scroll past!"""
             "If you're struggling with [problem], this is for you..."
         ]
     
-    def _create_video_script_prompt(self, theme: str, duration: int, style: str, hook: str) -> str:
+    def _create_video_script_prompt(self, theme: str, duration: int, style: str, hook: str,
+                                     target_duration_seconds: int = 55,
+                                     target_word_count_min: int = 75,
+                                     target_word_count_max: int = 100) -> str:
         """Create prompt for video script generation
-        
+
         Args:
             theme: Content theme
             duration: Video duration in seconds
             style: Video style
             hook: Video hook to use
-            
+            target_duration_seconds: Target duration for optimal video length
+            target_word_count_min: Minimum word count target
+            target_word_count_max: Maximum word count target
+
         Returns:
             str: Formatted prompt for video script generation
         """
@@ -1246,19 +1283,27 @@ Make this content impossible to scroll past!"""
         ai_settings = self.config.get('ai_influencer_settings', {})
         personality = ai_settings.get('personality_traits', [])
         speaking_style = ai_settings.get('speaking_style', {})
-        
+
         # Calculate timing breakdown
         hook_duration = 3  # First 3 seconds for hook
         main_content_duration = duration - hook_duration - 5  # 5 seconds for CTA
         cta_duration = 5
-        
-        prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating a {duration}-second video script for personal trainers.
+
+        prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating a {target_duration_seconds}-second video script for personal trainers.
 
 VIDEO SPECIFICATIONS:
-- Duration: {duration} seconds
+- Target Duration: {target_duration_seconds} seconds (aim for 50-60 seconds optimal range)
+- Maximum Duration: {duration} seconds
 - Style: {style}
 - Theme: {theme}
 - Hook: {hook}
+
+SCRIPT LENGTH REQUIREMENTS (CRITICAL):
+- Target word count: {target_word_count_min}-{target_word_count_max} words MAXIMUM
+- Speaking rate: ~150 words per minute (2.5 words per second)
+- This ensures the script fits within the 50-60 second optimal duration
+- Be concise and impactful - every word must count
+- DO NOT exceed {target_word_count_max} words total
 
 PERSONALITY & VOICE:
 - {', '.join(personality)}

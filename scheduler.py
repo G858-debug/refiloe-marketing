@@ -515,59 +515,58 @@ class SocialMediaScheduler:
     def job_generate_content(self):
         """
         DAILY JOB (6:00 AM SAST)
-        
-        Generate content for the next 7 days with video prioritization:
-        - 60% of all content should be video
-        - Generate text versions alongside videos
+
+        Generate content for the next 7 days with optimized content mix:
+        - 60% video content
+        - 25% static images
+        - 15% carousels
+        - 0% text-only (removed entirely)
         - A/B testing with different hooks
         """
         try:
-            log_info("Starting daily content generation job with video priority")
-            
+            log_info("Starting daily content generation job with optimized content mix")
+
             # Calculate current week number
             week_number = self.calculate_week_number()
             log_info(f"Current week number: {week_number}")
-            
+
             # Get posting schedule for this week
             week_schedule = self._get_week_schedule(week_number)
             posts_per_day = week_schedule.get('posts_per_day', 1)
             posting_times = week_schedule.get('times', ['09:00'])
-            
-            # Calculate content distribution (60% video, 40% static)
+
+            # Calculate content distribution (60% video, 40% static/carousel)
+            # Static content (40%) is split: 25% static images + 15% carousels
             base_posts = posts_per_day * 7
             video_posts_needed = int(base_posts * 0.6)
-            static_posts_needed = base_posts - video_posts_needed
-            
+            static_posts_needed = base_posts - video_posts_needed  # 40% total
+
             # Generate 2x for A/B testing + 20% reserve
             total_posts = int(static_posts_needed * 2.2)
-            
-            log_info(f"Generating {total_posts} static posts and leveraging {video_posts_needed} videos")
-            
+
+            log_info(
+                f"Generating {total_posts} static/carousel posts (25% static, 15% carousel) "
+                f"and leveraging {video_posts_needed} videos"
+            )
+
             # Generate static content batch with different hook types
+            # The content_generator.determine_content_media_type() will split these
+            # into static_image and carousel based on content keywords
             generated_posts = self.content_generator.generate_batch(
-                total_posts, 
+                total_posts,
                 week_number,
                 hook_variations=True
             )
-            
-            # For each video already generated, create a text-only version
-            videos_in_queue = self._get_todays_scheduled_videos()
-            
-            for video in videos_in_queue[:video_posts_needed]:
-                # Generate text version of video content
-                text_version = self._create_text_version_of_video(video)
-                if text_version:
-                    generated_posts.append(text_version)
-            
+
             if not generated_posts:
                 log_error("No content generated")
                 return
-            
+
             # Process posts as before (A/B testing, variants, reserve)
             self._process_and_schedule_posts(generated_posts, week_schedule)
-            
-            log_info("Content generation with video prioritization completed")
-            
+
+            log_info("Content generation with optimized mix completed")
+
         except Exception as e:
             log_error(f"Error in content generation job: {str(e)}")
             self._send_error_notification("Content Generation", str(e))
