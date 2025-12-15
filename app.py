@@ -4644,18 +4644,19 @@ def api_fresh_start():
 
 @app.route('/api/dashboard/generate-launch-content', methods=['POST'])
 def api_generate_launch_content():
-    """Generate single introduction post for global launch."""
+    """Generate single introduction post for global launch - optimized to only generate 1 post."""
     log_info("📥 Request: /api/dashboard/generate-launch-content")
 
     if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
         return jsonify({'success': False, 'error': 'Database not connected'}), 503
 
     try:
-        from social_media.launch_content import clear_all_test_posts, LaunchContentGenerator
+        from social_media.content_generator import ContentGenerator
+        from social_media.launch_content import clear_all_test_posts
         from database import SocialMediaDatabase
         import os
         import json
-        from datetime import datetime
+        from datetime import datetime, timedelta
         import pytz
 
         SA_TZ = pytz.timezone('Africa/Johannesburg')
@@ -4665,63 +4666,68 @@ def api_generate_launch_content():
         deleted_count = clear_all_test_posts(supabase_client)
         log_info(f"✅ Deleted {deleted_count} existing posts")
 
-        # Step 2: Generate only the first introduction post
+        # Step 2: Generate ONLY the introduction video (not all 9 posts!)
         log_info("🚀 Generating introduction post for global audience...")
 
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
-        generator = LaunchContentGenerator(supabase_client=supabase_client, config_path=config_path)
-
-        # Use today as start date, post at 14:00 SAST for global reach
-        today = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0)
-
-        # If it's already past 14:00, schedule for tomorrow
-        if datetime.now(SA_TZ).hour >= 14:
-            from datetime import timedelta
-            today = today + timedelta(days=1)
-
-        # Generate all posts but only save Day 1 Post 1 (the introduction)
-        all_posts = generator.generate_all_posts(start_date=today.replace(hour=0, minute=0))
-        intro_post = next((p for p in all_posts if p.get('day') == 1 and p.get('post_number') == 1), None)
-
-        if not intro_post:
-            return jsonify({'success': False, 'error': 'Failed to generate introduction post'}), 500
-
-        # Override scheduled time to 14:00 SAST
-        intro_post['scheduled_time'] = today.isoformat()
-
-        log_info(f"📝 Generated introduction post: {intro_post.get('content_theme')}")
-
-        # Save the introduction post
+        generator = ContentGenerator(config_path, supabase_client)
         db = SocialMediaDatabase(supabase_client)
 
-        metadata = {
-            "day": intro_post["day"],
-            "post_number": intro_post["post_number"],
-            "video_script": intro_post.get("video_script"),
-            "avatar_id_env": intro_post.get("avatar_id_env"),
-            "carousel_slides": intro_post.get("carousel_slides"),
-            "image_prompt": intro_post.get("image_prompt"),
-            "launch_content": True,
-            "target_audience": "global"
-        }
+        # Schedule for 14:00 SAST today or tomorrow if past 14:00
+        now = datetime.now(SA_TZ)
+        scheduled_time = now.replace(hour=14, minute=0, second=0, microsecond=0)
+        if now.hour >= 14:
+            scheduled_time = scheduled_time + timedelta(days=1)
 
-        # Use global hashtags
+        log_info(f"📅 Scheduled time: {scheduled_time.isoformat()}")
+
+        # Generate introduction video script directly
+        log_info("📝 Generating introduction video script...")
+        content = generator.generate_video_script(
+            theme='introduction',
+            duration=60,
+            style='introduction'
+        )
+
+        video_script = content.get('script', '')
+        content_text = content.get('caption', video_script)
+
+        if not video_script:
+            log_error("❌ Failed to generate video script")
+            return jsonify({'success': False, 'error': 'Failed to generate video script'}), 500
+
+        log_info(f"✅ Generated video script ({len(video_script)} chars)")
+
+        # Global hashtags
         global_hashtags = [
             "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
             "#PTLife", "#FitnessBusiness", "#TrainerTips"
         ]
 
+        # Metadata
+        metadata = {
+            "day": 1,
+            "post_number": 1,
+            "video_script": video_script,
+            "launch_content": True,
+            "target_audience": "global",
+            "content_theme": "introduction"
+        }
+
+        # Save the post
+        log_info("💾 Saving introduction post to database...")
         post_id = db.save_post(
-            platform=intro_post.get("platform", "facebook"),
-            content=intro_post.get("content_text", ""),
-            post_type=intro_post.get("post_type", "video"),
-            scheduled_time=intro_post.get("scheduled_time"),
-            content_theme=intro_post.get("content_theme"),
+            platform="facebook",
+            content=content_text,
+            post_type="video",
+            scheduled_time=scheduled_time.isoformat(),
+            content_theme="introduction",
             hashtags=global_hashtags,
             generation_prompt=json.dumps(metadata)
         )
 
         if not post_id:
+            log_error("❌ Failed to save post to database")
             return jsonify({'success': False, 'error': 'Failed to save introduction post'}), 500
 
         log_info(f"✅ Saved introduction post: {post_id}")
@@ -4731,8 +4737,8 @@ def api_generate_launch_content():
             'deleted_count': deleted_count,
             'created_count': 1,
             'post_ids': [post_id],
-            'scheduled_time': intro_post.get('scheduled_time'),
-            'message': '✅ Introduction post created for global audience! Review and approve to start posting.'
+            'scheduled_time': scheduled_time.isoformat(),
+            'message': f'✅ Introduction post created! Scheduled for {scheduled_time.strftime("%b %d at %H:%M")} SAST. Review and approve to start posting.'
         })
 
     except Exception as e:
