@@ -1170,10 +1170,19 @@
 
             // Video preview
             if (post.video_url) {
+                // Determine video source badge
+                let sourceBadge = '';
+                if (post.video_source === 'avatar_iv_api') {
+                    sourceBadge = '<span class="video-source-badge api-generated" style="background:#10b981; color:white; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600; margin-left:8px;">🤖 API Generated</span>';
+                } else if (post.video_source === 'manual_upload') {
+                    sourceBadge = '<span class="video-source-badge manual-upload" style="background:#6366f1; color:white; padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600; margin-left:8px;">📤 Manual Upload</span>';
+                }
+
                 preview = `
                     <div class="media-preview-section">
                         <div class="media-label">
                             🎥 Video Preview
+                            ${sourceBadge}
                             <button onclick="window.open('${post.video_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
                         </div>
                         <video controls class="media-preview-video" style="width:100%; max-height:400px; background:#000; border-radius:8px;">

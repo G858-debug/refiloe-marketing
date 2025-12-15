@@ -30,6 +30,11 @@ except ImportError:  # Fallback when modules are placed at project root
     from database import SocialMediaDatabase
 
 try:
+    from .utils.avatar_iv_tracker import can_generate_avatar_iv, get_avatar_iv_credit_status
+except ImportError:
+    from utils.avatar_iv_tracker import can_generate_avatar_iv, get_avatar_iv_credit_status
+
+try:
     from .content_generator import ContentGenerator
 except ImportError:
     from content_generator import ContentGenerator
@@ -920,6 +925,33 @@ class ContentPipeline:
                 "script": script,
             }
 
+        # Check Avatar IV credits before attempting generation
+        credits_available, credit_status = can_generate_avatar_iv(
+            duration,
+            self.db.supabase if hasattr(self.db, 'supabase') else None
+        )
+
+        # If credits exhausted, mark for manual creation instead of API generation
+        if not credits_available:
+            log_warning(
+                f"Avatar IV credits exhausted ({credit_status.get('remaining', 0):.2f} min remaining, "
+                f"{credit_status.get('required', 0):.2f} min required). "
+                f"Marking post for manual video creation."
+            )
+            return {
+                "status": "requires_manual_creation",
+                "script": script,
+                "duration_seconds": duration,
+                "requires_manual_video": True,
+                "credit_status": credit_status,
+                "reason": "avatar_iv_credits_exhausted",
+            }
+
+        log_info(
+            f"Avatar IV credits available: {credit_status.get('required', 0):.2f} min required, "
+            f"{credit_status.get('remaining', 0):.2f} min remaining"
+        )
+
         method_name = template.get("video_generator_method", "generate_ai_video_with_avatars")
         generator_method = getattr(self.video_generator, method_name, None)
 
@@ -956,6 +988,8 @@ class ContentPipeline:
             "script": script,
             "result": video_result,
             "duration_seconds": duration,
+            "credit_status": credit_status,
+            "video_source": "avatar_iv_api",  # Track that this was API-generated
         }
 
     # ------------------------------------------------------------------
