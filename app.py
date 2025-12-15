@@ -3255,6 +3255,82 @@ def view_post_detail(post_id):
         return f"Error: {str(e)}", 500
 
 
+@app.route('/dashboard/pending-scripts')
+def pending_scripts_dashboard():
+    """Dashboard for videos awaiting manual Avatar IV creation"""
+    if not supabase_client:
+        return "Database not connected", 503
+
+    try:
+        # Query posts where post_type = 'video' AND video_url IS NULL
+        # Order by scheduled_time ascending (soonest first)
+        result = supabase_client.table('social_posts').select('*').eq('post_type', 'video').is_('video_url', 'null').order('scheduled_time', desc=False).execute()
+
+        pending_posts = []
+
+        for post in result.data if result.data else []:
+            # Parse generation_prompt to get video_script and other metadata
+            video_script = ''
+            word_count = 0
+            estimated_duration = 0
+
+            if post.get('generation_prompt'):
+                try:
+                    metadata = json.loads(post['generation_prompt'])
+                    video_script = metadata.get('video_script', '')
+
+                    # Calculate word count and estimated duration
+                    if video_script:
+                        word_count = len(video_script.split())
+                        # Estimate duration: ~150 words per minute for conversational speech
+                        estimated_duration = int((word_count / 150) * 60)  # in seconds
+                except Exception as e:
+                    log_error(f"Error parsing generation_prompt for post {post.get('id')}: {e}")
+
+            # Format scheduled time
+            scheduled_formatted = 'Not scheduled'
+            if post.get('scheduled_time'):
+                try:
+                    dt = datetime.fromisoformat(post['scheduled_time'].replace('Z', '+00:00'))
+                    scheduled_formatted = dt.strftime('%a, %b %d, %Y at %H:%M')
+                except Exception:
+                    scheduled_formatted = post['scheduled_time']
+
+            pending_posts.append({
+                'id': post.get('id'),
+                'title': post.get('title', 'Untitled'),
+                'content_theme': post.get('content_theme', 'General'),
+                'content_text': post.get('content_text', ''),
+                'video_script': video_script,
+                'word_count': word_count,
+                'estimated_duration': estimated_duration,
+                'scheduled_time': post.get('scheduled_time'),
+                'scheduled_formatted': scheduled_formatted,
+                'status': post.get('status', 'unknown')
+            })
+
+        # TODO: Get Avatar IV credit status from HeyGen API
+        # For now, showing placeholder values
+        avatar_credits = {
+            'used': 0,
+            'remaining': 'Unknown',
+            'total': 'Unknown'
+        }
+
+        return render_template(
+            'pending_scripts.html',
+            pending_posts=pending_posts,
+            pending_count=len(pending_posts),
+            avatar_credits=avatar_credits
+        )
+
+    except Exception as e:
+        log_error(f"Error fetching pending scripts: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return f"Error: {str(e)}", 500
+
+
 # =============================================================================
 # API Helper Functions
 # =============================================================================

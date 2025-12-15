@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Video Scripts - Avatar IV Manual Creation</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Credit Status */
+        .credit-status {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e5e7eb;
+        }
+        .credit-status h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #374151;
+        }
+        .credit-info {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .credit-item {
+            flex: 1;
+            min-width: 150px;
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .credit-item .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .credit-item .label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        /* Action Buttons */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background: #d1d5db; }
+
+        /* Post Cards */
+        .section-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .count-badge {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .post-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 20px;
+        }
+
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .post-id {
+            font-size: 12px;
+            color: #6b7280;
+            font-family: monospace;
+        }
+
+        .post-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .theme-badge {
+            background: #fef3c7;
+            color: #b45309;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Script Section - Most Important */
+        .script-section {
+            background: #f9fafb;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .script-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .script-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .script-text {
+            background: white;
+            padding: 20px;
+            border-radius: 6px;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #1f2937;
+            white-space: pre-wrap;
+            border: 1px solid #e5e7eb;
+            font-family: 'Georgia', serif;
+        }
+
+        .script-stats {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        .script-stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .copy-btn {
+            background: #10b981;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .copy-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .copy-btn.copied {
+            background: #6366f1;
+        }
+
+        /* Caption Section */
+        .caption-section {
+            margin-bottom: 15px;
+        }
+
+        .caption-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .caption-text {
+            background: #fff;
+            padding: 12px;
+            border-left: 3px solid #4CAF50;
+            border-radius: 4px;
+            color: #333;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+        .empty-state h3 { margin-bottom: 10px; color: #374151; font-size: 20px; }
+        .empty-state p { margin-bottom: 20px; }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            display: none;
+        }
+
+        .toast.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container { padding: 15px; }
+            .post-header { flex-direction: column; }
+            .script-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .credit-info { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 Pending Video Scripts</h1>
+        <p>Videos awaiting manual Avatar IV creation</p>
+    </div>
+
+    <div class="container">
+        <!-- Avatar IV Credit Status -->
+        <div class="credit-status">
+            <h2>🎬 Avatar IV Credit Status</h2>
+            <div class="credit-info">
+                <div class="credit-item">
+                    <div class="number">{{ avatar_credits.used }}</div>
+                    <div class="label">Credits Used</div>
+                </div>
+                <div class="credit-item">
+                    <div class="number">{{ avatar_credits.remaining }}</div>
+                    <div class="label">Credits Remaining</div>
+                </div>
+                <div class="credit-item">
+                    <div class="number">{{ avatar_credits.total }}</div>
+                    <div class="label">Total Credits</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="actions">
+            <a href="/dashboard" class="btn btn-secondary">← Back to Dashboard</a>
+            <button class="btn btn-primary" onclick="location.reload()">🔄 Refresh</button>
+        </div>
+
+        <!-- Section Title -->
+        <h2 class="section-title">
+            Videos Pending Manual Creation
+            <span class="count-badge">{{ pending_count }}</span>
+        </h2>
+
+        <!-- Pending Posts -->
+        {% if pending_count == 0 %}
+        <div class="empty-state">
+            <h3>🎉 All caught up!</h3>
+            <p>No videos are currently awaiting manual creation.</p>
+            <a href="/dashboard" class="btn btn-primary">Return to Dashboard</a>
+        </div>
+        {% else %}
+        {% for post in pending_posts %}
+        <div class="post-card">
+            <!-- Post Header -->
+            <div class="post-header">
+                <div>
+                    <div class="post-id">ID: {{ post.id }}</div>
+                </div>
+            </div>
+
+            <!-- Post Meta -->
+            <div class="post-meta">
+                <div class="meta-item">
+                    <span class="meta-label">📅 Scheduled:</span>
+                    <span>{{ post.scheduled_formatted }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">🎨 Theme:</span>
+                    <span class="theme-badge">{{ post.content_theme }}</span>
+                </div>
+                {% if post.title %}
+                <div class="meta-item">
+                    <span class="meta-label">📌 Title:</span>
+                    <span>{{ post.title }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Script Section (Most Important) -->
+            <div class="script-section">
+                <div class="script-header">
+                    <div class="script-title">📜 Video Script</div>
+                    <button class="copy-btn" onclick="copyScript(this, '{{ post.id }}')">
+                        📋 Copy Script
+                    </button>
+                </div>
+
+                {% if post.video_script %}
+                <div class="script-text" id="script-{{ post.id }}">{{ post.video_script }}</div>
+                <div class="script-stats">
+                    <div class="script-stat">
+                        <span>📊 Word Count:</span>
+                        <strong>{{ post.word_count }}</strong>
+                    </div>
+                    <div class="script-stat">
+                        <span>⏱️ Estimated Duration:</span>
+                        <strong>~{{ post.estimated_duration }}s</strong>
+                    </div>
+                </div>
+                {% else %}
+                <div class="script-text">⚠️ No script available for this post</div>
+                {% endif %}
+            </div>
+
+            <!-- Caption Section -->
+            {% if post.content_text %}
+            <div class="caption-section">
+                <div class="caption-label">📝 Caption Preview</div>
+                <div class="caption-text">{{ post.content_text }}</div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        Script copied to clipboard!
+    </div>
+
+    <script>
+        function copyScript(button, postId) {
+            // Get the script text
+            const scriptElement = document.getElementById('script-' + postId);
+            const scriptText = scriptElement.textContent;
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(scriptText).then(() => {
+                // Show "Copied!" feedback
+                const originalText = button.innerHTML;
+                button.innerHTML = '✅ Copied!';
+                button.classList.add('copied');
+
+                // Show toast notification
+                const toast = document.getElementById('toast');
+                toast.classList.add('show');
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+
+                // Hide toast after 3 seconds
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }).catch(err => {
+                alert('Failed to copy script: ' + err);
+            });
+        }
+    </script>
+</body>
+</html>

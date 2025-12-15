@@ -716,6 +716,9 @@
             <button class="btn btn-secondary" onclick="refreshPosts()">
                 Refresh
             </button>
+            <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
+                📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
+            </a>
             <button class="btn btn-info" onclick="fetchVideosNow()">
                 🎥 Fetch Videos Now
             </button>
@@ -1370,6 +1373,19 @@
             document.getElementById('stat-scheduled').textContent = scheduled;
             document.getElementById('stat-published').textContent = published;
             document.getElementById('stat-total').textContent = posts.length;
+
+            // Update pending scripts badge (videos without video_url)
+            const pendingScripts = posts.filter(p => p.post_type === 'video' && !p.video_url).length;
+            const badge = document.getElementById('pending-scripts-badge');
+            if (badge) {
+                badge.textContent = pendingScripts;
+                // Hide badge if count is 0
+                if (pendingScripts === 0) {
+                    badge.style.display = 'none';
+                } else {
+                    badge.style.display = 'inline';
+                }
+            }
         }
 
         // Keep refreshPosts as an alias for backwards compatibility
