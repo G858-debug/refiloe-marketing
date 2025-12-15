@@ -3762,8 +3762,9 @@ def api_generate_media(post_id):
             db = SocialMediaDatabase(supabase_client)
             video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
 
-            # Use the standardized avatar ID
-            avatar_id = '5637676d31d54946b7585b012a3ce182'
+            # Get content_type for avatar selection (let VideoGenerator select from database)
+            content_type = metadata.get('content_type') or metadata.get('video_generation', {}).get('content_type')
+            avatar_id = None  # Let VideoGenerator select based on content_type
             script = metadata.get('video_script', '')
 
             if not script:
@@ -3778,11 +3779,12 @@ def api_generate_media(post_id):
                 # fetch_orphaned_videos_job will check for completion later
                 result = video_gen.generate_avatar_video(
                     script_text=script,
-                    avatar_id=avatar_id,
+                    avatar_id=None,  # Let VideoGenerator select from database
                     voice_id=None,
                     style='educational',
                     background_music=True,
                     metadata={'post_id': post_id, 'source': 'dashboard_generate_media'},
+                    content_type=content_type,  # Pass content_type for avatar selection
                     wait_for_completion=False
                 )
 
