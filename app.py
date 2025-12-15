@@ -4744,7 +4744,10 @@ def api_generate_launch_content():
 
 @app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
 def api_generate_weekly_content():
-    """Generate 7 posts for the upcoming week (1 post per day) for global audience."""
+    """Generate 7 posts for the upcoming week (1 post per day) for global audience.
+
+    This is ADDITIVE - it finds the latest scheduled post and adds 7 more days after it.
+    """
     log_info("📥 Request: /api/dashboard/generate-weekly-content")
 
     if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
@@ -4760,14 +4763,36 @@ def api_generate_weekly_content():
 
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
-        # Step 1: Clear existing pending posts
-        log_info("🗑️ Clearing existing pending posts...")
-        from social_media.launch_content import clear_all_test_posts
-        deleted_count = clear_all_test_posts(supabase_client)
-        log_info(f"✅ Deleted {deleted_count} existing posts")
+        # Step 1: Find the latest scheduled post date (don't delete anything!)
+        log_info("📅 Finding latest scheduled post date...")
 
-        # Step 2: Generate 7 posts for the next 7 days
-        log_info("📅 Generating weekly content (7 posts) for global audience...")
+        result = supabase_client.table('social_posts').select('scheduled_time').in_(
+            'status', ['pending_approval', 'scheduled', 'approved']
+        ).not_.is_('scheduled_time', 'null').order('scheduled_time', desc=True).limit(1).execute()
+
+        if result.data and result.data[0].get('scheduled_time'):
+            # Parse the latest scheduled time
+            latest_scheduled = result.data[0]['scheduled_time']
+            try:
+                if isinstance(latest_scheduled, str):
+                    # Handle various ISO format variations
+                    latest_date = datetime.fromisoformat(latest_scheduled.replace('Z', '+00:00'))
+                    latest_date = latest_date.astimezone(SA_TZ)
+                else:
+                    latest_date = latest_scheduled
+                # Start from the day after the latest scheduled post
+                start_date = latest_date.replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                log_info(f"📅 Latest scheduled post: {latest_date.date()}. Starting new batch from: {start_date.date()}")
+            except Exception as e:
+                log_warning(f"⚠️ Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
+                start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        else:
+            # No existing posts, start from tomorrow
+            start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            log_info(f"📅 No existing scheduled posts. Starting from: {start_date.date()}")
+
+        # Step 2: Generate 7 posts starting from start_date
+        log_info(f"📅 Generating weekly content (7 posts) starting {start_date.date()}...")
 
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
         generator = ContentGenerator(config_path, supabase_client)
@@ -4791,15 +4816,13 @@ def api_generate_weekly_content():
             "#FitnessIndustry", "#OnlineTrainer"
         ]
 
-        # Start tomorrow at 14:00 SAST (optimal global time)
-        tomorrow = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
         created_ids = []
 
         for day_offset, theme_config in enumerate(weekly_themes):
-            scheduled_time = tomorrow + timedelta(days=day_offset)
+            scheduled_time = start_date + timedelta(days=day_offset)
 
             try:
-                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']}")
+                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
 
                 # Generate content based on post type
                 if theme_config['post_type'] == 'video':
@@ -4844,12 +4867,16 @@ def api_generate_weekly_content():
                 log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
                 continue
 
+        # Calculate date range for message
+        end_date = start_date + timedelta(days=6)
+
         return jsonify({
             'success': True,
-            'deleted_count': deleted_count,
             'created_count': len(created_ids),
             'post_ids': created_ids,
-            'message': f'✅ Created {len(created_ids)} posts for the next 7 days (global audience, 14:00 SAST daily)'
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
+            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (14:00 SAST daily)'
         })
 
     except Exception as e:
