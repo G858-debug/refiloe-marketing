@@ -29,6 +29,11 @@ from utils.logger import log_error, log_info, log_warning
 from utils.whatsapp_notifier import WhatsAppNotifier
 from social_media.weekly_report import WeeklyReportGenerator
 
+try:
+    from social_media.utils.avatar_iv_tracker import get_avatar_iv_credit_status
+except ImportError:
+    from utils.avatar_iv_tracker import get_avatar_iv_credit_status
+
 
 SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
 
@@ -310,6 +315,12 @@ class SocialMediaScheduler:
                 "trigger": IntervalTrigger(minutes=2, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("fetch_orphaned_videos", self.fetch_orphaned_videos_job),
             },
+            {
+                "id": "weekly_manual_video_reminder",
+                "name": "Weekly Manual Video Reminder",
+                "trigger": CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("weekly_manual_video_reminder", self.run_weekly_manual_video_reminder),
+            },
         ]
 
         for job in job_definitions:
@@ -412,6 +423,25 @@ class SocialMediaScheduler:
             log_error(f"Content generator module unavailable: {exc}")
             return
 
+        # Log Avatar IV credit status at start of job
+        try:
+            credit_status = get_avatar_iv_credit_status(self.supabase_client)
+            log_info(
+                f"📊 Avatar IV Credit Status: "
+                f"{credit_status.get('used_minutes', 0):.2f}/{credit_status.get('total_credits', 60)} minutes used "
+                f"({credit_status.get('percentage_used', 0):.1f}%), "
+                f"{credit_status.get('remaining_minutes', 0):.2f} minutes remaining"
+            )
+
+            # Warn if credits are running low (>80% used)
+            if credit_status.get('percentage_used', 0) > 80:
+                log_warning(
+                    f"⚠️  Avatar IV credits running low: "
+                    f"{credit_status.get('percentage_used', 0):.1f}% used"
+                )
+        except Exception as exc:
+            log_warning(f"Could not fetch Avatar IV credit status: {exc}")
+
         try:
             generator = ContentGenerator("social_media/config.yaml", self.supabase_client)
             week_number = datetime.now(SA_TIMEZONE).isocalendar()[1]
@@ -422,6 +452,47 @@ class SocialMediaScheduler:
                 hook_variations=True,
             )
             log_info(f"Content generation job produced {len(posts)} posts.")
+
+            # Track video generation outcomes
+            api_generated_count = 0
+            manual_flagged_count = 0
+
+            for post in posts:
+                if post.get("post_type") == "video":
+                    # Check if post was flagged for manual creation
+                    video_assets = post.get("assets", {}).get("video", {})
+                    if video_assets.get("requires_manual_video"):
+                        manual_flagged_count += 1
+                    elif video_assets.get("video_source") == "avatar_iv_api":
+                        api_generated_count += 1
+
+            # Log video generation summary
+            if api_generated_count > 0 or manual_flagged_count > 0:
+                log_info(
+                    f"📹 Video generation summary: "
+                    f"{api_generated_count} generated via Avatar IV API, "
+                    f"{manual_flagged_count} flagged for manual creation"
+                )
+
+            # Send notification if many posts flagged for manual creation
+            if manual_flagged_count > 3:
+                log_warning(
+                    f"⚠️  High number of posts flagged for manual video creation: {manual_flagged_count}"
+                )
+                self._send_notification(
+                    "warning",
+                    f"{manual_flagged_count} posts require manual video creation",
+                    {
+                        "manual_flagged_count": manual_flagged_count,
+                        "api_generated_count": api_generated_count,
+                        "credit_status": credit_status if 'credit_status' in locals() else None,
+                        "message": (
+                            f"{manual_flagged_count} posts were flagged for manual video creation "
+                            f"due to Avatar IV credit exhaustion. Check the pending scripts dashboard."
+                        )
+                    }
+                )
+
         except ValueError as exc:
             log_warning(f"Content generation prerequisites not met: {exc}")
         except Exception as exc:  # pragma: no cover - API errors
@@ -1086,6 +1157,79 @@ class SocialMediaScheduler:
 
         except Exception as exc:  # pragma: no cover - unexpected errors
             log_error(f"Unexpected error during comment processing job: {exc}\n{traceback.format_exc()}")
+
+    def run_weekly_manual_video_reminder(self) -> None:
+        """Weekly reminder every Sunday at 9:00 AM SAST about pending manual videos.
+
+        Checks if there are posts with requires_manual_video=true for the upcoming week
+        and sends a WhatsApp notification with count and link to the pending scripts dashboard.
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping weekly manual video reminder.")
+            return
+
+        try:
+            # Get date range for upcoming week (next 7 days)
+            now_sa = datetime.now(SA_TIMEZONE)
+            week_from_now = now_sa + timedelta(days=7)
+
+            # Query posts with requires_manual_video=true scheduled in next 7 days
+            response = (
+                self.supabase_client.table("social_posts")
+                .select("id, content_text, scheduled_time, post_type")
+                .eq("requires_manual_video", True)
+                .gte("scheduled_time", now_sa.isoformat())
+                .lte("scheduled_time", week_from_now.isoformat())
+                .execute()
+            )
+
+            pending_posts = response.data if response.data else []
+            pending_count = len(pending_posts)
+
+            log_info(
+                f"📹 Weekly manual video reminder: {pending_count} posts "
+                f"require manual video creation for upcoming week"
+            )
+
+            # Send notification if there are pending manual videos
+            if pending_count > 0:
+                # Get base URL for dashboard link
+                dashboard_url = os.getenv("APP_BASE_URL", "http://localhost:5001")
+                pending_scripts_url = f"{dashboard_url}/admin/pending-scripts"
+
+                self._send_notification(
+                    "warning",
+                    f"{pending_count} videos need manual creation this week",
+                    {
+                        "pending_count": pending_count,
+                        "week_start": now_sa.strftime("%Y-%m-%d"),
+                        "week_end": week_from_now.strftime("%Y-%m-%d"),
+                        "dashboard_link": pending_scripts_url,
+                        "message": (
+                            f"📹 Weekly Reminder:\n\n"
+                            f"{pending_count} video script(s) are pending manual Avatar IV creation "
+                            f"for the upcoming week ({now_sa.strftime('%b %d')} - {week_from_now.strftime('%b %d')}).\n\n"
+                            f"View pending scripts:\n{pending_scripts_url}"
+                        )
+                    }
+                )
+
+                # Also log details about the pending posts
+                for idx, post in enumerate(pending_posts[:5], 1):  # Log first 5
+                    scheduled_time = post.get("scheduled_time", "Unknown")
+                    content_preview = (post.get("content_text") or "")[:50]
+                    log_info(
+                        f"  {idx}. Post {post.get('id')}: "
+                        f"scheduled {scheduled_time} - {content_preview}..."
+                    )
+
+                if pending_count > 5:
+                    log_info(f"  ... and {pending_count - 5} more")
+            else:
+                log_info("✅ No pending manual videos for upcoming week - all clear!")
+
+        except Exception as exc:
+            log_error(f"Error in weekly manual video reminder job: {exc}\n{traceback.format_exc()}")
 
     def _save_report_to_database(self, report: Dict[str, Any]) -> None:
         """
