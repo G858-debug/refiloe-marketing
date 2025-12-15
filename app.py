@@ -4644,34 +4644,70 @@ def api_fresh_start():
 
 @app.route('/api/dashboard/generate-launch-content', methods=['POST'])
 def api_generate_launch_content():
-    """Generate single introduction post for global launch - optimized to only generate 1 post."""
+    """Generate the 'Meet Refiloe' introduction post using the curated script."""
     log_info("📥 Request: /api/dashboard/generate-launch-content")
 
     if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
         return jsonify({'success': False, 'error': 'Database not connected'}), 503
 
     try:
-        from social_media.content_generator import ContentGenerator
         from social_media.launch_content import clear_all_test_posts
         from database import SocialMediaDatabase
-        import os
         import json
         from datetime import datetime, timedelta
         import pytz
 
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
-        # Step 1: Clear existing pending posts
+        # Step 1: Clear ALL existing pending posts
         log_info("🗑️ Clearing existing pending posts...")
         deleted_count = clear_all_test_posts(supabase_client)
         log_info(f"✅ Deleted {deleted_count} existing posts")
 
-        # Step 2: Generate ONLY the introduction video (not all 9 posts!)
-        log_info("🚀 Generating introduction post for global audience...")
+        # Step 2: Use the curated "Meet Refiloe" introduction script
+        log_info("🚀 Creating 'Meet Refiloe' introduction post...")
 
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
-        generator = ContentGenerator(config_path, supabase_client)
-        db = SocialMediaDatabase(supabase_client)
+        # The proper introduction script (from launch_content.py)
+        video_script = """You know that moment—5:47 AM, gym bag packed, coffee in hand—when you realise you're not just tired. You're drowning.
+
+Not in clients. In everything around the clients.
+
+The scheduling chaos. The payment awkwardness. The endless WhatsApp pings before your eyes are even open.
+
+I've spent years studying what separates trainers who burn out from those who build something sustainable. And here's the uncomfortable truth: it's rarely about training knowledge. It's about the business side—the part nobody taught us.
+
+That's why this page exists. Not for motivation porn. For real talk about the trainer struggle. Time-saving hacks that actually work. Ways to grow without sacrificing your sanity.
+
+Because you didn't become a trainer to drown in admin.
+
+You became a trainer to change lives.
+
+If that resonates, stick around. This is just the beginning. 💪"""
+
+        # Caption for the post (what shows on Facebook)
+        content_text = """You know that moment—5:47 AM, gym bag packed, coffee in hand—when you realise you're not just tired. You're drowning. 😤
+
+Not in clients. In everything AROUND the clients.
+
+I've spent years studying what separates trainers who burn out from those who build something sustainable.
+
+That's why this page exists:
+→ Real talk about the trainer struggle
+→ Time-saving hacks that actually work
+→ Ways to grow without sacrificing your sanity
+
+Because you didn't become a trainer to drown in admin.
+You became a trainer to change lives. 💪
+
+If that resonates, hit follow. This is just the beginning.
+
+#PersonalTrainer #FitnessCoach #TrainerLife #PTLife #FitnessBusiness #TrainerTips"""
+
+        # Global hashtags
+        global_hashtags = [
+            "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
+            "#PTLife", "#FitnessBusiness", "#TrainerTips"
+        ]
 
         # Schedule for 14:00 SAST today or tomorrow if past 14:00
         now = datetime.now(SA_TZ)
@@ -4681,42 +4717,6 @@ def api_generate_launch_content():
 
         log_info(f"📅 Scheduled time: {scheduled_time.isoformat()}")
 
-        # Generate introduction video script directly
-        log_info("📝 Generating introduction video script...")
-        content = generator.create_video_script(
-            theme='introduction',
-            duration=60,
-            style='introduction'
-        )
-
-        # Extract video script from the response
-        # The script is returned as a list of segments with 'text' fields
-        script_segments = content.get('script', [])
-        if isinstance(script_segments, list):
-            video_script = "\n\n".join([
-                segment.get('text', '')
-                for segment in script_segments
-                if isinstance(segment, dict) and segment.get('text', '').strip()
-            ])
-        else:
-            video_script = str(script_segments) if script_segments else ''
-
-        # Use hook as caption intro if available
-        hook = content.get('hook', '')
-        content_text = f"{hook}\n\n{video_script[:200]}..." if hook else video_script[:300]
-
-        if not video_script:
-            log_error("❌ Failed to generate video script")
-            return jsonify({'success': False, 'error': 'Failed to generate video script'}), 500
-
-        log_info(f"✅ Generated video script ({len(video_script)} chars)")
-
-        # Global hashtags
-        global_hashtags = [
-            "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
-            "#PTLife", "#FitnessBusiness", "#TrainerTips"
-        ]
-
         # Metadata
         metadata = {
             "day": 1,
@@ -4724,10 +4724,13 @@ def api_generate_launch_content():
             "video_script": video_script,
             "launch_content": True,
             "target_audience": "global",
-            "content_theme": "introduction"
+            "content_theme": "introduction",
+            "post_title": "Meet Refiloe - Introduction"
         }
 
         # Save the post
+        db = SocialMediaDatabase(supabase_client)
+
         log_info("💾 Saving introduction post to database...")
         post_data = {
             'platform': 'facebook',
@@ -4735,9 +4738,11 @@ def api_generate_launch_content():
             'post_type': 'video',
             'scheduled_time': scheduled_time.isoformat(),
             'content_theme': 'introduction',
+            'title': 'Meet Refiloe - Introduction',
             'hashtags': global_hashtags,
             'generation_prompt': json.dumps(metadata),
-            'status': 'pending_approval'
+            'status': 'pending_approval',
+            'video_duration': 60
         }
         post_id = db.save_post(post_data)
 
@@ -4745,7 +4750,7 @@ def api_generate_launch_content():
             log_error("❌ Failed to save post to database")
             return jsonify({'success': False, 'error': 'Failed to save introduction post'}), 500
 
-        log_info(f"✅ Saved introduction post: {post_id}")
+        log_info(f"✅ Saved 'Meet Refiloe' introduction post: {post_id}")
 
         return jsonify({
             'success': True,
@@ -4753,7 +4758,7 @@ def api_generate_launch_content():
             'created_count': 1,
             'post_ids': [post_id],
             'scheduled_time': scheduled_time.isoformat(),
-            'message': f'✅ Introduction post created! Scheduled for {scheduled_time.strftime("%b %d at %H:%M")} SAST. Review and approve to start posting.'
+            'message': f'✅ "Meet Refiloe" introduction post created! Scheduled for {scheduled_time.strftime("%b %d at %H:%M")} SAST.'
         })
 
     except Exception as e:
