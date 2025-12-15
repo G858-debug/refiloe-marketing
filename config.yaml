@@ -8,25 +8,25 @@
 # Defines when and how often Refiloe posts content
 # Times are in SAST (South African Standard Time)
 posting_schedule:
-  # All weeks: 1 quality post per day
+  # All weeks: 1 quality post per day at optimal global time
   week_1:
     enabled: true
     posts_per_day: 1
-    times: ["12:00"]
+    times: ["14:00"]
     timezone: "SAST"
-    description: "Launch phase - 1 quality post daily at noon"
+    description: "Launch phase - 1 post daily at 2pm SAST (catches Europe morning, Americas early, Africa afternoon)"
 
   week_2_to_4:
     enabled: true
     posts_per_day: 1
-    times: ["12:00"]
+    times: ["14:00"]
     timezone: "SAST"
-    description: "Growth phase - consistent daily posting"
+    description: "Growth phase - consistent global posting"
 
   week_5_plus:
     enabled: true
     posts_per_day: 1
-    times: ["12:00"]
+    times: ["14:00"]
     timezone: "SAST"
     description: "Sustained phase - quality over quantity"
 
@@ -476,22 +476,29 @@ facebook_settings:
       - "#PersonalTrainer"
       - "#FitnessCoach"
       - "#TrainerLife"
-      - "#RefiloeAI"
-      - "#TrainerTips"
-    
-    secondary_hashtags:
+      - "#PTLife"
       - "#FitnessBusiness"
+      - "#FitnessIndustry"
+      - "#OnlineTrainer"
+      - "#FitnessProfessional"
+      - "#TrainerTips"
+      - "#FitnessEntrepreneur"
+      - "#RefiloeAI"
+
+    secondary_hashtags:
       - "#ClientManagement"
       - "#TrainerHacks"
       - "#FitnessMotivation"
       - "#TrainerCommunity"
-    
+      - "#GymLife"
+      - "#WorkoutMotivation"
+
     niche_hashtags:
       - "#AdminHacks"
       - "#TrainerTools"
       - "#FitnessTech"
       - "#TrainerSupport"
-      - "#FitnessEntrepreneur"
+      - "#FitnessMarketing"
     
     hashtag_guidelines:
       - "Use 5-8 hashtags per post maximum"
