@@ -279,6 +279,13 @@ class FacebookPoster:
             log_error(f"Exception in _post_video: {e}")
             import traceback
             log_error(traceback.format_exc())
+            # Try to get more details from the response if it's an HTTP error
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                    log_error(f"Facebook error details: {error_detail}")
+                except:
+                    log_error(f"Facebook error text: {e.response.text}")
             return {
                 'success': False,
                 'post_id': None,
@@ -506,8 +513,14 @@ class FacebookPoster:
                     raise Exception("Access token expired")
                 
                 # Handle other errors
-                response.raise_for_status()
-                
+                if not response.ok:
+                    try:
+                        error_body = response.json()
+                        log_error(f"Facebook API error response: {error_body}")
+                    except:
+                        log_error(f"Facebook API error (non-JSON): {response.text}")
+                    response.raise_for_status()
+
                 # Return JSON response
                 return response.json()
                 
