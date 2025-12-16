@@ -1376,6 +1376,18 @@ def generate_real_video():
 
         scheduled_time = datetime.now(SA_TZ) + timedelta(hours=2)
 
+        # Get or generate reel_title for Facebook Reels
+        reel_title = (
+            selected_content.get('reel_title') or
+            data.get('reel_title') or
+            data.get('title') or
+            f"POV: You just discovered this {theme.replace('_', ' ')} hack..."
+        )
+
+        # Ensure reel_title is within Facebook's 255 character limit
+        if len(reel_title) > 255:
+            reel_title = reel_title[:252] + '...'
+
         post_data = {
             'post_type': 'video',
             'platform': 'facebook',
@@ -1388,6 +1400,7 @@ def generate_real_video():
             'video_style': data.get('style', 'educational'),
             'content_text': content_text,
             'content_theme': theme,
+            'title': reel_title,  # Save reel_title as title field
             'has_captions': True,
             'completion_rate': 0,
             'avg_watch_time': 0
@@ -4247,10 +4260,14 @@ def api_upload_to_facebook(post_id: str):
 
         log_info(f"Will schedule video for Unix timestamp: {schedule_timestamp}")
 
+        # Get the reel title for Facebook
+        reel_title = post.get('title') or post.get('reel_title', '')
+
         # Upload video as draft
         fb_result = fb_poster._post_video({
             'content_text': description,
             'video_url': video_url,
+            'title': reel_title,  # Reel title for Facebook
             'post_as_draft': True,
             'include_schedule_hint': False,
             'scheduled_publish_time': schedule_timestamp,
@@ -5734,6 +5751,7 @@ def api_generate_weekly_content():
                     )
                     content_text = content.get('caption', content.get('script', ''))
                     video_script = content.get('script', '')
+                    reel_title = content.get('reel_title', '')  # Capture reel_title from generated content
                 else:
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
@@ -5741,6 +5759,7 @@ def api_generate_weekly_content():
                     )
                     content_text = content.get('caption', '')
                     video_script = None
+                    reel_title = content.get('title', '')  # Use title for non-video posts
 
                 metadata = {
                     "day": day_offset + 1,
@@ -5757,6 +5776,7 @@ def api_generate_weekly_content():
                     'post_type': theme_config['post_type'],
                     'scheduled_time': scheduled_time.isoformat(),
                     'content_theme': theme_config['theme'],
+                    'title': reel_title,  # Save reel_title for video posts
                     'hashtags': global_hashtags,
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
