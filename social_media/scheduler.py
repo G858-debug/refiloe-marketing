@@ -203,6 +203,7 @@ class SocialMediaScheduler:
                     video_status = status_result.get('status')
                     video_url = status_result.get('video_url')
                     thumbnail_url = status_result.get('thumbnail_url')
+                    duration = status_result.get('duration')
                     error = status_result.get('error')
 
                     log_info(f"HeyGen status: {video_status}")
@@ -253,13 +254,29 @@ class SocialMediaScheduler:
                             'updated_at': datetime.now(SA_TIMEZONE).isoformat()
                         }
 
-                        # Add source_image_url if we found it
+                        # Add thumbnail_url from HeyGen (for display/preview)
+                        if thumbnail_url:
+                            update_data['thumbnail_url'] = thumbnail_url
+
+                        # Add source_image_url for title card generation
                         if source_image_url:
                             update_data['source_image_url'] = source_image_url
 
+                        # Add video_duration if available
+                        if duration:
+                            update_data['video_duration'] = duration
+
                         self.supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
 
-                        log_info(f"✅ Post {post_id} updated to pending_approval")
+                        # Log what was saved
+                        saved_fields = []
+                        if thumbnail_url:
+                            saved_fields.append(f"thumbnail_url")
+                        if source_image_url:
+                            saved_fields.append(f"source_image_url")
+                        if duration:
+                            saved_fields.append(f"video_duration={duration}s")
+                        log_info(f"✅ Post {post_id} updated to pending_approval (saved: {', '.join(saved_fields) if saved_fields else 'video_url only'})")
                         videos_completed += 1
 
                     elif video_status == 'failed' or (error and 'not found' in str(error).lower()):
