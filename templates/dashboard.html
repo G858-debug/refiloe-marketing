@@ -1311,12 +1311,16 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
             }
             else if (status === 'generating') {
                 buttons = `
                     <p class="status-message">⏱️ Generating media... This takes 30-90 seconds.</p>
+                    <div class="post-actions">
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
+                    </div>
                 `;
             }
             else if (status === 'pending_media_approval') {
@@ -1335,12 +1339,22 @@
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
                             🔄 Regenerate ${mediaType}
                         </button>
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
             }
             else if (status === 'scheduled') {
                 buttons = `
                     <p class="status-message">📅 Will post automatically at scheduled time</p>
+                    <div class="post-actions">
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
+                    </div>
+                `;
+            }
+            else if (status === 'published') {
+                // Published posts cannot be rejected
+                buttons = `
+                    <p class="status-message">✅ Posted successfully</p>
                 `;
             }
             else {
