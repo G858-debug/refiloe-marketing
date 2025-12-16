@@ -4907,6 +4907,7 @@ def api_regenerate_media(post_id):
 @app.route('/api/dashboard/motion-prompts', methods=['GET'])
 def api_get_motion_prompts():
     """Get list of available motion prompts for video generation."""
+    log_info("📥 Request: /api/dashboard/motion-prompts")
     return jsonify({
         'success': True,
         'prompts': MOTION_PROMPTS
@@ -4930,7 +4931,9 @@ def api_regenerate_video(post_id: str):
 
         # Get request data
         data = request.get_json() or {}
-        motion_prompt = data.get('motion_prompt', '').strip() or None
+        motion_prompt = data.get('motion_prompt', '').strip() if data.get('motion_prompt') else None
+
+        log_info(f"🎭 Motion prompt received: {motion_prompt}")
 
         # Fetch the post
         result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
@@ -4951,6 +4954,7 @@ def api_regenerate_video(post_id: str):
         # Get the video script from generation_prompt
         generation_prompt = post.get('generation_prompt')
         video_script = None
+        gen_data = {}
 
         if generation_prompt:
             try:
@@ -4959,8 +4963,8 @@ def api_regenerate_video(post_id: str):
                 else:
                     gen_data = generation_prompt
                 video_script = gen_data.get('video_script', '')
-            except:
-                pass
+            except Exception as e:
+                log_error(f"Error parsing generation_prompt: {e}")
 
         if not video_script:
             return jsonify({'success': False, 'error': 'No video script found for this post'}), 400
@@ -4992,89 +4996,96 @@ def api_regenerate_video(post_id: str):
         # Get voice ID
         voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
 
-        # Generate video using Avatar IV if possible, otherwise standard
-        # Try to get a look/image for Avatar IV
-        from social_media.avatar_mapping import get_avatar_and_look_for_content
-
-        avatar_id, look_info = get_avatar_and_look_for_content(
-            content_text=video_script,
-            content_type=content_type
-        )
-
-        image_url = look_info.get('image_url') if look_info else None
+        # Try to get avatar and look
+        try:
+            from social_media.avatar_mapping import get_avatar_and_look_for_content
+            avatar_id, look_info = get_avatar_and_look_for_content(
+                content_text=video_script,
+                content_type=content_type
+            )
+            image_url = look_info.get('image_url') if look_info else None
+        except Exception as e:
+            log_warning(f"Could not get avatar/look: {e}")
+            avatar_id = os.getenv('HEYGEN_DEFAULT_AVATAR_ID', gen_data.get('avatar_id_env'))
+            image_url = None
+            look_info = None
 
         log_info(f"🎭 Avatar ID: {avatar_id}")
-        log_info(f"🖼️ Image URL: {image_url[:50] if image_url else 'None'}...")
+        log_info(f"🖼️ Image URL: {image_url[:50] + '...' if image_url else 'None'}")
 
         # Generate video
+        video_result = None
+
         if image_url:
             # Use Avatar IV (supports gestures)
             log_info("Using Avatar IV API (supports gestures)")
-            result = video_gen.generate_avatar_iv_video(
-                script=video_script,
-                image_url=image_url,
-                voice_id=voice_id,
-                custom_motion_prompt=motion_prompt,
-                enhance_motion=True,
-                aspect_ratio="9:16",
-                title=post.get('title', 'Regenerated Video'),
-                metadata={
-                    'post_id': post_id,
-                    'regenerated': True,
-                    'motion_prompt': motion_prompt,
-                    'content_theme': content_theme
-                }
-            )
-        else:
-            # Use standard Photo Avatar API
-            log_info("Using Photo Avatar API (standard)")
-            result = video_gen.generate_avatar_video(
-                script_text=video_script,
-                avatar_id=avatar_id,
-                voice_id=voice_id,
-                style='educational',
-                background_music=True,
-                metadata={
-                    'post_id': post_id,
-                    'regenerated': True,
-                    'motion_prompt': motion_prompt
-                },
-                content_type=content_type,
-                wait_for_completion=False
-            )
+            try:
+                video_result = video_gen.generate_avatar_iv_video(
+                    script=video_script,
+                    image_url=image_url,
+                    voice_id=voice_id,
+                    custom_motion_prompt=motion_prompt,
+                    enhance_motion=True,
+                    aspect_ratio="9:16",
+                    title=post.get('title', 'Regenerated Video'),
+                    metadata={
+                        'post_id': post_id,
+                        'regenerated': True,
+                        'motion_prompt': motion_prompt,
+                        'content_theme': content_theme
+                    }
+                )
+            except Exception as e:
+                log_error(f"Avatar IV generation failed: {e}")
+                video_result = None
 
-        if not result:
+        if not video_result and avatar_id:
+            # Fallback to standard Photo Avatar API
+            log_info("Using Photo Avatar API (standard)")
+            try:
+                video_result = video_gen.generate_avatar_video(
+                    script_text=video_script,
+                    avatar_id=avatar_id,
+                    voice_id=voice_id,
+                    style='educational',
+                    background_music=True,
+                    metadata={
+                        'post_id': post_id,
+                        'regenerated': True,
+                        'motion_prompt': motion_prompt
+                    },
+                    content_type=content_type,
+                    wait_for_completion=False
+                )
+            except Exception as e:
+                log_error(f"Photo Avatar generation failed: {e}")
+                video_result = None
+
+        if not video_result:
             # Reset status on failure
             supabase_client.table('social_posts').update({
                 'status': 'pending_approval',
                 'updated_at': datetime.now(SA_TZ).isoformat()
             }).eq('id', post_id).execute()
 
-            return jsonify({'success': False, 'error': 'Video generation failed'}), 500
+            return jsonify({'success': False, 'error': 'Video generation failed - no result returned'}), 500
 
-        video_id = result.get('video_id')
-        video_url = result.get('video_url')
+        video_id = video_result.get('video_id')
+        video_url = video_result.get('video_url')
 
         log_info(f"📹 Video ID: {video_id}")
         log_info(f"📹 Video URL: {video_url or 'Processing...'}")
 
+        # Update generation_prompt with motion_prompt
+        if motion_prompt:
+            gen_data['motion_prompt'] = motion_prompt
+
         # Update post with video info
         update_data = {
             'video_id': video_id,
+            'generation_prompt': json.dumps(gen_data),
             'updated_at': datetime.now(SA_TZ).isoformat()
         }
-
-        # Store motion prompt in generation_prompt
-        if motion_prompt:
-            try:
-                if isinstance(generation_prompt, str):
-                    gen_data = json.loads(generation_prompt)
-                else:
-                    gen_data = generation_prompt or {}
-                gen_data['motion_prompt'] = motion_prompt
-                update_data['generation_prompt'] = json.dumps(gen_data)
-            except:
-                pass
 
         if video_url:
             # Video completed immediately
