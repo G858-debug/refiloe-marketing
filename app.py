@@ -1388,13 +1388,35 @@ def generate_real_video():
         if len(reel_title) > 255:
             reel_title = reel_title[:252] + '...'
 
+        # Generate custom thumbnail with reel title overlay
+        custom_thumbnail_path = None
+        try:
+            from social_media.thumbnail_generator import ThumbnailGenerator
+
+            source_image_url = result.get('thumbnail_url')
+            if source_image_url and reel_title:
+                log_info(f"Generating custom thumbnail for reel: {reel_title}")
+                thumbnail_gen = ThumbnailGenerator()
+                thumbnail_result = thumbnail_gen.generate_thumbnail(
+                    image_url=source_image_url,
+                    title_text=reel_title
+                )
+
+                if thumbnail_result.get('success'):
+                    custom_thumbnail_path = thumbnail_result.get('thumbnail_path')
+                    log_info(f"Custom thumbnail generated: {custom_thumbnail_path}")
+                else:
+                    log_warning(f"Thumbnail generation failed: {thumbnail_result.get('error')}")
+        except Exception as e:
+            log_error(f"Error generating custom thumbnail: {str(e)}")
+
         post_data = {
             'post_type': 'video',
             'platform': 'facebook',
             'status': 'pending_approval',
             'scheduled_time': scheduled_time.isoformat(),
             'video_url': result.get('video_url'),
-            'thumbnail_url': result.get('thumbnail_url'),
+            'thumbnail_url': custom_thumbnail_path or result.get('thumbnail_url'),  # Use custom thumbnail if available
             'video_duration': int(result.get('duration') or 0),
             'video_type': 'marketing_video',
             'video_style': data.get('style', 'educational'),

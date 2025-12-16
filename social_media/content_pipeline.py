@@ -50,6 +50,11 @@ except ImportError:
     from video_generator import VideoGenerator
 
 try:
+    from .thumbnail_generator import ThumbnailGenerator
+except ImportError:
+    from thumbnail_generator import ThumbnailGenerator
+
+try:
     from .carousel_template_generator import CarouselTemplateGenerator
 except ImportError:
     from carousel_template_generator import CarouselTemplateGenerator
@@ -114,6 +119,7 @@ class ContentPipeline:
             self.config_path, supabase_client
         )
         self.carousel_generator = self._init_carousel_generator(self.config_path)
+        self.thumbnail_generator = self._init_thumbnail_generator()
 
         self.cost_tracker = self._initialise_cost_tracker()
         self.cost_log: List[Dict[str, Any]] = []
@@ -127,7 +133,8 @@ class ContentPipeline:
             f"ContentPipeline initialised with text={bool(self.content_generator)}, "
             f"image={bool(self.image_generator)}, "
             f"video={bool(self.video_generator)}, "
-            f"carousel={bool(self.carousel_generator)}"
+            f"carousel={bool(self.carousel_generator)}, "
+            f"thumbnail={bool(self.thumbnail_generator)}"
         )
 
     # ---------------------------------------------------------------------
@@ -983,6 +990,34 @@ class ContentPipeline:
             {"template": template["name"], "method": method_name},
         )
 
+        # Generate custom thumbnail if video generation succeeded
+        thumbnail_path = None
+        if video_result and self.thumbnail_generator:
+            try:
+                # Get source image URL (HeyGen's thumbnail) and reel title
+                source_image_url = video_result.get('thumbnail_url')
+                reel_title = script.get('reel_title') or script.get('title', '')
+
+                if source_image_url and reel_title:
+                    log_info(f"Generating custom thumbnail for video with title: {reel_title}")
+                    thumbnail_result = self.thumbnail_generator.generate_thumbnail(
+                        image_url=source_image_url,
+                        title_text=reel_title
+                    )
+
+                    if thumbnail_result.get('success'):
+                        thumbnail_path = thumbnail_result.get('thumbnail_path')
+                        log_info(f"Custom thumbnail generated successfully: {thumbnail_path}")
+                    else:
+                        log_warning(f"Thumbnail generation failed: {thumbnail_result.get('error')}")
+                else:
+                    if not source_image_url:
+                        log_warning("No source image URL available for thumbnail generation")
+                    if not reel_title:
+                        log_warning("No reel title available for thumbnail generation")
+            except Exception as exc:
+                log_error(f"Error generating thumbnail: {exc}")
+
         return {
             "status": "generated" if video_result else "pending_generation",
             "script": script,
@@ -990,6 +1025,7 @@ class ContentPipeline:
             "duration_seconds": duration,
             "credit_status": credit_status,
             "video_source": "avatar_iv_api",  # Track that this was API-generated
+            "thumbnail_path": thumbnail_path,  # Custom thumbnail path
         }
 
     # ------------------------------------------------------------------
@@ -1536,6 +1572,13 @@ class ContentPipeline:
             return CarouselTemplateGenerator(config_path)
         except Exception as exc:
             log_warning(f"CarouselTemplateGenerator unavailable: {exc}")
+            return None
+
+    def _init_thumbnail_generator(self) -> Optional[ThumbnailGenerator]:
+        try:
+            return ThumbnailGenerator()
+        except Exception as exc:
+            log_warning(f"ThumbnailGenerator unavailable: {exc}")
             return None
 
     def _resolve_launch_date(self) -> date:
