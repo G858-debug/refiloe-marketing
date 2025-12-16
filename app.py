@@ -4684,6 +4684,7 @@ def api_generate_media(post_id):
 
             # If Avatar IV requested, generate a look first
             image_url = None
+            image_key = None
             if use_avatar_iv:
                 log_info("User requested Avatar IV - generating look first...")
 
@@ -4720,11 +4721,13 @@ def api_generate_media(post_id):
 
                     # Extract image_url from look result
                     image_url = look_result.get('preview_url') or (look_result.get('image_urls', [None])[0])
+                    image_key = look_result.get('photo_avatar_id')  # This is what Avatar IV needs
 
-                    if not image_url:
-                        raise ValueError("Look generation succeeded but no image_url returned")
+                    log_info(f"Look generated - image_url: {image_url[:50] if image_url else None}...")
+                    log_info(f"Look generated - image_key (photo_avatar_id): {image_key}")
 
-                    log_info(f"Look generated successfully, image_url: {image_url[:50]}...")
+                    if not image_url and not image_key:
+                        raise ValueError("Look generation succeeded but no image_url or image_key returned")
 
                     # Save look info to post for later reference
                     looks_gen.save_look_to_database(look_result)
@@ -4749,11 +4752,12 @@ def api_generate_media(post_id):
 
             try:
                 # Choose API based on whether we have image_url (Avatar IV) or not (Photo Avatar)
-                if image_url:
+                if image_url or image_key:
                     log_info("Using Avatar IV API")
                     result = video_gen.generate_avatar_iv_video(
                         script=script,
                         image_url=image_url,
+                        image_key=image_key,  # ADD THIS - Avatar IV requires this
                         voice_id=voice_id,
                         aspect_ratio="9:16",
                         title=post_data.get('title', 'Generated Video'),
@@ -5310,6 +5314,7 @@ def api_regenerate_video(post_id: str):
 
         # Try to get avatar and look for Avatar IV
         image_url = None
+        image_key = None
         avatar_id = None
 
         # If Avatar IV requested, generate a look
@@ -5349,11 +5354,13 @@ def api_regenerate_video(post_id: str):
 
                 # Extract image_url from look result
                 image_url = look_result.get('preview_url') or (look_result.get('image_urls', [None])[0])
+                image_key = look_result.get('photo_avatar_id')  # This is what Avatar IV needs
 
-                if not image_url:
-                    raise ValueError("Look generation succeeded but no image_url returned")
+                log_info(f"Look generated - image_url: {image_url[:50] if image_url else None}...")
+                log_info(f"Look generated - image_key (photo_avatar_id): {image_key}")
 
-                log_info(f"Look generated successfully, image_url: {image_url[:50]}...")
+                if not image_url and not image_key:
+                    raise ValueError("Look generation succeeded but no image_url or image_key returned")
 
                 # Save look info to post for later reference
                 looks_gen.save_look_to_database(look_result)
@@ -5390,7 +5397,7 @@ def api_regenerate_video(post_id: str):
         video_result = None
         api_used = None
 
-        if image_url:
+        if image_url or image_key:
             # Use Avatar IV (supports gestures) - only if we have a valid image
             log_info("Using Avatar IV API (supports gestures)")
             api_used = 'avatar_iv'
@@ -5398,6 +5405,7 @@ def api_regenerate_video(post_id: str):
                 video_result = video_gen.generate_avatar_iv_video(
                     script=video_script,
                     image_url=image_url,
+                    image_key=image_key,  # ADD THIS - Avatar IV requires this
                     voice_id=voice_id,
                     custom_motion_prompt=motion_prompt,
                     enhance_motion=True,

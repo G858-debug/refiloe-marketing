@@ -466,7 +466,7 @@ class VideoGenerator:
         elif image_url:
             # Fallback to image_url if no key available
             payload["image_url"] = image_url
-            log_info(f"Using image_url: {image_url[:50]}...")
+            log_info(f"Using image_url (fallback): {image_url[:50]}...")
 
         # Add optional motion prompt
         if custom_motion_prompt:
