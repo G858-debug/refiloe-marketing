@@ -343,9 +343,22 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
 
                 if result.get('success'):
                     processed_video_path = result.get('video_path')
+                    thumbnail_path = result.get('thumbnail_path')
                     thumb_offset = 0  # Use first frame (our title card) as thumbnail
                     log_info(f"✓ Title card added successfully: {processed_video_path}")
                     log_info(f"✓ Using thumb_offset={thumb_offset} (title card frame)")
+
+                    # Save processed video URL and thumbnail to database
+                    log_info("Updating post with processed_video_url and thumbnail_url...")
+                    update_fields = {
+                        'processed_video_url': processed_video_path,
+                        'thumbnail_url': thumbnail_path
+                    }
+                    if _update_post_fields(db, post['id'], update_fields):
+                        log_info(f"✓ Database updated: processed_video_url={processed_video_path}")
+                        log_info(f"✓ Database updated: thumbnail_url={thumbnail_path}")
+                    else:
+                        log_warning("Failed to update post with processed video URL - continuing anyway")
                 else:
                     log_warning(f"Title card processing failed: {result.get('error')}")
                     log_warning("Falling back to original video")
