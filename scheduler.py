@@ -434,17 +434,18 @@ class SocialMediaScheduler:
             if video_result and 'video_url' in video_result:
                 # Schedule for immediate posting (within 2 hours)
                 scheduled_time = datetime.now(self.sa_tz) + timedelta(hours=1)
-                
+
                 video_post = {
                     'video_url': video_result['video_url'],
                     'thumbnail_url': video_result.get('thumbnail_url'),
                     'video_type': 'reactive_content',
                     'video_duration': 30,
                     'caption': f"?? HOT TOPIC: {trending_topic['title']}\n\n{script.get('caption', '')}",
+                    'title': script.get('reel_title') or f"🔥 {trending_topic['title']}",  # Capture reel_title from script
                     'trending_topic_id': trending_topic.get('id'),
                     'is_reactive': True
                 }
-                
+
                 self._save_video_post(video_post, scheduled_time)
                 log_info(f"Reactive video scheduled for {scheduled_time}")
                 
@@ -857,6 +858,7 @@ class SocialMediaScheduler:
         try:
             post_data = {
                 'content': video_data.get('caption', ''),
+                'title': video_data.get('title', ''),  # Reel title for Facebook
                 'video_url': video_data['video_url'],
                 'thumbnail_url': video_data.get('thumbnail_url'),
                 'video_type': video_data.get('video_type', 'general'),

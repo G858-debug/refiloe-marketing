@@ -318,6 +318,7 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
         post_data = {
             'content_text': post.get('content_text', ''),
             'video_url': post.get('video_url'),
+            'title': post.get('title') or post.get('reel_title', ''),  # Reel title for Facebook
             'post_as_draft': True,
             'include_schedule_hint': True,
             'scheduled_time': post.get('scheduled_time'),
