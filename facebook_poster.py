@@ -193,44 +193,46 @@ class FacebookPoster:
 
     def _post_video(self, post_data: Dict) -> Dict:
         """
-        Post video to Facebook Page using video URL.
+        Post video to Facebook Page as UNPUBLISHED DRAFT.
+
+        Videos are posted as drafts so background music can be added
+        manually in Creator Studio before publishing.
 
         Args:
             post_data: Dictionary containing:
                 - content_text: The text content/description for the video
                 - video_url: URL of the video (from HeyGen or other source)
-                - scheduled_time: Optional scheduled posting time
+                - post_as_draft: If True (default for videos), post as unpublished
 
         Returns:
             Dictionary with success status, post_id, and error message
         """
         try:
             video_url = post_data.get('video_url')
+            post_as_draft = post_data.get('post_as_draft', True)  # Default to draft for videos
+
             log_info(f"Posting video to Facebook page from URL: {video_url}")
+            log_info(f"Post as draft (unpublished): {post_as_draft}")
 
             # Prepare video post parameters
             video_params = {
                 'description': post_data.get('content_text', ''),
                 'file_url': video_url,
-                'access_token': self.page_access_token
+                'access_token': self.page_access_token,
+                'published': not post_as_draft,  # False = draft/unpublished
             }
-
-            # Add scheduled time if provided
-            if post_data.get('scheduled_time'):
-                video_params['scheduled_publish_time'] = int(
-                    post_data['scheduled_time'].timestamp()
-                )
-                video_params['published'] = False
 
             # Make API request to videos endpoint
             url = f"{self.base_url}/{self.page_id}/videos"
             response = self._make_api_request('POST', url, data=video_params)
 
             if response.get('id'):
-                log_info(f"Successfully posted video to Facebook: {response['id']}")
+                status_msg = "as DRAFT (unpublished)" if post_as_draft else "as PUBLISHED"
+                log_info(f"Successfully posted video to Facebook {status_msg}: {response['id']}")
                 return {
                     'success': True,
                     'post_id': response['id'],
+                    'is_draft': post_as_draft,
                     'error': None
                 }
             else:
@@ -239,6 +241,7 @@ class FacebookPoster:
                 return {
                     'success': False,
                     'post_id': None,
+                    'is_draft': post_as_draft,
                     'error': error_msg
                 }
 

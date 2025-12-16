@@ -4096,6 +4096,60 @@ def api_reschedule_post(post_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/mark-published/<string:post_id>', methods=['POST'])
+def api_mark_published(post_id: str):
+    """Manually mark a post as published (for videos after adding music in Creator Studio)."""
+    log_info(f"📥 Request: /api/dashboard/mark-published/{post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Verify post exists and is in awaiting_music status
+        result = supabase_client.table('social_posts').select('id, status, facebook_post_id').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        if post.get('status') != 'awaiting_music':
+            return jsonify({
+                'success': False,
+                'error': f"Post is not awaiting music. Current status: {post.get('status')}"
+            }), 400
+
+        # Update to published
+        update_data = {
+            'status': 'published',
+            'published_time': datetime.now(SA_TZ).isoformat(),
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        update_result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        if update_result.data:
+            log_info(f"✅ Post {post_id} manually marked as published")
+            return jsonify({
+                'success': True,
+                'post_id': post_id,
+                'message': 'Post marked as published!'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update post'}), 500
+
+    except Exception as e:
+        log_error(f"❌ Mark published failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/edit/<string:post_id>', methods=['POST'])
 def api_edit_post(post_id: str):
     """Edit a post's content, script, or prompts."""
