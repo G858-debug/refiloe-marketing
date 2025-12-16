@@ -332,8 +332,7 @@ class FacebookPoster:
 
         Args:
             post_data: Dictionary containing:
-                - video_url: URL of the video (from HeyGen CDN)
-                - processed_video_path: Optional local path to video file (takes priority over video_url)
+                - video_url: URL or local path to video file (e.g., HeyGen CDN URL or /tmp/processed_video.mp4)
                 - content_text: Caption/description for the reel
                 - title: Optional reel title (max 255 chars)
                 - scheduled_publish_time: Optional Unix timestamp for scheduling
@@ -353,16 +352,18 @@ class FacebookPoster:
             - Post preview in database records
         """
         try:
-            # Check for local file first (processed video with title card), then URL
-            processed_video_path = post_data.get('processed_video_path')
-            video_url = post_data.get('video_url')
+            # Get video source (can be URL or local file path)
+            video_source = post_data.get('video_url')
 
-            if not processed_video_path and not video_url:
+            if not video_source:
                 return {
                     'success': False,
                     'post_id': None,
-                    'error': 'No video source provided (neither processed_video_path nor video_url)'
+                    'error': 'No video source provided (video_url is required)'
                 }
+
+            # Determine if video source is a local file or remote URL
+            is_local_file = video_source.startswith('/') or video_source.startswith('/tmp')
 
             # Extract parameters with defaults
             description = post_data.get('content_text', '')
@@ -380,7 +381,7 @@ class FacebookPoster:
                 log_warning(f"Title truncated to 255 characters")
 
             log_info(f"Starting Reels API upload")
-            log_info(f"Video source: {'Local file: ' + processed_video_path if processed_video_path else 'URL: ' + video_url}")
+            log_info(f"Video source: {'Local file: ' + video_source if is_local_file else 'URL: ' + video_source}")
             log_info(f"Video state: {video_state}")
 
             # STEP 1: Initialize upload session
@@ -408,15 +409,23 @@ class FacebookPoster:
 
             # STEP 2: Upload video (binary for local files, file_url for URLs)
             try:
-                if processed_video_path and os.path.exists(processed_video_path):
+                if is_local_file:
                     # STEP 2.A: Binary upload for local file
-                    log_info(f"Step 2.A: Uploading video from local file: {processed_video_path}")
+                    if not os.path.exists(video_source):
+                        log_error(f"Local video file not found: {video_source}")
+                        return {
+                            'success': False,
+                            'post_id': None,
+                            'error': f'Local video file not found: {video_source}'
+                        }
 
-                    with open(processed_video_path, 'rb') as video_file:
+                    log_info(f"Step 2.A: Uploading video from local file: {video_source}")
+
+                    with open(video_source, 'rb') as video_file:
                         upload_headers = {
                             'Authorization': f'OAuth {self.page_access_token}',
                             'offset': '0',
-                            'file_size': str(os.path.getsize(processed_video_path))
+                            'file_size': str(os.path.getsize(video_source))
                         }
 
                         upload_response = requests.post(
@@ -441,10 +450,10 @@ class FacebookPoster:
 
                 else:
                     # STEP 2.B: URL upload for CDN-hosted videos
-                    log_info(f"Step 2.B: Uploading video from CDN: {video_url}")
+                    log_info(f"Step 2.B: Uploading video from CDN: {video_source}")
                     upload_headers = {
                         'Authorization': f'OAuth {self.page_access_token}',
-                        'file_url': video_url
+                        'file_url': video_source
                     }
 
                     upload_response = requests.post(
