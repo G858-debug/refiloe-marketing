@@ -16,6 +16,7 @@ from flask import (
 from utils.logger import log_error, log_info, log_warning
 from utils.supabase_rest import SupabaseRestClient
 import pytz
+from social_media.config.avatar_mapping import PHOTO_AVATAR_REGISTRY
 
 admin_bp = Blueprint(
     "admin",
@@ -481,152 +482,45 @@ def debug_seed_looks():
 
         now = datetime.now(timezone.utc).isoformat()
 
-        # Define the 13 avatar looks
-        avatar_looks = [
-            {
-                "content_type": "business",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Business Professional",
-                "outfit_description": "Professional business attire, blazer",
-                "environment_description": "Modern office setting",
+        # Import look descriptions from avatar mapping
+        from social_media.config.avatar_mapping import CONTENT_TO_LOOK
+
+        # Label mapping for each content type
+        label_mapping = {
+            "business": "Business Professional",
+            "workout": "Gym Workout",
+            "fitness": "Fitness Training",
+            "professional": "Professional",
+            "motivational": "Motivational",
+            "educational": "Educational",
+            "community": "Community",
+            "relatable": "Relatable",
+            "casual": "Casual",
+            "announcement": "Announcement",
+            "outdoor": "Outdoor",
+            "studio": "Studio",
+            "lifestyle": "Lifestyle",
+        }
+
+        # Dynamically build avatar looks from PHOTO_AVATAR_REGISTRY
+        avatar_looks = []
+        for content_type, photo_avatar_id in PHOTO_AVATAR_REGISTRY.items():
+            # Get outfit and environment from CONTENT_TO_LOOK
+            look_config = CONTENT_TO_LOOK.get(content_type, {})
+            outfit = look_config.get("outfit", f"{content_type.capitalize()} attire")
+            environment = look_config.get("environment", f"{content_type.capitalize()} setting")
+
+            avatar_looks.append({
+                "content_type": content_type,
+                "photo_avatar_id": photo_avatar_id,
+                "label": label_mapping.get(content_type, content_type.capitalize()),
+                "outfit_description": outfit,
+                "environment_description": environment,
                 "is_active": True,
-                "is_default": True,
+                "is_default": (content_type == "business"),  # Set business as default
                 "created_at": now,
                 "updated_at": now
-            },
-            {
-                "content_type": "workout",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Gym Workout",
-                "outfit_description": "Athletic workout gear",
-                "environment_description": "Gym or fitness studio",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "fitness",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Fitness Training",
-                "outfit_description": "Fitness training outfit",
-                "environment_description": "Training area or outdoor",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "professional",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Professional",
-                "outfit_description": "Professional attire",
-                "environment_description": "Professional setting",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "motivational",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Motivational",
-                "outfit_description": "Confident, inspiring outfit",
-                "environment_description": "Inspiring background",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "educational",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Educational",
-                "outfit_description": "Smart casual teaching attire",
-                "environment_description": "Learning environment",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "community",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Community",
-                "outfit_description": "Friendly, approachable outfit",
-                "environment_description": "Community space",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "relatable",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Relatable",
-                "outfit_description": "Casual, everyday outfit",
-                "environment_description": "Everyday setting",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "casual",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Casual",
-                "outfit_description": "Relaxed casual wear",
-                "environment_description": "Casual environment",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "announcement",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Announcement",
-                "outfit_description": "Professional announcement attire",
-                "environment_description": "Clean, professional background",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "outdoor",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Outdoor",
-                "outfit_description": "Outdoor activity wear",
-                "environment_description": "Outdoor natural setting",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "studio",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Studio",
-                "outfit_description": "Studio presentation attire",
-                "environment_description": "Professional studio",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            },
-            {
-                "content_type": "lifestyle",
-                "photo_avatar_id": "REPLACE_WITH_ACTUAL_ID",
-                "label": "Lifestyle",
-                "outfit_description": "Lifestyle casual wear",
-                "environment_description": "Lifestyle setting",
-                "is_active": True,
-                "is_default": False,
-                "created_at": now,
-                "updated_at": now
-            }
-        ]
+            })
 
         # Insert all looks
         inserted_count = 0
