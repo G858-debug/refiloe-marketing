@@ -640,6 +640,10 @@ class SocialMediaScheduler:
                         "content_preview": post.get("content_text", "")[:100]
                     }
                 )
+
+                # For video posts, send add-music notification
+                if post.get("post_type") == "video" and facebook_post_id:
+                    self._send_add_music_notification(post_id, facebook_post_id, post)
             else:
                 # Post failed - implement retry logic
                 error_message = result.get("error", "Unknown error")
@@ -875,6 +879,64 @@ class SocialMediaScheduler:
                 )
             except Exception as e:
                 log_error(f"Failed to send WhatsApp notification: {e}")
+
+    def _send_add_music_notification(self, post_id: str, facebook_post_id: str, post: Dict[str, Any]) -> None:
+        """
+        Send WhatsApp notification to add music to video in Creator Studio.
+        Uses the approved template for reliable delivery.
+
+        Args:
+            post_id: Post UUID
+            facebook_post_id: Facebook's video ID
+            post: Full post data
+        """
+        try:
+            page_id = os.getenv("PAGE_ID", "")
+
+            # Creator Studio URL for the video
+            creator_studio_url = f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}"
+
+            # Get video details
+            video_title = post.get("title") or post.get("content_theme", "").replace("_", " ").title() or "Untitled Video"
+            content_text = post.get("content_text", "")
+            caption_preview = content_text[:150] + "..." if len(content_text) > 150 else content_text
+
+            # Log the notification attempt
+            log_info(f"Sending add-music notification for post {post_id}")
+            log_info(f"Video title: {video_title}")
+            log_info(f"Creator Studio URL: {creator_studio_url}")
+
+            # Send notification via template
+            if self.whatsapp:
+                result = self.whatsapp.send_video_ready_template(
+                    video_title=video_title,
+                    creator_studio_url=creator_studio_url,
+                    caption_preview=caption_preview
+                )
+
+                if result.get('success'):
+                    log_info(f"✅ WhatsApp notification sent for video {post_id}")
+                else:
+                    log_warning(f"⚠️ WhatsApp notification failed: {result.get('error')}")
+            else:
+                log_warning("WhatsApp notifier not available")
+
+            # Also send internal notification for logging/dashboard
+            self._send_notification(
+                "info",
+                "Video ready for music",
+                {
+                    "post_id": post_id,
+                    "facebook_post_id": facebook_post_id,
+                    "creator_studio_url": creator_studio_url,
+                    "video_title": video_title
+                }
+            )
+
+        except Exception as exc:
+            log_error(f"Error sending add music notification: {exc}")
+            import traceback
+            log_error(traceback.format_exc())
 
     def run_weekly_avatar_looks(self) -> None:
         """Weekly job at 3:00 AM SAST every Sunday to generate fresh avatar looks.
