@@ -1354,12 +1354,29 @@ CALL-TO-ACTION OPTIONS:
 - "Which tip will you try first?"
 - "Follow for more trainer hacks"
 
+REEL TITLE REQUIREMENTS (CRITICAL FOR FACEBOOK REELS):
+- Generate an engaging "reel_title" that will be used as the Facebook Reel title
+- Maximum 255 characters (Facebook limit)
+- Must be curiosity-inducing and scroll-stopping
+- Use emotional triggers, time-stamps, or POV format
+- Examples of great reel titles:
+  * "When clients cancel at 6:47 AM... 😤"
+  * "The spreadsheet that changed everything 📊"
+  * "POV: You just got your 10th reschedule this week"
+  * "Nobody talks about THIS part of being a trainer..."
+  * "The message that made me rethink everything 💭"
+  * "5:30 AM training session gone wrong..."
+- Make it impossible to scroll past
+- Should complement the video hook but be standalone engaging
+- Can include 1-2 emojis maximum
+
 IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
 
 OUTPUT FORMAT:
 Please provide your response in the following JSON format:
 {{
     "title": "Compelling video title",
+    "reel_title": "Engaging Facebook Reel title (max 255 chars, curiosity-inducing, e.g., 'When clients cancel at 6:47 AM... 😤')",
     "hook": "The exact opening hook text",
     "script": [
         {{
@@ -1420,6 +1437,7 @@ Generate a script that will keep trainers watching until the end!"""
                 # Fallback: create basic structure
                 script_data = {
                     "title": f"{theme.replace('_', ' ').title()} Video Script",
+                    "reel_title": f"POV: You just discovered this {theme.replace('_', ' ')} hack...",
                     "hook": "Stop scrolling if you're a trainer who...",
                     "script": [
                         {
@@ -1437,6 +1455,16 @@ Generate a script that will keep trainers watching until the end!"""
                     "estimated_retention": "High"
                 }
             
+            # Ensure reel_title exists and is within Facebook's limit
+            if 'reel_title' not in script_data or not script_data['reel_title']:
+                # Generate fallback reel_title from script content
+                script_data['reel_title'] = f"POV: You just discovered this {theme.replace('_', ' ')} hack..."
+
+            # Truncate reel_title to 255 characters if needed (Facebook limit)
+            if len(script_data['reel_title']) > 255:
+                script_data['reel_title'] = script_data['reel_title'][:252] + '...'
+                log_warning(f"Reel title truncated to 255 characters: {script_data['reel_title']}")
+
             # Add metadata
             script_data.update({
                 'theme': theme,
@@ -1448,10 +1476,11 @@ Generate a script that will keep trainers watching until the end!"""
                 'metadata': {
                     'ai_generated': True,
                     'model_used': self.model,
-                    'generation_time': datetime.now(self.sa_tz).isoformat()
+                    'generation_time': datetime.now(self.sa_tz).isoformat(),
+                    'reel_title_length': len(script_data.get('reel_title', ''))
                 }
             })
-            
+
             return script_data
             
         except Exception as e:

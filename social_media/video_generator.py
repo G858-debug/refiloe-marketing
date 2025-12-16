@@ -938,9 +938,16 @@ class VideoGenerator:
                 script += " " + " ".join(tips[:3])
 
             caption = f"{hook} ? {pace} delivery"
+
+            # Generate engaging reel_title for Facebook Reels
+            reel_title = f"POV: You just discovered this {hook.lower()} hack..."
+            if len(reel_title) > 255:
+                reel_title = reel_title[:252] + "..."
+
             return {
                 "script_text": script,
                 "caption": caption,
+                "reel_title": reel_title,
                 "duration": duration,
                 "style": style,
             }
