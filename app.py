@@ -3837,6 +3837,15 @@ def api_reject_post(post_id):
         post_info = check_result.data[0]
         log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
 
+        # Prevent rejecting published posts
+        if post_info.get('status') == 'published':
+            log_error(f"❌ Cannot reject published post {post_id}")
+            return api_error_response(
+                'Cannot reject a post that has already been published',
+                400,
+                {'post_id': post_id, 'current_status': 'published'}
+            )
+
         # Update post to rejected status
         start_time = datetime.now()
         update_data = {
