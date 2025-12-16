@@ -4726,6 +4726,30 @@ def api_generate_media(post_id):
                     log_info(f"Look generated - image_url: {image_url[:50] if image_url else None}...")
                     log_info(f"Look generated - image_key (photo_avatar_id): {image_key}")
 
+                    # Wait for look to be ready before using with Avatar IV
+                    if image_key:
+                        log_info(f"Waiting for look to be ready...")
+                        ready_result = looks_gen.wait_for_look_ready(image_key, max_wait_seconds=120, poll_interval=5)
+
+                        if not ready_result.get('ready'):
+                            error_msg = ready_result.get('error', 'Look processing did not complete in time')
+                            log_error(f"Look not ready: {error_msg}")
+
+                            if not force_fallback:
+                                return jsonify({
+                                    'success': False,
+                                    'needs_confirmation': True,
+                                    'fallback_reason': 'look_not_ready',
+                                    'message': f'Avatar IV look not ready: {error_msg}. Would you like to use Photo Avatar instead?'
+                                }), 200
+                            else:
+                                log_info("Falling back to Photo Avatar due to force_fallback=True")
+                                image_url = None
+                                image_key = None
+                                use_avatar_iv = False
+                        else:
+                            log_info(f"✅ Look is ready, proceeding with Avatar IV")
+
                     if not image_url and not image_key:
                         raise ValueError("Look generation succeeded but no image_url or image_key returned")
 
@@ -5358,6 +5382,36 @@ def api_regenerate_video(post_id: str):
 
                 log_info(f"Look generated - image_url: {image_url[:50] if image_url else None}...")
                 log_info(f"Look generated - image_key (photo_avatar_id): {image_key}")
+
+                # Wait for look to be ready before using with Avatar IV
+                if image_key:
+                    log_info(f"Waiting for look to be ready...")
+                    ready_result = looks_gen.wait_for_look_ready(image_key, max_wait_seconds=120, poll_interval=5)
+
+                    if not ready_result.get('ready'):
+                        error_msg = ready_result.get('error', 'Look processing did not complete in time')
+                        log_error(f"Look not ready: {error_msg}")
+
+                        if not force_fallback:
+                            # Reset status back since we're not generating yet
+                            supabase_client.table('social_posts').update({
+                                'status': post.get('status', 'pending_approval'),
+                                'updated_at': datetime.now(SA_TZ).isoformat()
+                            }).eq('id', post_id).execute()
+
+                            return jsonify({
+                                'success': False,
+                                'needs_confirmation': True,
+                                'fallback_reason': 'look_not_ready',
+                                'message': f'Avatar IV look not ready: {error_msg}. Would you like to use Photo Avatar instead?'
+                            }), 200
+                        else:
+                            log_info("Falling back to Photo Avatar due to force_fallback=True")
+                            image_url = None
+                            image_key = None
+                            use_avatar_iv = False
+                    else:
+                        log_info(f"✅ Look is ready, proceeding with Avatar IV")
 
                 if not image_url and not image_key:
                     raise ValueError("Look generation succeeded but no image_url or image_key returned")
