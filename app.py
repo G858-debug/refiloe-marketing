@@ -3791,7 +3791,7 @@ def api_approve_media(post_id):
 
 @app.route('/api/dashboard/reject/<post_id>', methods=['POST'])
 def api_reject_post(post_id):
-    """API: Reject a single post"""
+    """API: Delete a single post (reject endpoint kept for backward compatibility)"""
     log_info(f"📥 Request: /api/dashboard/reject/{post_id}")
 
     # Validate post_id format (should be UUID)
@@ -3837,48 +3837,40 @@ def api_reject_post(post_id):
         post_info = check_result.data[0]
         log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
 
-        # Prevent rejecting published posts
+        # Prevent deleting published posts
         if post_info.get('status') == 'published':
-            log_error(f"❌ Cannot reject published post {post_id}")
+            log_error(f"❌ Cannot delete published post {post_id}")
             return api_error_response(
-                'Cannot reject a post that has already been published',
+                'Cannot delete a post that has already been published',
                 400,
                 {'post_id': post_id, 'current_status': 'published'}
             )
 
-        # Update post to rejected status
+        # Delete the post completely from database
         start_time = datetime.now()
-        update_data = {
-            'status': 'rejected',
-            'updated_at': datetime.now(SA_TZ).isoformat()
-        }
+        result = supabase_client.table('social_posts').delete().eq('id', post_id).execute()
 
-        result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
-
-        update_time = (datetime.now() - start_time).total_seconds()
+        delete_time = (datetime.now() - start_time).total_seconds()
 
         if result.data:
-            reason_msg = f" with reason: {reason}" if reason else ""
-            log_info(f"✅ Post {post_id} rejected{reason_msg} in {update_time:.2f}s")
+            log_info(f"✅ Post {post_id} deleted from database in {delete_time:.2f}s")
             response_data = {
                 'success': True,
-                'message': 'Post rejected',
+                'message': 'Post deleted',
                 'post_id': post_id,
-                'update_time': update_time
+                'delete_time': delete_time
             }
-            if reason:
-                response_data['reason'] = reason
             return jsonify(response_data)
         else:
-            log_error(f"❌ Failed to update post {post_id}")
+            log_error(f"❌ Failed to delete post {post_id}")
             return api_error_response(
-                'Failed to update post',
+                'Failed to delete post',
                 500,
                 {'post_id': post_id}
             )
 
     except Exception as e:
-        log_error(f"❌ Error rejecting post {post_id}: {e}")
+        log_error(f"❌ Error deleting post {post_id}: {e}")
         log_error(traceback.format_exc())
         return api_error_response(
             str(e),
