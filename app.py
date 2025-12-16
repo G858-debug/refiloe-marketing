@@ -4713,13 +4713,29 @@ def api_generate_media(post_id):
                     log_info(f"🎉 Video completed immediately with URL: {video_url}")
                     log_info(f"💾 Saving video_id {video_id} and URL to database for post {post_id}")
 
-                    supabase_client.table('social_posts').update({
+                    # Get source image for title card generation
+                    source_image_url = None
+
+                    # Try to get from HeyGen result thumbnail (best option when available)
+                    if isinstance(result, dict):
+                        source_image_url = result.get('thumbnail_url')
+
+                    if source_image_url:
+                        log_info(f"📸 Using HeyGen thumbnail as source_image_url: {source_image_url[:50]}...")
+
+                    update_data = {
                         'video_id': video_id,
                         'video_url': video_url,
                         'status': 'pending_approval',
                         'media_generation_completed_at': datetime.now(timezone.utc).isoformat(),
                         'updated_at': datetime.now(timezone.utc).isoformat()
-                    }).eq('id', post_id).execute()
+                    }
+
+                    # Add source_image_url if available
+                    if source_image_url:
+                        update_data['source_image_url'] = source_image_url
+
+                    supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
 
                     log_info(f"✅ Video generated successfully for post {post_id}")
 
@@ -4735,6 +4751,7 @@ def api_generate_media(post_id):
                     # Video is processing - save video_id and let background job fetch URL
                     log_info(f"⏳ Video processing - saving video_id {video_id} for background fetch")
                     log_info(f"💾 Saving video_id to database: {video_id}")
+                    log_info(f"📸 source_image_url will be fetched by background job when video completes")
 
                     supabase_client.table('social_posts').update({
                         'video_id': video_id,

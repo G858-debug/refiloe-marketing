@@ -202,6 +202,7 @@ class SocialMediaScheduler:
 
                     video_status = status_result.get('status')
                     video_url = status_result.get('video_url')
+                    thumbnail_url = status_result.get('thumbnail_url')
                     error = status_result.get('error')
 
                     log_info(f"HeyGen status: {video_status}")
@@ -210,7 +211,9 @@ class SocialMediaScheduler:
                         # Video is ready! Update post
                         log_info(f"✅ Video completed: {video_url}")
 
-                        # Try to get source_image_url from post's generation_prompt
+                        # Get source_image_url for title card generation
+                        # Priority 1: Try to get from post's generation_prompt (if using avatar looks)
+                        # Priority 2: Use HeyGen's thumbnail as fallback
                         source_image_url = None
                         try:
                             # Get full post data to extract generation_prompt
@@ -237,6 +240,11 @@ class SocialMediaScheduler:
                                         pass
                         except Exception as e:
                             log_warning(f"Could not retrieve source_image_url for post {post_id}: {e}")
+
+                        # Fallback to HeyGen thumbnail if no source_image_url from generation_prompt
+                        if not source_image_url and thumbnail_url:
+                            source_image_url = thumbnail_url
+                            log_info(f"Using HeyGen thumbnail as source_image_url: {thumbnail_url[:50]}...")
 
                         update_data = {
                             'video_url': video_url,
