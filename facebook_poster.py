@@ -193,23 +193,37 @@ class FacebookPoster:
 
     def _post_video(self, post_data: Dict) -> Dict:
         """
-        Post video to Facebook Page as UNPUBLISHED DRAFT.
+        Post video to Facebook Page as UNPUBLISHED DRAFT or as a Reel.
 
-        Videos are posted as drafts so background music can be added
-        manually in Creator Studio before publishing.
+        By default, videos are posted using the Reels API for better reach
+        (Reels tab, Feed, Watch, Suggested). Set use_reels_api=False to use
+        the legacy Videos API.
+
+        Videos posted via Videos API are created as drafts so background music
+        can be added manually in Creator Studio before publishing.
 
         Args:
             post_data: Dictionary containing:
                 - content_text: The text content/description for the video
                 - video_url: URL of the video (from HeyGen or other source)
-                - post_as_draft: If True (default for videos), post as unpublished
+                - title: Optional title for the video/reel
+                - use_reels_api: If True (default), use Reels API; if False, use Videos API
+                - post_as_draft: If True (default for videos), post as unpublished (Videos API only)
                 - scheduled_time: Optional datetime for schedule hint in description
                 - include_schedule_hint: If True, append schedule to description
+                - scheduled_publish_time: Optional Unix timestamp for scheduling
 
         Returns:
             Dictionary with success status, post_id, and error message
         """
         try:
+            # Use Reels API for better reach (Reels tab, Feed, Watch, Suggested)
+            use_reels_api = post_data.get('use_reels_api', True)  # Default to Reels
+
+            if use_reels_api:
+                return self._post_reel(post_data)
+
+            # Fallback to Videos API for legacy support
             video_url = post_data.get('video_url')
             post_as_draft = post_data.get('post_as_draft', True)  # Default to draft for videos
             scheduled_time = post_data.get('scheduled_time')
