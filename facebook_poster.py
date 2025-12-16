@@ -249,16 +249,31 @@ class FacebookPoster:
                 'description': description,
                 'file_url': video_url,
                 'access_token': self.page_access_token,
-                'published': not post_as_draft,  # False = draft/unpublished
             }
+
+            # Use specific scheduled_publish_time if provided, otherwise default to 10 mins
+            if post_as_draft:
+                if post_data.get('scheduled_publish_time'):
+                    scheduled_time = post_data.get('scheduled_publish_time')
+                else:
+                    scheduled_time = int(time.time()) + 600  # 600 seconds = 10 minutes
+
+                video_params['published'] = 'false'
+                video_params['scheduled_publish_time'] = scheduled_time
+                log_info(f"Scheduling video for Unix timestamp: {scheduled_time}")
+            else:
+                video_params['published'] = 'true'
 
             # Make API request to videos endpoint
             url = f"{self.base_url}/{self.page_id}/videos"
             response = self._make_api_request('POST', url, data=video_params)
 
             if response.get('id'):
-                status_msg = "as DRAFT (unpublished)" if post_as_draft else "as PUBLISHED"
-                log_info(f"Successfully posted video to Facebook {status_msg}: {response['id']}")
+                if post_as_draft:
+                    scheduled_dt = datetime.fromtimestamp(scheduled_time)
+                    log_info(f"Successfully scheduled video on Facebook: {response['id']} for {scheduled_dt}")
+                else:
+                    log_info(f"Successfully published video to Facebook: {response['id']}")
                 return {
                     'success': True,
                     'post_id': response['id'],
