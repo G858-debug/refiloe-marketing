@@ -3879,6 +3879,80 @@ def api_reject_post(post_id):
         )
 
 
+@app.route('/api/dashboard/reschedule/<string:post_id>', methods=['POST'])
+def api_reschedule_post(post_id: str):
+    """Reschedule a post to a new date/time."""
+    log_info(f"📥 Request: /api/dashboard/reschedule/{post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Get new scheduled time from request
+        data = request.get_json()
+        new_scheduled_time = data.get('scheduled_time')
+
+        if not new_scheduled_time:
+            return jsonify({'success': False, 'error': 'No scheduled_time provided'}), 400
+
+        # Validate the post exists and is not published
+        log_info(f"🔍 Checking if post {post_id} exists")
+        result = supabase_client.table('social_posts').select('id, status, scheduled_time').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        if post.get('status') == 'published':
+            return jsonify({'success': False, 'error': 'Cannot reschedule a published post'}), 400
+
+        # Parse and validate the new time
+        try:
+            # Handle ISO format from datetime-local input
+            if 'T' in new_scheduled_time and '+' not in new_scheduled_time and 'Z' not in new_scheduled_time:
+                # Add SAST timezone if not present
+                new_dt = datetime.fromisoformat(new_scheduled_time)
+                new_dt = SA_TZ.localize(new_dt)
+            else:
+                new_dt = datetime.fromisoformat(new_scheduled_time.replace('Z', '+00:00'))
+                new_dt = new_dt.astimezone(SA_TZ)
+
+            new_scheduled_iso = new_dt.isoformat()
+        except Exception as e:
+            log_error(f"Failed to parse scheduled_time: {e}")
+            return jsonify({'success': False, 'error': f'Invalid date format: {str(e)}'}), 400
+
+        # Update the post
+        log_info(f"📅 Rescheduling post {post_id} to {new_scheduled_iso}")
+        update_result = supabase_client.table('social_posts').update({
+            'scheduled_time': new_scheduled_iso,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        if update_result.data:
+            log_info(f"✅ Post {post_id} rescheduled to {new_scheduled_iso}")
+            return jsonify({
+                'success': True,
+                'post_id': post_id,
+                'new_scheduled_time': new_scheduled_iso,
+                'message': f'Post rescheduled to {new_dt.strftime("%b %d, %Y at %H:%M")} SAST'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update post'}), 500
+
+    except Exception as e:
+        log_error(f"❌ Reschedule failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/edit/<post_id>', methods=['POST'])
 def api_edit_post(post_id):
     """API: Edit a pending post"""
