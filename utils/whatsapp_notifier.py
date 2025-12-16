@@ -85,6 +85,40 @@ class WhatsAppNotifier:
 
         return clean
 
+    def _sanitize_template_param(self, text: str, max_length: int = 1000) -> str:
+        """
+        Sanitize text for use in WhatsApp template parameters.
+
+        WhatsApp template parameters cannot contain:
+        - Newline characters
+        - Tab characters
+        - More than 4 consecutive spaces
+
+        Args:
+            text: Text to sanitize
+            max_length: Maximum length for the parameter (default: 1000)
+
+        Returns:
+            Sanitized text string
+        """
+        if not text:
+            return ""
+
+        # Replace newlines and tabs with spaces
+        sanitized = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+
+        # Replace multiple spaces with single space
+        sanitized = re.sub(r' {2,}', ' ', sanitized)
+
+        # Trim whitespace
+        sanitized = sanitized.strip()
+
+        # Truncate to max length
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length - 3] + '...'
+
+        return sanitized
+
     def send_message(self, to_number: str, message: str) -> Dict:
         """
         Send a WhatsApp message
@@ -416,15 +450,15 @@ View full report: {os.getenv('DASHBOARD_URL', 'https://your-dashboard-url.com')}
                         "parameters": [
                             {
                                 "type": "text",
-                                "text": video_title
+                                "text": self._sanitize_template_param(video_title, 100)
                             },
                             {
                                 "type": "text",
-                                "text": creator_studio_url
+                                "text": self._sanitize_template_param(creator_studio_url, 500)
                             },
                             {
                                 "type": "text",
-                                "text": caption_preview
+                                "text": self._sanitize_template_param(caption_preview, 150) or "No caption"
                             }
                         ]
                     }
