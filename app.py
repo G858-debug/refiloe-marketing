@@ -4660,34 +4660,116 @@ def api_generate_media(post_id):
 
             log_info(f"🎥 Using VIDEO generation workflow for post {post_id}")
 
+            # Get request data
+            data = request.get_json() or {}
+            use_avatar_iv = data.get('use_avatar_iv', False)
+            force_fallback = data.get('force_fallback', False)
+
+            log_info(f"Generate media request - use_avatar_iv: {use_avatar_iv}, force_fallback: {force_fallback}")
+
             db = SocialMediaDatabase(supabase_client)
             video_gen = VideoGenerator('social_media/config.yaml', supabase_client)
 
             # Get content_type for avatar selection (let VideoGenerator select from database)
             content_type = metadata.get('content_type') or metadata.get('video_generation', {}).get('content_type')
+            content_theme = post_data.get('content_theme', 'general')
             avatar_id = None  # Let VideoGenerator select based on content_type
             script = metadata.get('video_script', '')
 
             if not script:
                 return jsonify({'success': False, 'error': 'No video script found'}), 400
 
+            # Get voice ID
+            voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+
+            # If Avatar IV requested, generate a look first
+            image_url = None
+            if use_avatar_iv:
+                log_info("User requested Avatar IV - generating look first...")
+
+                try:
+                    from social_media.looks_generator import LooksGenerator
+                    looks_gen = LooksGenerator(supabase_client=supabase_client)
+
+                    # Determine look type from content theme
+                    look_type_map = {
+                        'relatable_trainer_life': 'relatable',
+                        'admin_hacks': 'professional',
+                        'client_management': 'business',
+                        'business_growth': 'business',
+                        'fitness_tips': 'fitness',
+                        'motivation': 'motivational',
+                    }
+                    look_type = look_type_map.get(content_theme, 'casual')
+
+                    log_info(f"Generating look with type: {look_type} (from content_theme: {content_theme})")
+
+                    look_result = looks_gen.generate_avatar_look(
+                        look_type=look_type,
+                        metadata={'purpose': 'video_generation', 'post_id': post_id}
+                    )
+
+                    # Extract image_url from look result
+                    image_url = look_result.get('preview_url') or (look_result.get('image_urls', [None])[0])
+
+                    if not image_url:
+                        raise ValueError("Look generation succeeded but no image_url returned")
+
+                    log_info(f"Look generated successfully, image_url: {image_url[:50]}...")
+
+                    # Save look info to post for later reference
+                    looks_gen.save_look_to_database(look_result)
+
+                except Exception as e:
+                    log_error(f"Look generation failed for Avatar IV: {e}")
+
+                    if not force_fallback:
+                        return jsonify({
+                            'success': False,
+                            'needs_confirmation': True,
+                            'fallback_reason': 'look_generation_failed',
+                            'message': f'Avatar IV look generation failed: {str(e)}. Would you like to use Photo Avatar instead?'
+                        }), 200
+                    else:
+                        log_info("Falling back to Photo Avatar due to force_fallback=True")
+                        image_url = None
+                        use_avatar_iv = False
+
             log_info(f"🎬 Generating HeyGen video for post {post_id}")
             log_info(f"🎬 Calling HeyGen to generate video for post {post_id}")
 
             try:
-                # Call VideoGenerator with async mode
-                # wait_for_completion=False returns immediately with video_id
-                # fetch_orphaned_videos_job will check for completion later
-                result = video_gen.generate_avatar_video(
-                    script_text=script,
-                    avatar_id=None,  # Let VideoGenerator select from database
-                    voice_id=None,
-                    style='educational',
-                    background_music=True,
-                    metadata={'post_id': post_id, 'source': 'dashboard_generate_media'},
-                    content_type=content_type,  # Pass content_type for avatar selection
-                    wait_for_completion=False
-                )
+                # Choose API based on whether we have image_url (Avatar IV) or not (Photo Avatar)
+                if image_url:
+                    log_info("Using Avatar IV API")
+                    result = video_gen.generate_avatar_iv_video(
+                        script=script,
+                        image_url=image_url,
+                        voice_id=voice_id,
+                        aspect_ratio="9:16",
+                        title=post_data.get('title', 'Generated Video'),
+                        metadata={
+                            'post_id': post_id,
+                            'content_theme': content_theme,
+                            'api_type': 'avatar_iv'
+                        }
+                    )
+                else:
+                    log_info("Using Photo Avatar API")
+                    result = video_gen.generate_avatar_video(
+                        script_text=script,
+                        avatar_id=None,  # Let VideoGenerator select from database
+                        voice_id=voice_id,
+                        style='educational',
+                        background_music=False,
+                        metadata={
+                            'post_id': post_id,
+                            'content_theme': content_theme,
+                            'api_type': 'photo_avatar'
+                        },
+                        content_type=content_type,
+                        wait_for_completion=False
+                    )
 
                 log_info(f"📹 HeyGen response received: {result}")
 
@@ -4716,12 +4798,15 @@ def api_generate_media(post_id):
                     # Get source image for title card generation
                     source_image_url = None
 
-                    # Try to get from HeyGen result thumbnail (best option when available)
-                    if isinstance(result, dict):
+                    # If we used Avatar IV, we already have the image_url
+                    if image_url:
+                        source_image_url = image_url
+                        log_info(f"📸 Using Avatar IV image_url as source_image_url: {source_image_url[:50]}...")
+                    # Otherwise try to get from HeyGen result thumbnail
+                    elif isinstance(result, dict):
                         source_image_url = result.get('thumbnail_url')
-
-                    if source_image_url:
-                        log_info(f"📸 Using HeyGen thumbnail as source_image_url: {source_image_url[:50]}...")
+                        if source_image_url:
+                            log_info(f"📸 Using HeyGen thumbnail as source_image_url: {source_image_url[:50]}...")
 
                     update_data = {
                         'video_id': video_id,
@@ -5146,9 +5231,11 @@ def api_regenerate_video(post_id: str):
         # Get request data
         data = request.get_json() or {}
         motion_prompt = data.get('motion_prompt', '').strip() if data.get('motion_prompt') else None
-        force_fallback = data.get('force_fallback', False)  # New parameter
+        use_avatar_iv = data.get('use_avatar_iv', False)
+        force_fallback = data.get('force_fallback', False)
 
         log_info(f"🎭 Motion prompt received: {motion_prompt}")
+        log_info(f"🎭 Use Avatar IV: {use_avatar_iv}")
         log_info(f"🔄 Force fallback: {force_fallback}")
 
         # Fetch the post
@@ -5216,53 +5303,70 @@ def api_regenerate_video(post_id: str):
         image_url = None
         avatar_id = None
 
-        # First, try to get image_url from the original generation (if it was stored)
-        original_image_url = gen_data.get('image_url') or gen_data.get('look_image_url')
-        if original_image_url:
-            image_url = original_image_url
-            log_info(f"Using original image_url from generation_prompt")
+        # If Avatar IV requested, generate a look
+        if use_avatar_iv:
+            log_info("User requested Avatar IV - generating look...")
 
-        # If no original image, try to get a look
-        if not image_url:
             try:
-                from social_media.avatar_mapping import get_avatar_and_look_for_content
-                avatar_id, look_info = get_avatar_and_look_for_content(
-                    content_text=video_script,
-                    content_type=content_theme
-                )
-                if look_info and look_info.get('image_url'):
-                    image_url = look_info.get('image_url')
-                    log_info(f"Got image_url from avatar_mapping: {image_url[:50]}...")
-                else:
-                    log_info("No image_url returned from avatar_mapping")
-            except Exception as e:
-                log_warning(f"Could not get avatar/look: {e}")
+                from social_media.looks_generator import LooksGenerator
+                looks_gen = LooksGenerator(supabase_client=supabase_client)
 
-        # Get fallback avatar_id if not set
+                # Determine look type from content theme
+                look_type_map = {
+                    'relatable_trainer_life': 'relatable',
+                    'admin_hacks': 'professional',
+                    'client_management': 'business',
+                    'business_growth': 'business',
+                    'fitness_tips': 'fitness',
+                    'motivation': 'motivational',
+                }
+                look_type = look_type_map.get(content_theme, 'casual')
+
+                log_info(f"Generating look with type: {look_type} (from content_theme: {content_theme})")
+
+                look_result = looks_gen.generate_avatar_look(
+                    look_type=look_type,
+                    metadata={'purpose': 'video_regeneration', 'post_id': post_id}
+                )
+
+                # Extract image_url from look result
+                image_url = look_result.get('preview_url') or (look_result.get('image_urls', [None])[0])
+
+                if not image_url:
+                    raise ValueError("Look generation succeeded but no image_url returned")
+
+                log_info(f"Look generated successfully, image_url: {image_url[:50]}...")
+
+                # Save look info to post for later reference
+                looks_gen.save_look_to_database(look_result)
+
+            except Exception as e:
+                log_error(f"Look generation failed for Avatar IV: {e}")
+
+                if not force_fallback:
+                    # Reset status back since we're not generating yet
+                    supabase_client.table('social_posts').update({
+                        'status': post.get('status', 'pending_approval'),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    return jsonify({
+                        'success': False,
+                        'needs_confirmation': True,
+                        'fallback_reason': 'look_generation_failed',
+                        'message': f'Avatar IV look generation failed: {str(e)}. Would you like to use Photo Avatar instead?'
+                    }), 200
+                else:
+                    log_info("Falling back to Photo Avatar due to force_fallback=True")
+                    image_url = None
+                    use_avatar_iv = False
+
+        # Get fallback avatar_id
         if not avatar_id:
             avatar_id = gen_data.get('avatar_id_env') or os.getenv('HEYGEN_DEFAULT_AVATAR_ID')
 
         log_info(f"🎭 Avatar ID: {avatar_id}")
         log_info(f"🖼️ Image URL: {image_url[:50] + '...' if image_url else 'None'}")
-
-        # If no image_url available, we need to fall back to Photo Avatar API
-        # But first, ask for confirmation unless force_fallback is True
-        if not image_url and not force_fallback:
-            log_info("No image_url available - requesting confirmation for fallback")
-
-            # Reset status back since we're not generating yet
-            supabase_client.table('social_posts').update({
-                'status': post.get('status', 'pending_approval'),  # Keep original status
-                'updated_at': datetime.now(SA_TZ).isoformat()
-            }).eq('id', post_id).execute()
-
-            return jsonify({
-                'success': False,
-                'needs_confirmation': True,
-                'fallback_reason': 'no_image',
-                'message': 'No avatar image available for Avatar IV (which supports gestures). Would you like to use the standard Photo Avatar API instead? Note: Motion style selection will have limited effect.',
-                'avatar_id': avatar_id
-            }), 200  # Return 200 so frontend can handle it
 
         # Generate video - choose API based on whether we have an image
         video_result = None

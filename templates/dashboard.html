@@ -1034,6 +1034,16 @@
                 <p id="motion-prompt-description" style="font-size: 13px; color: #888; margin-top: 8px; font-style: italic; min-height: 20px;"></p>
             </div>
 
+            <div style="margin-bottom: 20px; padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px;">
+                    <input type="checkbox" id="regenerate-use-avatar-iv-checkbox" style="width: 16px; height: 16px; margin-right: 10px; cursor: pointer;">
+                    <span style="color: #0369a1;">
+                        <strong>Use Avatar IV</strong>
+                        <span style="color: #64748b; font-weight: normal;"> — gestures & movements (more credits)</span>
+                    </span>
+                </label>
+            </div>
+
             <div style="margin-bottom: 20px;">
                 <label style="font-weight: bold; display: block; margin-bottom: 8px;">📝 Current Script:</label>
                 <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #e9ecef;">
@@ -1047,6 +1057,41 @@
                 </button>
                 <button id="confirm-regenerate-btn" onclick="confirmRegenerateVideo()" style="padding: 12px 24px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold;">
                     🎬 Regenerate Video
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Media Modal -->
+    <div id="generate-media-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 30px; border-radius: 16px; max-width: 450px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                <h3 style="margin: 0; font-size: 20px;">🎬 Generate Video</h3>
+                <button onclick="closeGenerateMediaModal()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #666; line-height: 1;">&times;</button>
+            </div>
+
+            <p style="color: #666; margin-bottom: 20px;">
+                Generate a video for this post using HeyGen. This typically takes 30-60 seconds.
+            </p>
+
+            <div style="margin-bottom: 20px; padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+                <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px;">
+                    <input type="checkbox" id="generate-use-avatar-iv-checkbox" style="width: 16px; height: 16px; margin-right: 10px; cursor: pointer;">
+                    <span style="color: #0369a1;">
+                        <strong>Use Avatar IV</strong>
+                        <span style="color: #64748b; font-weight: normal;"> — gestures & movements (more credits)</span>
+                    </span>
+                </label>
+            </div>
+
+            <input type="hidden" id="generate-media-post-id" value="">
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee;">
+                <button onclick="closeGenerateMediaModal()" style="padding: 12px 24px; border: 2px solid #ddd; background: white; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 500;">
+                    Cancel
+                </button>
+                <button id="confirm-generate-btn" onclick="confirmGenerateMedia()" style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold;">
+                    🎬 Generate Video
                 </button>
             </div>
         </div>
@@ -1591,7 +1636,7 @@
             else if (status === 'approved') {
                 buttons = `
                     <div class="post-actions">
-                        <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                        <button onclick="openGenerateMediaModal('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
@@ -2636,6 +2681,8 @@
                 console.log('Selected motion prompt:', motionPrompt);
             }
 
+            var useAvatarIV = document.getElementById('regenerate-use-avatar-iv-checkbox').checked;
+
             var btn = document.getElementById('confirm-regenerate-btn');
             if (btn) {
                 btn.disabled = true;
@@ -2646,6 +2693,7 @@
 
             var requestBody = {
                 motion_prompt: motionPrompt,
+                use_avatar_iv: useAvatarIV,
                 force_fallback: forceFallback || false
             };
 
@@ -2744,6 +2792,122 @@
             confirmRegenerateVideo(true);
         }
         // ========== END REGENERATE VIDEO FUNCTIONS ==========
+
+        // ========== GENERATE MEDIA MODAL FUNCTIONS ==========
+        function openGenerateMediaModal(postId) {
+            document.getElementById('generate-media-post-id').value = postId;
+            document.getElementById('generate-use-avatar-iv-checkbox').checked = false; // Default to Photo Avatar
+            document.getElementById('generate-media-modal').style.display = 'flex';
+        }
+
+        function closeGenerateMediaModal() {
+            document.getElementById('generate-media-modal').style.display = 'none';
+            document.getElementById('generate-media-post-id').value = '';
+        }
+
+        async function confirmGenerateMedia() {
+            const postId = document.getElementById('generate-media-post-id').value;
+            const useAvatarIV = document.getElementById('generate-use-avatar-iv-checkbox').checked;
+
+            if (!postId) {
+                alert('Error: No post ID found');
+                return;
+            }
+
+            const btn = document.getElementById('confirm-generate-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Generating...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        use_avatar_iv: useAvatarIV
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success !== false) {
+                    closeGenerateMediaModal();
+
+                    if (data.video_id) {
+                        alert('✅ Video generation started!\n\n' +
+                              'Your video is being created by HeyGen (30-60 seconds).\n' +
+                              'It will automatically appear when ready.\n\n' +
+                              (useAvatarIV ? '🎭 Using Avatar IV with gestures.' : '📷 Using Photo Avatar.'));
+                    } else {
+                        alert('Media generation started!');
+                    }
+                    location.reload();
+                } else if (data.needs_confirmation) {
+                    // Avatar IV failed, offer fallback
+                    closeGenerateMediaModal();
+                    showGenerateFallbackDialog(postId, data.message || 'Avatar IV generation failed.');
+                } else {
+                    alert('Failed: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🎬 Generate Video';
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '🎬 Generate Video';
+            }
+        }
+
+        function showGenerateFallbackDialog(postId, message) {
+            const dialog = document.createElement('div');
+            dialog.id = 'generate-fallback-dialog';
+            dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; justify-content: center; align-items: center;';
+
+            dialog.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 16px; max-width: 450px; width: 90%; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                    <h3 style="margin: 0 0 15px 0;">Avatar IV Unavailable</h3>
+                    <p style="color: #666; margin-bottom: 25px;">${message}</p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button onclick="closeGenerateFallbackDialog()" style="padding: 12px 24px; border: 2px solid #ddd; background: white; border-radius: 8px; cursor: pointer;">Cancel</button>
+                        <button onclick="proceedWithGenerateFallback('${postId}')" style="padding: 12px 24px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">Use Photo Avatar</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dialog);
+        }
+
+        function closeGenerateFallbackDialog() {
+            const dialog = document.getElementById('generate-fallback-dialog');
+            if (dialog) dialog.remove();
+        }
+
+        async function proceedWithGenerateFallback(postId) {
+            closeGenerateFallbackDialog();
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        use_avatar_iv: false,
+                        force_fallback: true
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Video generation started with Photo Avatar!');
+                    location.reload();
+                } else {
+                    alert('Failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        // ========== END GENERATE MEDIA MODAL FUNCTIONS ==========
 
         async function backfillImagePrompts() {
             if (!confirm('This will generate image prompts for all posts that don\'t have one. Continue?')) {
