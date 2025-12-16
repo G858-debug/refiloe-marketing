@@ -268,15 +268,10 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
 
 def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict:
     """
-    Upload a video post to Facebook as a draft immediately upon approval.
-
-    Args:
-        db: Database instance
-        post: Post record
-
-    Returns:
-        Dict with success status and facebook_post_id
+    Upload a video post to Facebook as a scheduled post immediately upon approval.
     """
+    import time as time_module
+
     page_access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
     page_id = os.getenv("FACEBOOK_PAGE_ID")
 
@@ -285,18 +280,51 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
         return {'success': False, 'error': 'Facebook credentials missing'}
 
     try:
+        # Calculate the scheduled timestamp
+        scheduled_time = post.get('scheduled_time')
+        schedule_timestamp = None
+
+        if scheduled_time:
+            try:
+                from datetime import datetime as dt
+                if isinstance(scheduled_time, str):
+                    scheduled_dt = dt.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                else:
+                    scheduled_dt = scheduled_time
+
+                # Convert to Unix timestamp
+                schedule_timestamp = int(scheduled_dt.timestamp())
+
+                # Facebook requires at least 10 mins in future
+                current_time = int(time_module.time())
+                min_schedule_time = current_time + 600  # 10 minutes
+
+                if schedule_timestamp < min_schedule_time:
+                    log_info(f"Scheduled time {scheduled_dt} is less than 10 mins away, using minimum (10 mins from now)")
+                    schedule_timestamp = min_schedule_time
+                else:
+                    log_info(f"Using post's scheduled time: {scheduled_dt} (timestamp: {schedule_timestamp})")
+
+            except Exception as e:
+                log_warning(f"Could not parse scheduled_time '{scheduled_time}': {e}")
+                schedule_timestamp = int(time_module.time()) + 600
+        else:
+            log_info("No scheduled_time on post, defaulting to 10 mins from now")
+            schedule_timestamp = int(time_module.time()) + 600
+
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
-        # Prepare post data with schedule hint
+        # Prepare post data with schedule hint and scheduled_publish_time
         post_data = {
             'content_text': post.get('content_text', ''),
             'video_url': post.get('video_url'),
             'post_as_draft': True,
             'include_schedule_hint': True,
-            'scheduled_time': post.get('scheduled_time')
+            'scheduled_time': post.get('scheduled_time'),
+            'scheduled_publish_time': schedule_timestamp,  # Pass the calculated timestamp
         }
 
-        # Upload to Facebook as draft
+        # Upload to Facebook as scheduled post
         result = poster._post_video(post_data)
 
         return result
