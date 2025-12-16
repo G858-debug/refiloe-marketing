@@ -203,6 +203,11 @@
         .badge-pending-media { background: #fef3c7; color: #b45309; }
         .badge-media-approved { background: #dbeafe; color: #1d4ed8; }
         .badge-scheduled { background: #dbeafe; color: #1d4ed8; }
+        .badge-music {
+            background-color: #9333ea;
+            color: white;
+            animation: pulse 2s infinite;
+        }
         .badge-published { background: #dcfce7; color: #15803d; }
         .badge-rejected { background: #fee2e2; color: #dc2626; }
 
@@ -1155,6 +1160,7 @@
                 'pending_media_approval': 'badge-pending-media',
                 'media_approved': 'badge-media-approved',
                 'scheduled': 'badge-scheduled',
+                'awaiting_music': 'badge-music',
                 'published': 'badge-published',
                 'rejected': 'badge-rejected'
             };
@@ -1471,7 +1477,8 @@
                 approved: '<span class="status-badge approved">✅ Approved</span>',
                 generating: '<span class="status-badge generating">⏳ Generating...</span>',
                 pending_media_approval: '<span class="status-badge pending-media">🎬 Review Media</span>',
-                scheduled: '<span class="status-badge scheduled">📅 Scheduled</span>'
+                scheduled: '<span class="status-badge scheduled">📅 Scheduled</span>',
+                awaiting_music: '<span class="status-badge" style="background-color: #9333ea; color: white;">🎵 Add Music & Publish</span>'
             };
             return badges[status] || '<span class="status-badge">Unknown</span>';
         }
@@ -1529,6 +1536,21 @@
                         </button>
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
+                    </div>
+                `;
+            }
+            else if (status === 'awaiting_music') {
+                buttons = `
+                    <p class="status-message">🎵 Video posted as draft. Add music in Creator Studio and publish manually.</p>
+                    <div class="post-actions">
+                        <a href="https://business.facebook.com/creator_studio" target="_blank" class="btn btn-sm" style="background-color: #9333ea; color: white;">
+                            🎵 Open Creator Studio
+                        </a>
+                        <button class="btn btn-success btn-sm" onclick="markAsPublished('${post.id}')">
+                            ✅ Mark as Published
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1762,6 +1784,32 @@
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
+            }
+        }
+
+        // Mark video as published after adding music in Creator Studio
+        async function markAsPublished(postId) {
+            if (!confirm('Have you added music and published this video in Creator Studio?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/mark-published/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Post marked as published!', 'success');
+                    loadPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error marking post as published:', error);
+                showToast('Failed to update post status', 'error');
             }
         }
 

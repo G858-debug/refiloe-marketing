@@ -626,20 +626,33 @@ class SocialMediaScheduler:
             result = poster.post_to_page(post_data)
 
             if result.get("success"):
-                # Post succeeded - update database
                 facebook_post_id = result.get("post_id")
-                self._mark_post_published(post_id, facebook_post_id)
 
-                log_info(f"Successfully published post {post_id} as Facebook post {facebook_post_id}")
-                self._send_notification(
-                    "success",
-                    f"Post published successfully",
-                    {
-                        "post_id": post_id,
-                        "facebook_post_id": facebook_post_id,
-                        "content_preview": post.get("content_text", "")[:100]
-                    }
-                )
+                # Check if this was a video posted as draft
+                is_video = post.get("post_type") == "video" or post.get("video_url")
+                is_draft = result.get("is_draft", False)
+
+                if is_video and is_draft:
+                    # Video posted as draft - mark as awaiting_music
+                    self._mark_post_awaiting_music(post_id, facebook_post_id)
+                    log_info(f"Video post {post_id} uploaded as draft, awaiting music addition")
+
+                    # Send notification to add music
+                    self._send_add_music_notification(post_id, facebook_post_id, post)
+                else:
+                    # Regular post or video posted as published
+                    self._mark_post_published(post_id, facebook_post_id)
+                    log_info(f"Successfully published post {post_id} as Facebook post {facebook_post_id}")
+
+                    self._send_notification(
+                        "success",
+                        f"Post published successfully",
+                        {
+                            "post_id": post_id,
+                            "facebook_post_id": facebook_post_id,
+                            "content_preview": post.get("content_text", "")[:100]
+                        }
+                    )
             else:
                 # Post failed - implement retry logic
                 error_message = result.get("error", "Unknown error")
@@ -752,6 +765,94 @@ class SocialMediaScheduler:
 
         except Exception as exc:
             log_error(f"Error marking post {post_id} as published: {exc}")
+
+    def _mark_post_awaiting_music(self, post_id: str, facebook_post_id: str) -> None:
+        """
+        Mark video post as awaiting music addition in Creator Studio.
+
+        Args:
+            post_id: Post UUID
+            facebook_post_id: Facebook's video ID (draft)
+        """
+        try:
+            update_data = {
+                "status": "awaiting_music",
+                "facebook_post_id": facebook_post_id,
+                "updated_at": datetime.now(SA_TIMEZONE).isoformat()
+            }
+
+            result = self.supabase_client.table("social_posts").update(update_data).eq(
+                "id", post_id
+            ).execute()
+
+            if result.data:
+                log_info(f"Post {post_id} marked as awaiting_music with Facebook ID: {facebook_post_id}")
+            else:
+                log_error(f"Failed to update post {post_id} status to awaiting_music")
+
+        except Exception as exc:
+            log_error(f"Error marking post {post_id} as awaiting_music: {exc}")
+
+    def _send_add_music_notification(self, post_id: str, facebook_post_id: str, post: Dict[str, Any]) -> None:
+        """
+        Send WhatsApp notification to add music to video in Creator Studio.
+
+        Args:
+            post_id: Post UUID
+            facebook_post_id: Facebook's video ID
+            post: Full post data
+        """
+        try:
+            page_id = os.getenv("PAGE_ID", "")
+
+            # Creator Studio URL for the video
+            creator_studio_url = f"https://business.facebook.com/creator_studio?asset_id={facebook_post_id}&page_id={page_id}"
+
+            # Alternative: Direct to Content Library
+            content_library_url = f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}"
+
+            content_preview = post.get("content_text", "")[:100]
+            title = post.get("title", "Untitled Video")
+
+            message = f"""🎬 VIDEO READY FOR MUSIC
+
+📹 *{title}*
+
+Your video has been uploaded to Facebook as a DRAFT.
+
+*Next steps:*
+1. Go to Creator Studio
+2. Find the video in Content Library
+3. Click "Edit Video" → "Add Music"
+4. Choose a track from Sound Collection
+5. Click "Publish" when ready
+
+🔗 *Creator Studio:*
+{creator_studio_url}
+
+📝 *Caption preview:*
+{content_preview}...
+
+⏰ Add music and publish when ready!"""
+
+            self._send_notification(
+                "info",
+                "Video ready for music",
+                {
+                    "post_id": post_id,
+                    "facebook_post_id": facebook_post_id,
+                    "creator_studio_url": creator_studio_url,
+                    "message": message
+                }
+            )
+
+            # Also send via WhatsApp if notifier is available
+            if self.whatsapp:
+                self.whatsapp.send_message(message)
+                log_info(f"Sent WhatsApp notification for video {post_id}")
+
+        except Exception as exc:
+            log_error(f"Error sending add music notification: {exc}")
 
     def _mark_post_failed(self, post_id: str, error_message: str) -> None:
         """

@@ -16,6 +16,7 @@ class SocialMediaDatabase:
         'pending_media_approval', # Media generated, awaiting approval
         'media_approved',         # Media approved, awaiting final post approval
         'scheduled',              # Post fully approved and scheduled
+        'awaiting_music',         # Video posted as draft, awaiting music addition
         'published',              # Post has been published
         'failed',                 # Publishing failed
         'rejected'                # Post rejected, won't be published
