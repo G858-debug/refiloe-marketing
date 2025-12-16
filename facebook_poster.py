@@ -307,6 +307,167 @@ class FacebookPoster:
                 'error': str(e)
             }
 
+    def _post_reel(self, post_data: Dict) -> Dict:
+        """
+        Post video as a Facebook Reel using the Reels Publishing API.
+
+        This is a 3-step process:
+        1. Initialize upload session to get video_id and upload_url
+        2. Upload video file using file_url header (for CDN-hosted videos)
+        3. Publish or schedule the reel
+
+        Args:
+            post_data: Dictionary containing:
+                - video_url: URL of the video (from HeyGen CDN)
+                - content_text: Caption/description for the reel
+                - title: Optional reel title (max 255 chars)
+                - scheduled_publish_time: Optional Unix timestamp for scheduling
+                - video_state: "SCHEDULED" (default) or "PUBLISHED"
+
+        Returns:
+            Dictionary with success status, video_id/post_id, and error message
+        """
+        try:
+            video_url = post_data.get('video_url')
+            if not video_url:
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': 'No video URL provided'
+                }
+
+            # Extract parameters with defaults
+            description = post_data.get('content_text', '')
+            title = post_data.get('title', '')
+            video_state = post_data.get('video_state', 'SCHEDULED')
+            scheduled_publish_time = post_data.get('scheduled_publish_time')
+
+            # If state is SCHEDULED but no time provided, default to 10 minutes from now
+            if video_state == 'SCHEDULED' and not scheduled_publish_time:
+                scheduled_publish_time = int(time.time()) + 600  # 10 minutes
+
+            # Truncate title to 255 chars if needed
+            if title and len(title) > 255:
+                title = title[:252] + '...'
+                log_warning(f"Title truncated to 255 characters")
+
+            log_info(f"Starting Reels API upload for video: {video_url}")
+            log_info(f"Video state: {video_state}")
+
+            # STEP 1: Initialize upload session
+            log_info("Step 1: Initializing upload session")
+            init_url = f"https://graph.facebook.com/v19.0/{self.page_id}/video_reels"
+            init_params = {
+                'access_token': self.page_access_token,
+                'upload_phase': 'start'
+            }
+
+            init_response = self._make_api_request('POST', init_url, data=init_params)
+
+            if not init_response.get('video_id') or not init_response.get('upload_url'):
+                error_msg = init_response.get('error', {}).get('message', 'Failed to initialize upload')
+                log_error(f"Step 1 failed: {error_msg}")
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': f'Upload initialization failed: {error_msg}'
+                }
+
+            video_id = init_response['video_id']
+            upload_url = init_response['upload_url']
+            log_info(f"Step 1 complete - video_id: {video_id}")
+
+            # STEP 2: Upload video using file_url header
+            log_info(f"Step 2: Uploading video from CDN: {video_url}")
+            upload_headers = {
+                'Authorization': f'OAuth {self.page_access_token}',
+                'file_url': video_url
+            }
+
+            try:
+                upload_response = requests.post(
+                    upload_url,
+                    headers=upload_headers,
+                    timeout=120  # 2 minutes for upload
+                )
+                upload_response.raise_for_status()
+                upload_result = upload_response.json()
+
+                if not upload_result.get('success'):
+                    error_msg = upload_result.get('error', {}).get('message', 'Upload failed')
+                    log_error(f"Step 2 failed: {error_msg}")
+                    return {
+                        'success': False,
+                        'post_id': None,
+                        'error': f'Video upload failed: {error_msg}'
+                    }
+
+                log_info("Step 2 complete - video uploaded successfully")
+
+            except requests.exceptions.RequestException as e:
+                log_error(f"Step 2 failed with exception: {e}")
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': f'Video upload error: {str(e)}'
+                }
+
+            # STEP 3: Publish or schedule the reel
+            log_info(f"Step 3: Publishing/scheduling reel (state: {video_state})")
+            finish_url = f"https://graph.facebook.com/v19.0/{self.page_id}/video_reels"
+            finish_params = {
+                'access_token': self.page_access_token,
+                'upload_phase': 'finish',
+                'video_id': video_id,
+                'video_state': video_state,
+                'description': description
+            }
+
+            # Add optional title if provided
+            if title:
+                finish_params['title'] = title
+
+            # Add scheduled time if state is SCHEDULED
+            if video_state == 'SCHEDULED' and scheduled_publish_time:
+                finish_params['scheduled_publish_time'] = scheduled_publish_time
+                log_info(f"Scheduling reel for Unix timestamp: {scheduled_publish_time}")
+
+            finish_response = self._make_api_request('POST', finish_url, data=finish_params)
+
+            if finish_response.get('success'):
+                log_info(f"Step 3 complete - Reel posted successfully with video_id: {video_id}")
+
+                # Log scheduling info if scheduled
+                if video_state == 'SCHEDULED' and scheduled_publish_time:
+                    scheduled_dt = datetime.fromtimestamp(scheduled_publish_time)
+                    log_info(f"Reel scheduled for: {scheduled_dt}")
+
+                return {
+                    'success': True,
+                    'post_id': video_id,
+                    'video_state': video_state,
+                    'scheduled_time': scheduled_publish_time if video_state == 'SCHEDULED' else None,
+                    'error': None
+                }
+            else:
+                error_msg = finish_response.get('error', {}).get('message', 'Unknown error')
+                log_error(f"Step 3 failed: {error_msg}")
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': f'Reel publish/schedule failed: {error_msg}'
+                }
+
+        except Exception as e:
+            log_error(f"Exception in _post_reel: {e}")
+            import traceback
+            log_error(traceback.format_exc())
+            return {
+                'success': False,
+                'post_id': None,
+                'error': str(e)
+            }
+
     def post_approved_content(self, post_record: Dict) -> Dict:
         """
         Post approved content to Facebook, handling videos, images, or text.
