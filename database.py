@@ -130,6 +130,7 @@ class SocialMediaDatabase:
                 'status': status,
                 'facebook_post_id': post_data.get('facebook_post_id'),
                 'generation_prompt': post_data.get('generation_prompt'),
+                'image_prompt': post_data.get('image_prompt'),
                 'week_number': post_data.get('week_number'),
                 'video_url': post_data.get('video_url'),
                 'video_duration': post_data.get('video_duration', 0),
