@@ -2502,92 +2502,65 @@
         let currentRegeneratePostId = null;
 
         async function openRegenerateModal(postId) {
-            console.log('=== Opening Regenerate Modal ===');
-            console.log('Post ID:', postId);
-
+            console.log('Opening regenerate modal for:', postId);
             currentRegeneratePostId = postId;
 
-            // Show modal immediately
-            const modal = document.getElementById('regenerate-video-modal');
-            if (!modal) {
-                console.error('Modal element not found!');
-                alert('Error: Regenerate modal not found. Please refresh the page.');
-                return;
-            }
-            modal.style.display = 'flex';
+            // Show modal first
+            document.getElementById('regenerate-video-modal').style.display = 'flex';
 
-            // Load motion prompts
+            // Get the select element
             const select = document.getElementById('motion-prompt-select');
-            if (select) {
-                select.innerHTML = '<option value="">Loading...</option>';
 
-                try {
-                    console.log('Fetching motion prompts...');
-                    const response = await fetch(`${API_BASE}/api/dashboard/motion-prompts`);
-                    const data = await response.json();
-                    console.log('Motion prompts response:', data);
+            // Fetch and populate motion prompts
+            try {
+                const resp = await fetch(API_BASE + '/api/dashboard/motion-prompts');
+                const json = await resp.json();
 
-                    if (data.success && data.prompts && data.prompts.length > 0) {
-                        select.innerHTML = '';
-                        data.prompts.forEach((prompt, index) => {
-                            const option = document.createElement('option');
-                            option.value = prompt.id;
-                            option.textContent = prompt.name;
-                            option.setAttribute('data-prompt', prompt.prompt || '');
-                            option.setAttribute('data-description', prompt.description || '');
-                            select.appendChild(option);
-                            console.log(`Added option ${index}: ${prompt.name}`);
-                        });
+                console.log('Got prompts:', json.prompts?.length || 0);
 
-                        // Set initial description
-                        const descEl = document.getElementById('motion-prompt-description');
-                        if (descEl && select.options.length > 0) {
-                            descEl.textContent = select.options[0].getAttribute('data-description') || '';
-                        }
+                if (json.success && json.prompts) {
+                    // Build options HTML directly
+                    let optionsHtml = '';
+                    json.prompts.forEach(function(p) {
+                        const promptVal = p.prompt ? p.prompt.replace(/"/g, '&quot;') : '';
+                        const descVal = p.description ? p.description.replace(/"/g, '&quot;') : '';
+                        optionsHtml += '<option value="' + p.id + '" data-prompt="' + promptVal + '" data-description="' + descVal + '">' + p.name + '</option>';
+                    });
+                    select.innerHTML = optionsHtml;
+                    console.log('Options added:', select.options.length);
 
-                        // Add change handler
-                        select.onchange = function() {
-                            const selectedOpt = this.options[this.selectedIndex];
-                            const descEl = document.getElementById('motion-prompt-description');
-                            if (descEl && selectedOpt) {
-                                descEl.textContent = selectedOpt.getAttribute('data-description') || '';
-                            }
-                        };
-
-                        console.log('Motion prompts loaded successfully:', data.prompts.length, 'options');
-                    } else {
-                        select.innerHTML = '<option value="">No motion styles available</option>';
-                        console.warn('No motion prompts in response');
+                    // Set description
+                    if (select.options.length > 0) {
+                        document.getElementById('motion-prompt-description').textContent =
+                            select.options[0].getAttribute('data-description') || '';
                     }
-                } catch (error) {
-                    console.error('Error loading motion prompts:', error);
-                    select.innerHTML = '<option value="">Error loading styles</option>';
                 }
-            } else {
-                console.error('Select element not found!');
+            } catch (e) {
+                console.error('Error loading prompts:', e);
+                select.innerHTML = '<option value="">Error loading</option>';
             }
 
-            // Load post script preview
-            const scriptPreview = document.getElementById('script-preview-text');
-            if (scriptPreview) {
-                scriptPreview.textContent = 'Loading script...';
+            // Handle dropdown change
+            select.onchange = function() {
+                var opt = this.options[this.selectedIndex];
+                document.getElementById('motion-prompt-description').textContent =
+                    opt.getAttribute('data-description') || '';
+            };
 
-                try {
-                    console.log('Fetching post details...');
-                    const response = await fetch(`${API_BASE}/api/dashboard/post/${postId}`);
-                    const data = await response.json();
-                    console.log('Post details response:', data);
+            // Fetch script preview
+            try {
+                const resp = await fetch(API_BASE + '/api/dashboard/post/' + postId);
+                const json = await resp.json();
 
-                    if (data.success && data.post) {
-                        const script = data.post.video_script || 'No script found';
-                        scriptPreview.textContent = script.length > 500 ? script.substring(0, 500) + '...' : script;
-                    } else {
-                        scriptPreview.textContent = 'Could not load script';
-                    }
-                } catch (error) {
-                    console.error('Error loading post:', error);
-                    scriptPreview.textContent = 'Error loading script';
+                if (json.success && json.post && json.post.video_script) {
+                    var script = json.post.video_script;
+                    document.getElementById('script-preview-text').textContent =
+                        script.length > 500 ? script.substring(0, 500) + '...' : script;
+                } else {
+                    document.getElementById('script-preview-text').textContent = 'No script found';
                 }
+            } catch (e) {
+                document.getElementById('script-preview-text').textContent = 'Error loading script';
             }
         }
 
