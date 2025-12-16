@@ -590,8 +590,8 @@ class SocialMediaScheduler:
             return
 
         # Check if Facebook credentials are available
-        page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
-        page_id = os.getenv("PAGE_ID")
+        page_access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+        page_id = os.getenv("FACEBOOK_PAGE_ID")
 
         if not page_access_token or not page_id:
             log_warning("Facebook credentials missing; cannot post content.")
@@ -811,7 +811,7 @@ class SocialMediaScheduler:
             post: Full post data
         """
         try:
-            page_id = os.getenv("PAGE_ID", "")
+            page_id = os.getenv("FACEBOOK_PAGE_ID", "")
 
             # Creator Studio URL for the video
             creator_studio_url = f"https://business.facebook.com/creator_studio?asset_id={facebook_post_id}&page_id={page_id}"
@@ -996,7 +996,7 @@ Your video has been uploaded to Facebook as a DRAFT.
             post: Full post data
         """
         try:
-            page_id = os.getenv("PAGE_ID", "")
+            page_id = os.getenv("FACEBOOK_PAGE_ID", "")
 
             # Creator Studio URL for the video
             creator_studio_url = f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}"
@@ -1265,8 +1265,8 @@ Your video has been uploaded to Facebook as a DRAFT.
             log_warning("ANTHROPIC_API_KEY missing; comment processing job skipped.")
             return
 
-        if not os.getenv("PAGE_ACCESS_TOKEN"):
-            log_warning("PAGE_ACCESS_TOKEN missing; comment processing job skipped.")
+        if not os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN"):
+            log_warning("FACEBOOK_PAGE_ACCESS_TOKEN missing; comment processing job skipped.")
             return
 
         try:
@@ -1278,11 +1278,11 @@ Your video has been uploaded to Facebook as a DRAFT.
 
         try:
             # Initialize Facebook poster
-            page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
-            page_id = os.getenv("PAGE_ID")
+            page_access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+            page_id = os.getenv("FACEBOOK_PAGE_ID")
 
             if not page_id:
-                log_warning("PAGE_ID missing; comment processing job skipped.")
+                log_warning("FACEBOOK_PAGE_ID missing; comment processing job skipped.")
                 return
 
             facebook_poster = FacebookPoster(page_access_token, page_id, self.supabase_client)

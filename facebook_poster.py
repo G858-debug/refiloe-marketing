@@ -632,8 +632,8 @@ class FacebookPoster:
 def test_facebook_poster():
     """Test function for Facebook poster functionality."""
     # Get credentials from environment
-    page_access_token = os.getenv('PAGE_ACCESS_TOKEN')
-    page_id = os.getenv('PAGE_ID')
+    page_access_token = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN')
+    page_id = os.getenv('FACEBOOK_PAGE_ID')
     
     if not page_access_token or not page_id:
         log_error("Missing Facebook credentials in environment variables")
