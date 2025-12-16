@@ -141,6 +141,10 @@ class SocialMediaDatabase:
                 'media_url': self._serialize_media_urls(
                     post_data.get('media_urls') or post_data.get('media_url')
                 ),
+                # New fields for Facebook Reels title cards
+                'reel_title': post_data.get('reel_title'),
+                'source_image_url': post_data.get('source_image_url'),
+                'processed_video_url': post_data.get('processed_video_url'),
                 'completion_rate': post_data.get('completion_rate', 0),
                 'avg_watch_time': post_data.get('avg_watch_time', 0),
                 'has_captions': post_data.get('has_captions', True),
@@ -526,11 +530,11 @@ class SocialMediaDatabase:
 
     def update_post_status(self, post_id: str, status: str) -> bool:
         """Update the status of a post
-        
+
         Args:
             post_id: UUID of the post
             status: New status (draft, scheduled, published, failed)
-        
+
         Returns:
             bool: True if successful, False otherwise
         """
@@ -539,20 +543,77 @@ class SocialMediaDatabase:
                 'status': status,
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
-            
+
             result = self.db.table('social_posts').update(update_data).eq(
                 'id', post_id
             ).execute()
-            
+
             if result.data:
                 log_info(f"Updated post {post_id} status to {status}")
                 return True
             else:
                 log_error(f"Failed to update post {post_id} status")
                 return False
-                
+
         except Exception as e:
             log_error(f"Error updating post status: {str(e)}")
+            return False
+
+    def update_post(self, post_id: str, update_data: Dict) -> bool:
+        """Update a post with new data
+
+        Args:
+            post_id: UUID of the post to update
+            update_data: Dictionary containing fields to update
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Define allowed fields for update
+            allowed_fields = [
+                'status', 'video_url', 'thumbnail_url', 'published_time',
+                'reel_title', 'source_image_url', 'processed_video_url',
+                'content_text', 'title', 'content_theme', 'image_ids',
+                'scheduled_time', 'facebook_post_id', 'generation_prompt',
+                'image_prompt', 'week_number', 'video_duration', 'video_type',
+                'media_url', 'completion_rate', 'avg_watch_time', 'has_captions',
+                'audio_track_id', 'video_style', 'post_type', 'platform'
+            ]
+
+            # Filter to only allowed fields and remove None values
+            filtered_data = {
+                k: v for k, v in update_data.items()
+                if k in allowed_fields and v is not None
+            }
+
+            # Add updated_at timestamp
+            filtered_data['updated_at'] = datetime.now(self.sa_tz).isoformat()
+
+            # Handle media_url serialization if present
+            if 'media_url' in filtered_data:
+                filtered_data['media_url'] = self._serialize_media_urls(filtered_data['media_url'])
+
+            if not filtered_data or filtered_data == {'updated_at': filtered_data['updated_at']}:
+                log_error(f"No valid fields to update for post {post_id}")
+                return False
+
+            log_info(f"Updating post {post_id} with data: {filtered_data}")
+
+            result = self.db.table('social_posts').update(filtered_data).eq(
+                'id', post_id
+            ).execute()
+
+            if result.data:
+                log_info(f"Successfully updated post {post_id}")
+                return True
+            else:
+                log_error(f"Failed to update post {post_id} - no data returned")
+                return False
+
+        except Exception as e:
+            log_error(f"Error updating post: {str(e)}")
+            log_error(f"Post ID: {post_id}, Update data: {update_data}")
             return False
 
     def get_post(self, post_id: str) -> Optional[Dict]:
