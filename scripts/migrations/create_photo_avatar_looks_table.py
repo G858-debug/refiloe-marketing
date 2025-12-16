@@ -32,7 +32,7 @@ def get_supabase_client() -> Client:
 INITIAL_PHOTO_AVATARS = [
     {
         "content_type": "workout",
-        "photo_avatar_id": "96c419d3058444069ab8e28308fdc834",
+        "photo_avatar_id": "c27a07fecf6d4fd0916e5da74ba9a247",
         "label": "Workout",
         "outfit_description": "Fitted coral athletic crop top with thin straps, high-waisted burgundy leggings, delicate gold body chain across collarbone, small gold hoop earrings",
         "environment_description": "Modern boutique gym with warm wood-paneled accent wall, chrome dumbbells on beige leather bench, floor-to-ceiling window with golden morning light, snake plant in terracotta pot",
@@ -41,7 +41,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "fitness",
-        "photo_avatar_id": "291df9103e744984be41715e649ae8e6",
+        "photo_avatar_id": "546e123c403646abb8a1b5c806000d2d",
         "label": "Fitness",
         "outfit_description": "Electric blue racerback athletic top with mesh panel detail, matching blue sports bra visible underneath, thin gold necklace with small pendant, medium gold hoop earrings, hair in two neat cornrow braids",
         "environment_description": "Bright fitness studio with floor-to-ceiling mirrors, polished light oak hardwood floors, ballet barre on cream wall, stacked yoga mats in earthy tones on wooden shelving",
@@ -50,7 +50,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "professional",
-        "photo_avatar_id": "64a1ca313daf488698bebb282aa87dae",
+        "photo_avatar_id": "921680e6ba184811aea1e72102920ff8",
         "label": "Professional",
         "outfit_description": "Structured hot pink blazer with padded shoulders over cream silk camisole with delicate lace trim, thin gold layered necklaces, statement gold drop earrings, hair in sophisticated low bun",
         "environment_description": "Modern co-working space with large beige linen sofa and cognac leather armchair, brass floor lamp with cream shade, floating wooden shelves with books and fiddle leaf fig, abstract art in terracotta and gold",
@@ -59,7 +59,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "business",
-        "photo_avatar_id": "331e5ac30c914d5abeb2853be17a8532",
+        "photo_avatar_id": "e449aa5ff5bc4c9b970e40b4420dacbd",
         "label": "Business",
         "outfit_description": "Tailored emerald green power blazer with gold button detail over crisp white V-neck blouse, gold chain-link earrings, delicate gold watch, hair straightened and flowing over one shoulder",
         "environment_description": "Executive office with mahogany desk, beige leather executive chair, floor-to-ceiling bookshelf with leather-bound books and bronze sculptures, city skyline visible through window",
@@ -68,7 +68,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "motivational",
-        "photo_avatar_id": "d0c9ad8674ef49b79f618dd5303e50df",
+        "photo_avatar_id": "9150e25a09ab417fa9b3aff5482d4268",
         "label": "Motivational",
         "outfit_description": "Bold orange off-shoulder crop top showing toned shoulders, high-waisted camel wide-leg trousers, chunky gold statement necklace, large gold hoop earrings, voluminous natural afro with golden highlights",
         "environment_description": "Rooftop terrace at golden hour with city skyline in warm orange and pink sunset, modern outdoor furniture with beige cushions, string lights, tall ornamental grasses in terracotta planters",
@@ -77,7 +77,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "educational",
-        "photo_avatar_id": "55bdbaaa7ded40458bfc0e498ff24ae6",
+        "photo_avatar_id": "f7b5354d99454a259a405694aff6041f",
         "label": "Educational",
         "outfit_description": "Cozy oversized mustard yellow knit cardigan over fitted white tank top, delicate gold pendant necklace with small charm, small gold stud earrings, loose natural curls with side part",
         "environment_description": "Warm home office with light oak desk, beige ergonomic chair, open laptop and notebook, wooden floating shelves with books and succulents, cork pinboard with quotes, fairy lights along shelf edge",
@@ -86,7 +86,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "community",
-        "photo_avatar_id": "6a7f86c8c60544d497ae63695af00425",
+        "photo_avatar_id": "34f4326cfa394ce0808c37179eff8dd4",
         "label": "Community",
         "outfit_description": "Flowy fuchsia wrap blouse with subtle print detail, layered gold chain necklaces of varying lengths, medium bamboo hoop earrings, hair in protective twist-out style with volume",
         "environment_description": "Trendy coffee shop with exposed brick wall painted cream, wooden communal table with cappuccinos, hanging Edison bulb pendant lights, chalkboard menu, monstera plant, vintage cognac leather armchairs",
@@ -95,7 +95,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "relatable",
-        "photo_avatar_id": "b6bb73219ff54f5eb2934b3047bf028f",
+        "photo_avatar_id": "8a5e863b6d4049ad80d4fc5c56d84721",
         "label": "Relatable",
         "outfit_description": "Oversized sage green hoodie slightly off one shoulder revealing tank strap, simple gold huggie earrings, thin gold chain bracelet, hair in messy topknot with loose face-framing pieces",
         "environment_description": "Cozy living room with plush beige sectional sofa with textured throw pillows in terracotta and cream, soft knit blanket, wooden coffee table with mug and journal, fiddle leaf fig plant, fairy lights, family photos",
@@ -104,7 +104,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "casual",
-        "photo_avatar_id": "a33ab8bbeff5499a96ae613e5497247c",
+        "photo_avatar_id": "e3e6f1c06c7342ae8804770543707c23",
         "label": "Casual",
         "outfit_description": "Vibrant yellow linen button-up shirt tied at waist over white fitted tank, gold layered delicate necklaces, statement gold cuff bracelet, loose beachy waves",
         "environment_description": "Outdoor café terrace with wrought iron bistro table, espresso and croissant, potted lavender and olive trees in terracotta pots, cobblestone floor, cream canvas umbrella, pink bougainvillea on cream stucco wall",
@@ -113,7 +113,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "announcement",
-        "photo_avatar_id": "e4fc74c588ba45ec9eb49020bd95417d",
+        "photo_avatar_id": "9fa2794180864cb39e1ed2e5af4d80dc",
         "label": "Announcement",
         "outfit_description": "Stunning royal blue satin blazer with peak lapels over nude silk camisole, dramatic gold chandelier earrings, sleek gold cuff bracelet, voluminous waves with deep side part",
         "environment_description": "Clean professional backdrop with cream textured wall, subtle branded element in warm beige and gold, modern minimalist console table with single orchid in white ceramic pot, abstract gold metal wall sculpture",
@@ -122,7 +122,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "outdoor",
-        "photo_avatar_id": "79938b6165b649b9b724d1af99a3b4b5",
+        "photo_avatar_id": "c056dfb7ca4c4c63abfe8b915f2d2c6a",
         "label": "Outdoor",
         "outfit_description": "Bright coral moisture-wicking fitted tank top, lightweight sage green running vest unzipped, sporty gold-accented smartwatch, small gold stud earrings, high sporty ponytail with matching coral sweatband",
         "environment_description": "Lush green park with manicured lawn and mature trees creating dappled shade, wooden park bench, gravel jogging path, distant runners softly blurred, city skyline through trees, colorful flower beds",
@@ -131,7 +131,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "studio",
-        "photo_avatar_id": "4a5842d1f4de4d0ab4d0cb832b71a1d3",
+        "photo_avatar_id": "6b1ce97e7cb0492ca43632383b3c37de",
         "label": "Studio",
         "outfit_description": "Sleek black halter-neck athletic crop top with criss-cross back detail, high-waisted purple compression leggings, delicate gold body chain, medium gold hoop earrings, hair slicked back in low ponytail",
         "environment_description": "Bright group fitness studio with polished light wood floors reflecting studio lights, full wall of mirrors, wall-mounted chrome ballet barre, neatly arranged exercise mats in earthy tones, motivational gold wall decal",
@@ -140,7 +140,7 @@ INITIAL_PHOTO_AVATARS = [
     },
     {
         "content_type": "lifestyle",
-        "photo_avatar_id": "4c621fd3eae84def9dfcc5f25bd83c93",
+        "photo_avatar_id": "b36238122e054eea822e409f1a469978",
         "label": "Lifestyle",
         "outfit_description": "Soft lavender cashmere wrap sweater falling off one shoulder, matching ribbed loungewear pants, delicate gold pendant necklace with small gemstone, tiny gold huggie earrings, loose natural waves with middle part",
         "environment_description": "Peaceful wellness corner with large cream linen armchair, chunky knit beige throw blanket, small wooden side table with herbal tea, lit candle and wellness journal, monstera and snake plants in woven baskets, macramé wall hanging",
