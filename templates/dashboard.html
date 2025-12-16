@@ -829,11 +829,36 @@
         </div>
     </div>
 
+    <!-- Reschedule Modal -->
+    <div class="modal-overlay" id="reschedule-modal">
+        <div class="modal" style="max-width: 400px;">
+            <h3>📅 Reschedule Post</h3>
+            <p id="reschedule-post-title" style="color: #6b7280; margin-bottom: 15px;"></p>
+
+            <div style="margin-bottom: 15px;">
+                <label for="reschedule-datetime" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    New Date & Time (SAST):
+                </label>
+                <input
+                    type="datetime-local"
+                    id="reschedule-datetime"
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+                >
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmReschedule()">Reschedule</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let debugMode = false;
         let allPosts = [];  // Store all posts globally for editing
         let currentEditPostId = null;
+        let currentReschedulePostId = null;
 
         // Toast notifications
         function showToast(message, type = 'info') {
@@ -1303,6 +1328,9 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="approvePost('${post.id}')" class="btn btn-success">✅ Approve Content (Stage 1)</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
+                            📅 Reschedule
+                        </button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1311,6 +1339,9 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
+                            📅 Reschedule
+                        </button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1319,6 +1350,9 @@
                 buttons = `
                     <p class="status-message">⏱️ Generating media... This takes 30-90 seconds.</p>
                     <div class="post-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
+                            📅 Reschedule
+                        </button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1339,6 +1373,9 @@
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
                             🔄 Regenerate ${mediaType}
                         </button>
+                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
+                            📅 Reschedule
+                        </button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1347,6 +1384,9 @@
                 buttons = `
                     <p class="status-message">📅 Will post automatically at scheduled time</p>
                     <div class="post-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
+                            📅 Reschedule
+                        </button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1836,6 +1876,89 @@
             } catch (error) {
                 alert('Error: ' + error.message);
                 location.reload();
+            }
+        }
+
+        // Reschedule functions
+        function openRescheduleModal(postId, postTitle, currentScheduledTime) {
+            currentReschedulePostId = postId;
+
+            // Set the post title in modal
+            document.getElementById('reschedule-post-title').textContent = postTitle || 'Untitled Post';
+
+            // Set default value to current scheduled time or tomorrow at 14:00
+            const datetimeInput = document.getElementById('reschedule-datetime');
+
+            if (currentScheduledTime) {
+                // Parse and format for datetime-local input (YYYY-MM-DDTHH:MM)
+                try {
+                    const dt = new Date(currentScheduledTime);
+                    const year = dt.getFullYear();
+                    const month = String(dt.getMonth() + 1).padStart(2, '0');
+                    const day = String(dt.getDate()).padStart(2, '0');
+                    const hours = String(dt.getHours()).padStart(2, '0');
+                    const minutes = String(dt.getMinutes()).padStart(2, '0');
+                    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                } catch (e) {
+                    // Default to tomorrow at 14:00
+                    setDefaultRescheduleTime(datetimeInput);
+                }
+            } else {
+                setDefaultRescheduleTime(datetimeInput);
+            }
+
+            // Show modal
+            document.getElementById('reschedule-modal').classList.add('active');
+        }
+
+        function setDefaultRescheduleTime(input) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(14, 0, 0, 0);
+
+            const year = tomorrow.getFullYear();
+            const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+            const day = String(tomorrow.getDate()).padStart(2, '0');
+            input.value = `${year}-${month}-${day}T14:00`;
+        }
+
+        function closeRescheduleModal() {
+            document.getElementById('reschedule-modal').classList.remove('active');
+            currentReschedulePostId = null;
+        }
+
+        async function confirmReschedule() {
+            if (!currentReschedulePostId) {
+                showToast('No post selected', 'error');
+                return;
+            }
+
+            const newDateTime = document.getElementById('reschedule-datetime').value;
+
+            if (!newDateTime) {
+                showToast('Please select a date and time', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/reschedule/${currentReschedulePostId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scheduled_time: newDateTime })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Post rescheduled!', 'success');
+                    closeRescheduleModal();
+                    refreshPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error rescheduling:', error);
+                showToast('Failed to reschedule post', 'error');
             }
         }
 
