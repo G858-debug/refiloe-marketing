@@ -20,6 +20,7 @@ import pytz
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from utils.logger import log_info, log_warning, log_error
+from social_media.config.avatar_ids import DEFAULT_AVATAR_ID
 
 try:  # Allow use both as package module and standalone
     from content_generator import ContentGenerator  # type: ignore
@@ -369,7 +370,7 @@ If that resonates, stick around. This is just the beginning. 💪"""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,
@@ -531,7 +532,7 @@ Drop a 😤 if you've lived this moment."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,
@@ -609,7 +610,7 @@ Comment below. I read every single one. And your answer will shape what I share 
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 60,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,
@@ -746,7 +747,7 @@ You're welcome. 😉"""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,
@@ -824,7 +825,7 @@ And drop a 🙋 if this sounds like the dream you're chasing."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 45,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,
@@ -992,7 +993,7 @@ So tell me what you need. I'm listening."""
             "content_text": content_text,
             "video_script": video_script,
             "video_duration": 30,
-            "avatar_id_env": "5637676d31d54946b7585b012a3ce182",
+            "avatar_id_env": DEFAULT_AVATAR_ID,
             "carousel_slides": None,
             "image_prompt": None,
             "hashtags": hashtags,

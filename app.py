@@ -1351,7 +1351,13 @@ def generate_real_video():
             content_text = script_text
 
         voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
-        avatar_id = data.get('avatar_id') or '5637676d31d54946b7585b012a3ce182'
+
+        # Get avatar ID based on content theme, with fallback to default
+        from social_media.config.avatar_ids import get_avatar_id, DEFAULT_AVATAR_ID
+        content_theme = data.get('content_theme') or theme
+        avatar_id = data.get('avatar_id') or os.getenv('DEFAULT_PHOTO_AVATAR_ID') or get_avatar_id(content_theme)
+
+        log_info(f"Using avatar_id: {avatar_id} for content_theme: {content_theme}")
 
         # Get look information for source_image_url
         look_image_url = None
@@ -5442,7 +5448,12 @@ def api_regenerate_video(post_id: str):
 
         # Get fallback avatar_id
         if not avatar_id:
-            avatar_id = gen_data.get('avatar_id_env') or os.getenv('HEYGEN_DEFAULT_AVATAR_ID')
+            from social_media.config.avatar_ids import get_avatar_id, DEFAULT_AVATAR_ID
+
+            # Get avatar ID based on content theme, with fallback to default
+            avatar_id = os.getenv('DEFAULT_PHOTO_AVATAR_ID') or get_avatar_id(content_theme)
+
+            log_info(f"Using avatar_id: {avatar_id} for content_theme: {content_theme}")
 
         log_info(f"🎭 Avatar ID: {avatar_id}")
         log_info(f"🖼️ Image URL: {image_url[:50] + '...' if image_url else 'None'}")
