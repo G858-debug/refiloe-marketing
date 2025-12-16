@@ -203,6 +203,8 @@ class FacebookPoster:
                 - content_text: The text content/description for the video
                 - video_url: URL of the video (from HeyGen or other source)
                 - post_as_draft: If True (default for videos), post as unpublished
+                - scheduled_time: Optional datetime for schedule hint in description
+                - include_schedule_hint: If True, append schedule to description
 
         Returns:
             Dictionary with success status, post_id, and error message
@@ -210,13 +212,41 @@ class FacebookPoster:
         try:
             video_url = post_data.get('video_url')
             post_as_draft = post_data.get('post_as_draft', True)  # Default to draft for videos
+            scheduled_time = post_data.get('scheduled_time')
+            include_schedule_hint = post_data.get('include_schedule_hint', True)
 
             log_info(f"Posting video to Facebook page from URL: {video_url}")
             log_info(f"Post as draft (unpublished): {post_as_draft}")
 
+            # Build description with optional schedule hint
+            description = post_data.get('content_text', '')
+
+            if post_as_draft and include_schedule_hint and scheduled_time:
+                # Format the scheduled time for display
+                SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+                if hasattr(scheduled_time, 'astimezone'):
+                    # It's a datetime object
+                    scheduled_dt = scheduled_time.astimezone(SA_TZ)
+                else:
+                    # It's a string, parse it
+                    if isinstance(scheduled_time, str):
+                        try:
+                            scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                            scheduled_dt = scheduled_dt.astimezone(SA_TZ)
+                        except:
+                            scheduled_dt = None
+                    else:
+                        scheduled_dt = None
+
+                if scheduled_dt:
+                    schedule_hint = scheduled_dt.strftime('%a, %d %b %Y at %H:%M SAST')
+                    description = f"{description}\n\n---\n📅 Suggested posting: {schedule_hint}"
+                    log_info(f"Added schedule hint to description: {schedule_hint}")
+
             # Prepare video post parameters
             video_params = {
-                'description': post_data.get('content_text', ''),
+                'description': description,
                 'file_url': video_url,
                 'access_token': self.page_access_token,
                 'published': not post_as_draft,  # False = draft/unpublished
@@ -247,6 +277,8 @@ class FacebookPoster:
 
         except Exception as e:
             log_error(f"Exception in _post_video: {e}")
+            import traceback
+            log_error(traceback.format_exc())
             return {
                 'success': False,
                 'post_id': None,

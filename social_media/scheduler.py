@@ -573,8 +573,16 @@ class SocialMediaScheduler:
         """
         post_id = post.get("id")
         platform = post.get("platform", "facebook")
+        post_type = post.get("post_type")
+        video_url = post.get("video_url")
 
         log_info(f"Processing post {post_id} for platform {platform}")
+
+        # Skip video posts - they are uploaded immediately on approval
+        # Only process them here if they failed during approval (fallback)
+        if (post_type == 'video' or video_url) and post.get('status') == 'scheduled':
+            log_info(f"Video post {post_id} - uploading as draft (fallback from approval)")
+            # Continue processing as fallback
 
         # Currently only support Facebook
         if platform.lower() != "facebook":
