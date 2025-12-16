@@ -25,11 +25,25 @@ except ImportError:  # pragma: no cover - fallback when running from project roo
     except ImportError:  # pragma: no cover - avatar mapping optional at runtime
         _avatar_mapping_module = None
 
+# Import avatar IDs from single source of truth
+try:
+    from social_media.config.avatar_ids import (
+        AVATAR_IDS,
+        DEFAULT_AVATAR_ID,
+        DEFAULT_PHOTO_AVATAR_ID,
+        PHOTO_AVATAR_REGISTRY,
+    )
+except ImportError:
+    # Fallback if config module not available - use casual avatar
+    AVATAR_IDS = {}
+    DEFAULT_AVATAR_ID = "e3e6f1c06c7342ae8804770543707c23"  # casual
+    DEFAULT_PHOTO_AVATAR_ID = "e3e6f1c06c7342ae8804770543707c23"  # casual
+    PHOTO_AVATAR_REGISTRY = {}
+
+# Import avatar mapping functions
 if _avatar_mapping_module is not None:
     get_photo_avatar_for_content = getattr(_avatar_mapping_module, "get_photo_avatar_for_content", None)
     get_photo_avatar_for_content_with_db = getattr(_avatar_mapping_module, "get_photo_avatar_for_content_with_db", None)
-    PHOTO_AVATAR_REGISTRY = getattr(_avatar_mapping_module, "PHOTO_AVATAR_REGISTRY", {})
-    DEFAULT_PHOTO_AVATAR_ID = getattr(_avatar_mapping_module, "DEFAULT_PHOTO_AVATAR_ID", "eb23e1d4a0f44fbd81c358ef2f69dfa6")
     AvatarSelectionError = getattr(
         _avatar_mapping_module,
         "AvatarSelectionError",
@@ -38,8 +52,6 @@ if _avatar_mapping_module is not None:
 else:  # pragma: no cover - defensive defaults when module missing
     get_photo_avatar_for_content = None
     get_photo_avatar_for_content_with_db = None
-    PHOTO_AVATAR_REGISTRY = {}
-    DEFAULT_PHOTO_AVATAR_ID = "eb23e1d4a0f44fbd81c358ef2f69dfa6"  # casual as default
 
     class AvatarSelectionError(Exception):
         """Raised when dynamic avatar selection fails."""
