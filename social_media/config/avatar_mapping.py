@@ -75,23 +75,8 @@ class LookInfo(TypedDict, total=False):
     photo_avatar_id: Optional[str]
 
 
-PHOTO_AVATAR_REGISTRY = {
-    "workout": "c27a07fecf6d4fd0916e5da74ba9a247",
-    "fitness": "546e123c403646abb8a1b5c806000d2d",
-    "professional": "921680e6ba184811aea1e72102920ff8",
-    "business": "e449aa5ff5bc4c9b970e40b4420dacbd",
-    "motivational": "9150e25a09ab417fa9b3aff5482d4268",
-    "educational": "f7b5354d99454a259a405694aff6041f",
-    "community": "34f4326cfa394ce0808c37179eff8dd4",
-    "relatable": "8a5e863b6d4049ad80d4fc5c56d84721",
-    "casual": "e3e6f1c06c7342ae8804770543707c23",
-    "announcement": "9fa2794180864cb39e1ed2e5af4d80dc",
-    "outdoor": "c056dfb7ca4c4c63abfe8b915f2d2c6a",
-    "studio": "6b1ce97e7cb0492ca43632383b3c37de",
-    "lifestyle": "b36238122e054eea822e409f1a469978",
-}
-
-DEFAULT_PHOTO_AVATAR_ID = "e3e6f1c06c7342ae8804770543707c23"  # casual as default
+# Import avatar IDs from single source of truth
+from social_media.config.avatar_ids import PHOTO_AVATAR_REGISTRY, DEFAULT_PHOTO_AVATAR_ID
 
 
 CONTENT_KEYWORDS = {
