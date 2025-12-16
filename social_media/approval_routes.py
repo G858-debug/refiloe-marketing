@@ -266,6 +266,106 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
         return False
 
 
+def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict:
+    """
+    Upload a video post to Facebook as a draft immediately upon approval.
+
+    Args:
+        db: Database instance
+        post: Post record
+
+    Returns:
+        Dict with success status and facebook_post_id
+    """
+    page_access_token = os.getenv("PAGE_ACCESS_TOKEN")
+    page_id = os.getenv("PAGE_ID")
+
+    if not page_access_token or not page_id:
+        log_warning("Facebook credentials missing; cannot upload video draft")
+        return {'success': False, 'error': 'Facebook credentials missing'}
+
+    try:
+        poster = FacebookPoster(page_access_token, page_id, db.db)
+
+        # Prepare post data with schedule hint
+        post_data = {
+            'content_text': post.get('content_text', ''),
+            'video_url': post.get('video_url'),
+            'post_as_draft': True,
+            'include_schedule_hint': True,
+            'scheduled_time': post.get('scheduled_time')
+        }
+
+        # Upload to Facebook as draft
+        result = poster._post_video(post_data)
+
+        return result
+
+    except Exception as e:
+        log_error(f"Error uploading video draft: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def _send_video_ready_notification(db: SocialMediaDatabase, post: Dict, facebook_post_id: str) -> None:
+    """
+    Send WhatsApp notification for video ready to add music.
+
+    Args:
+        db: Database instance
+        post: Post record
+        facebook_post_id: Facebook's video ID
+    """
+    try:
+        from utils.whatsapp_notifier import WhatsAppNotifier
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        notifier = WhatsAppNotifier()
+
+        if not notifier.enabled:
+            log_info("WhatsApp notifications disabled")
+            return
+
+        # Build Creator Studio URL
+        creator_studio_url = f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}"
+
+        # Get video details
+        video_title = post.get('title') or post.get('content_theme', '').replace('_', ' ').title() or 'Untitled Video'
+        content_text = post.get('content_text', '')
+        caption_preview = content_text[:150] + '...' if len(content_text) > 150 else content_text
+
+        # Format scheduled time for the notification
+        scheduled_time = post.get('scheduled_time')
+        schedule_hint = ''
+        if scheduled_time:
+            try:
+                if isinstance(scheduled_time, str):
+                    scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                else:
+                    scheduled_dt = scheduled_time
+                scheduled_dt = scheduled_dt.astimezone(SA_TZ)
+                schedule_hint = f"\n\n📅 *Suggested posting:* {scheduled_dt.strftime('%a, %d %b %Y at %H:%M SAST')}"
+            except Exception as e:
+                log_warning(f"Could not format scheduled_time: {e}")
+
+        # Send via template (or fallback)
+        result = notifier.send_video_ready_template(
+            video_title=video_title,
+            creator_studio_url=creator_studio_url,
+            caption_preview=caption_preview + schedule_hint
+        )
+
+        if result.get('success'):
+            log_info(f"WhatsApp notification sent for video {post.get('id')}")
+        else:
+            log_warning(f"WhatsApp notification failed: {result.get('error')}")
+
+    except Exception as e:
+        log_error(f"Error sending video notification: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+
+
 def _resolve_actor() -> str:
     """Infer the actor performing the action from request context."""
 
@@ -522,9 +622,53 @@ def approve_post(post_id: str):
 
     log_info(f"Post {post_id} approved for scheduling")
 
-    # Check if we should post immediately
+    # Check if it's a video post - upload as draft immediately
     # Refresh post data to get the updated status
     post = _fetch_post(db, post_id)
+    post_type = post.get('post_type')
+    video_url = post.get('video_url')
+
+    if post_type == 'video' or video_url:
+        log_info(f"Video post detected - uploading draft to Facebook immediately")
+
+        # Upload video as draft immediately
+        upload_result = _upload_video_draft_immediately(db, post)
+
+        if upload_result.get('success'):
+            facebook_post_id = upload_result.get('post_id')
+
+            # Update post status to awaiting_music
+            update_fields = {
+                'status': 'awaiting_music',
+                'facebook_post_id': facebook_post_id,
+                'updated_at': _current_iso_timestamp(db)
+            }
+            _update_post_fields(db, post_id, update_fields)
+
+            log_info(f"Video uploaded as draft to Facebook: {facebook_post_id}")
+
+            # Send WhatsApp notification
+            _send_video_ready_notification(db, post, facebook_post_id)
+
+            return jsonify({
+                'success': True,
+                'message': 'Video approved and uploaded as draft to Facebook. Check WhatsApp for instructions to add music.',
+                'post_id': post_id,
+                'facebook_post_id': facebook_post_id,
+                'status': 'awaiting_music'
+            })
+        else:
+            log_error(f"Failed to upload video draft: {upload_result.get('error')}")
+            # Keep as scheduled - scheduler will retry later
+            return jsonify({
+                'success': True,
+                'message': 'Post approved but video upload failed. Scheduler will retry.',
+                'post_id': post_id,
+                'status': 'scheduled',
+                'upload_error': upload_result.get('error')
+            })
+
+    # Check if we should post immediately (non-video posts)
     if _should_post_immediately(post):
         log_info(f"Post {post_id} scheduled for immediate posting")
         result = _post_to_facebook(db, post)

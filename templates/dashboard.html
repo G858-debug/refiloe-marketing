@@ -1755,18 +1755,32 @@
 
         // Approve a single post
         async function approvePost(postId) {
-            if (!confirm('Approve this content for media generation?')) return;
-
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/approve/${postId}`, { method: 'POST' });
-                if (response.ok) {
-                    alert('Content approved! You can now generate media.');
-                    location.reload();
+                showToast('Approving post...', 'info');
+
+                const response = await fetch(`${API_BASE}/approval/approve/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Check if it was a video that got uploaded as draft
+                    if (data.status === 'awaiting_music') {
+                        showToast('✅ Video uploaded as draft! Check WhatsApp for music instructions.', 'success');
+                    } else if (data.upload_error) {
+                        showToast('⚠️ Approved but video upload failed. Scheduler will retry.', 'warning');
+                    } else {
+                        showToast('Post approved and scheduled!', 'success');
+                    }
+                    refreshPosts();
                 } else {
-                    alert('Failed to approve post');
+                    showToast('Failed to approve: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                console.error('Error approving post:', error);
+                showToast('Failed to approve post', 'error');
             }
         }
 
