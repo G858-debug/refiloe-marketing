@@ -4932,8 +4932,10 @@ def api_regenerate_video(post_id: str):
         # Get request data
         data = request.get_json() or {}
         motion_prompt = data.get('motion_prompt', '').strip() if data.get('motion_prompt') else None
+        force_fallback = data.get('force_fallback', False)  # New parameter
 
         log_info(f"🎭 Motion prompt received: {motion_prompt}")
+        log_info(f"🔄 Force fallback: {force_fallback}")
 
         # Fetch the post
         result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
@@ -4996,29 +4998,66 @@ def api_regenerate_video(post_id: str):
         # Get voice ID
         voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
 
-        # Try to get avatar and look
-        try:
-            from social_media.avatar_mapping import get_avatar_and_look_for_content
-            avatar_id, look_info = get_avatar_and_look_for_content(
-                content_text=video_script,
-                content_type=content_type
-            )
-            image_url = look_info.get('image_url') if look_info else None
-        except Exception as e:
-            log_warning(f"Could not get avatar/look: {e}")
-            avatar_id = os.getenv('HEYGEN_DEFAULT_AVATAR_ID', gen_data.get('avatar_id_env'))
-            image_url = None
-            look_info = None
+        # Try to get avatar and look for Avatar IV
+        image_url = None
+        avatar_id = None
+
+        # First, try to get image_url from the original generation (if it was stored)
+        original_image_url = gen_data.get('image_url') or gen_data.get('look_image_url')
+        if original_image_url:
+            image_url = original_image_url
+            log_info(f"Using original image_url from generation_prompt")
+
+        # If no original image, try to get a look
+        if not image_url:
+            try:
+                from social_media.avatar_mapping import get_avatar_and_look_for_content
+                avatar_id, look_info = get_avatar_and_look_for_content(
+                    content_text=video_script,
+                    content_type=content_theme
+                )
+                if look_info and look_info.get('image_url'):
+                    image_url = look_info.get('image_url')
+                    log_info(f"Got image_url from avatar_mapping: {image_url[:50]}...")
+                else:
+                    log_info("No image_url returned from avatar_mapping")
+            except Exception as e:
+                log_warning(f"Could not get avatar/look: {e}")
+
+        # Get fallback avatar_id if not set
+        if not avatar_id:
+            avatar_id = gen_data.get('avatar_id_env') or os.getenv('HEYGEN_DEFAULT_AVATAR_ID')
 
         log_info(f"🎭 Avatar ID: {avatar_id}")
         log_info(f"🖼️ Image URL: {image_url[:50] + '...' if image_url else 'None'}")
 
-        # Generate video
+        # If no image_url available, we need to fall back to Photo Avatar API
+        # But first, ask for confirmation unless force_fallback is True
+        if not image_url and not force_fallback:
+            log_info("No image_url available - requesting confirmation for fallback")
+
+            # Reset status back since we're not generating yet
+            supabase_client.table('social_posts').update({
+                'status': post.get('status', 'pending_approval'),  # Keep original status
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('id', post_id).execute()
+
+            return jsonify({
+                'success': False,
+                'needs_confirmation': True,
+                'fallback_reason': 'no_image',
+                'message': 'No avatar image available for Avatar IV (which supports gestures). Would you like to use the standard Photo Avatar API instead? Note: Motion style selection will have limited effect.',
+                'avatar_id': avatar_id
+            }), 200  # Return 200 so frontend can handle it
+
+        # Generate video - choose API based on whether we have an image
         video_result = None
+        api_used = None
 
         if image_url:
-            # Use Avatar IV (supports gestures)
+            # Use Avatar IV (supports gestures) - only if we have a valid image
             log_info("Using Avatar IV API (supports gestures)")
+            api_used = 'avatar_iv'
             try:
                 video_result = video_gen.generate_avatar_iv_video(
                     script=video_script,
@@ -5039,9 +5078,27 @@ def api_regenerate_video(post_id: str):
                 log_error(f"Avatar IV generation failed: {e}")
                 video_result = None
 
+                # Avatar IV failed - ask for confirmation to use fallback
+                if not force_fallback:
+                    log_info("Avatar IV failed - requesting confirmation for fallback")
+
+                    supabase_client.table('social_posts').update({
+                        'status': post.get('status', 'pending_approval'),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    return jsonify({
+                        'success': False,
+                        'needs_confirmation': True,
+                        'fallback_reason': 'avatar_iv_failed',
+                        'message': f'Avatar IV generation failed: {str(e)}. Would you like to try the standard Photo Avatar API instead?',
+                        'avatar_id': avatar_id
+                    }), 200
+
+        # Use Photo Avatar API (either as primary choice when forced, or as fallback)
         if not video_result and avatar_id:
-            # Fallback to standard Photo Avatar API
-            log_info("Using Photo Avatar API (standard)")
+            log_info("Using Photo Avatar API")
+            api_used = 'photo_avatar'
             try:
                 video_result = video_gen.generate_avatar_video(
                     script_text=video_script,
@@ -5054,7 +5111,7 @@ def api_regenerate_video(post_id: str):
                         'regenerated': True,
                         'motion_prompt': motion_prompt
                     },
-                    content_type=content_type,
+                    content_type=content_theme,
                     wait_for_completion=False
                 )
             except Exception as e:
@@ -5068,7 +5125,7 @@ def api_regenerate_video(post_id: str):
                 'updated_at': datetime.now(SA_TZ).isoformat()
             }).eq('id', post_id).execute()
 
-            return jsonify({'success': False, 'error': 'Video generation failed - no result returned'}), 500
+            return jsonify({'success': False, 'error': 'Video generation failed - all methods exhausted'}), 500
 
         video_id = video_result.get('video_id')
         video_url = video_result.get('video_url')
