@@ -441,7 +441,8 @@ class SocialMediaScheduler:
                     'video_type': 'reactive_content',
                     'video_duration': 30,
                     'caption': f"?? HOT TOPIC: {trending_topic['title']}\n\n{script.get('caption', '')}",
-                    'title': script.get('reel_title') or f"🔥 {trending_topic['title']}",  # Capture reel_title from script
+                    'title': script.get('reel_title') or f"🔥 {trending_topic['title']}",  # Capture reel_title as title for backwards compatibility
+                    'reel_title': script.get('reel_title') or f"🔥 {trending_topic['title']}",  # Save reel_title to the reel_title database field
                     'trending_topic_id': trending_topic.get('id'),
                     'is_reactive': True
                 }
