@@ -5223,6 +5223,124 @@ def api_generate_weekly_content():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/backfill-image-prompts', methods=['POST'])
+def api_backfill_image_prompts():
+    """Backfill image prompts for all posts that don't have one."""
+    log_info("📥 Request: /api/dashboard/backfill-image-prompts")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime
+        import json
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Find all posts without image_prompt (or with empty image_prompt)
+        log_info("🔍 Finding posts without image prompts...")
+
+        # Get all non-published posts
+        result = supabase_client.table('social_posts').select(
+            'id, content_theme, content_text, post_type, generation_prompt, image_prompt, title'
+        ).neq('status', 'published').execute()
+
+        if not result.data:
+            return jsonify({
+                'success': True,
+                'message': 'No posts found to update',
+                'updated_count': 0
+            })
+
+        posts = result.data
+        updated_count = 0
+        skipped_count = 0
+
+        for post in posts:
+            post_id = post['id']
+
+            # Skip if already has image_prompt
+            existing_prompt = post.get('image_prompt', '').strip() if post.get('image_prompt') else ''
+            if existing_prompt:
+                skipped_count += 1
+                continue
+
+            # Get content_theme, fallback to extracting from generation_prompt
+            content_theme = post.get('content_theme', '')
+
+            if not content_theme:
+                # Try to extract from generation_prompt JSON
+                gen_prompt = post.get('generation_prompt')
+                if gen_prompt:
+                    try:
+                        if isinstance(gen_prompt, str):
+                            gen_data = json.loads(gen_prompt)
+                        else:
+                            gen_data = gen_prompt
+                        content_theme = gen_data.get('content_theme', 'general')
+                    except:
+                        content_theme = 'general'
+                else:
+                    content_theme = 'general'
+
+            # Generate the image prompt
+            content_text = post.get('content_text', '')
+            post_type = post.get('post_type', 'image')
+
+            new_image_prompt = generate_scroll_stopping_image_prompt(
+                content_theme,
+                content_text,
+                post_type
+            )
+
+            # Update the post
+            try:
+                # Also update generation_prompt to include image_prompt
+                gen_prompt = post.get('generation_prompt')
+                gen_data = {}
+                if gen_prompt:
+                    try:
+                        if isinstance(gen_prompt, str):
+                            gen_data = json.loads(gen_prompt)
+                        else:
+                            gen_data = gen_prompt
+                    except:
+                        gen_data = {}
+
+                gen_data['image_prompt'] = new_image_prompt
+
+                update_data = {
+                    'image_prompt': new_image_prompt,
+                    'generation_prompt': json.dumps(gen_data),
+                    'updated_at': datetime.now(SA_TZ).isoformat()
+                }
+
+                supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+                updated_count += 1
+                log_info(f"✅ Updated post {post_id[:8]}... with {content_theme} prompt")
+
+            except Exception as e:
+                log_error(f"❌ Failed to update post {post_id}: {e}")
+
+        log_info(f"✅ Backfill complete: {updated_count} updated, {skipped_count} skipped (already had prompts)")
+
+        return jsonify({
+            'success': True,
+            'message': f'Backfill complete! {updated_count} posts updated, {skipped_count} already had prompts.',
+            'updated_count': updated_count,
+            'skipped_count': skipped_count,
+            'total_processed': len(posts)
+        })
+
+    except Exception as e:
+        log_error(f"❌ Backfill image prompts failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
