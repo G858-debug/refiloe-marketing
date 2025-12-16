@@ -48,19 +48,19 @@ logger = logging.getLogger(__name__)
 
 # Avatar ID mappings
 AVATAR_MAPPINGS = {
-    'workout': '96c419d3058444069ab8e28308fdc834',
-    'fitness': '291df9103e744984be41715e649ae8e6',
-    'professional': '64a1ca313daf488698bebb282aa87dae',
-    'business': '331e5ac30c914d5abeb2853be17a8532',
-    'motivational': 'd0c9ad8674ef49b79f618dd5303e50df',
-    'educational': '55bdbaaa7ded40458bfc0e498ff24ae6',
-    'community': '6a7f86c8c60544d497ae63695af00425',
-    'relatable': 'b6bb73219ff54f5eb2934b3047bf028f',
-    'casual': 'a33ab8bbeff5499a96ae613e5497247c',
-    'announcement': 'e4fc74c588ba45ec9eb49020bd95417d',
-    'outdoor': '79938b6165b649b9b724d1af99a3b4b5',
-    'studio': '4a5842d1f4de4d0ab4d0cb832b71a1d3',
-    'lifestyle': '4c621fd3eae84def9dfcc5f25bd83c93',
+    'workout': 'c27a07fecf6d4fd0916e5da74ba9a247',
+    'fitness': '546e123c403646abb8a1b5c806000d2d',
+    'professional': '921680e6ba184811aea1e72102920ff8',
+    'business': 'e449aa5ff5bc4c9b970e40b4420dacbd',
+    'motivational': '9150e25a09ab417fa9b3aff5482d4268',
+    'educational': 'f7b5354d99454a259a405694aff6041f',
+    'community': '34f4326cfa394ce0808c37179eff8dd4',
+    'relatable': '8a5e863b6d4049ad80d4fc5c56d84721',
+    'casual': 'e3e6f1c06c7342ae8804770543707c23',
+    'announcement': '9fa2794180864cb39e1ed2e5af4d80dc',
+    'outdoor': 'c056dfb7ca4c4c63abfe8b915f2d2c6a',
+    'studio': '6b1ce97e7cb0492ca43632383b3c37de',
+    'lifestyle': 'b36238122e054eea822e409f1a469978',
 }
 
 
