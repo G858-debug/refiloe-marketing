@@ -363,6 +363,198 @@ View full report: {os.getenv('DASHBOARD_URL', 'https://your-dashboard-url.com')}
 
         return result
 
+    def send_video_ready_template(self, video_title: str, creator_studio_url: str, caption_preview: str) -> Dict:
+        """
+        Send video ready for music notification using approved template.
+
+        Uses the 'video_ready_for_music' template which must be approved in Meta Business Suite.
+
+        Args:
+            video_title: Title of the video (e.g., "Meet Refiloe - Introduction")
+            creator_studio_url: Full URL to Creator Studio for this video
+            caption_preview: First ~100 chars of the caption
+
+        Returns:
+            Dictionary with success status, message_id, and error (if any)
+        """
+        if not self.enabled:
+            log_info("WhatsApp notifications disabled - skipping template send")
+            return {
+                'success': False,
+                'message_id': None,
+                'error': 'WhatsApp notifications are disabled'
+            }
+
+        if not self.notification_phone:
+            log_error("NOTIFICATION_PHONE_NUMBER not configured")
+            return {
+                'success': False,
+                'message_id': None,
+                'error': 'NOTIFICATION_PHONE_NUMBER not configured'
+            }
+
+        # Format phone number
+        formatted_phone = self._format_phone_number(self.notification_phone)
+
+        # Truncate caption preview to avoid template issues (max ~200 chars recommended)
+        if len(caption_preview) > 150:
+            caption_preview = caption_preview[:147] + "..."
+
+        # Build template payload
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": formatted_phone,
+            "type": "template",
+            "template": {
+                "name": "video_ready_for_music",
+                "language": {
+                    "code": "en"
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": video_title
+                            },
+                            {
+                                "type": "text",
+                                "text": creator_studio_url
+                            },
+                            {
+                                "type": "text",
+                                "text": caption_preview
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Retry logic
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                log_info(f"Sending video_ready_for_music template to {formatted_phone} (attempt {attempt}/{max_retries})")
+                log_info(f"Template parameters: title='{video_title}', url='{creator_studio_url[:50]}...', preview='{caption_preview[:30]}...'")
+
+                response = requests.post(
+                    self.api_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    response_data = response.json()
+                    message_id = response_data.get('messages', [{}])[0].get('id')
+                    log_info(f"Template message sent successfully - ID: {message_id}")
+                    return {
+                        'success': True,
+                        'message_id': message_id,
+                        'error': None
+                    }
+                else:
+                    error_msg = f"WhatsApp template API error: {response.status_code} - {response.text}"
+                    log_error(error_msg)
+
+                    # Check for specific template errors
+                    try:
+                        error_data = response.json()
+                        error_code = error_data.get('error', {}).get('code')
+                        error_message = error_data.get('error', {}).get('message', '')
+
+                        # Template not approved yet
+                        if error_code == 132000 or 'template' in error_message.lower():
+                            log_warning("Template may not be approved yet. Falling back to free-form message.")
+                            return self._send_video_ready_fallback(video_title, creator_studio_url, caption_preview)
+                    except:
+                        pass
+
+                    # Don't retry on client errors
+                    if 400 <= response.status_code < 500:
+                        return {
+                            'success': False,
+                            'message_id': None,
+                            'error': error_msg
+                        }
+
+                    # Retry on server errors
+                    if attempt < max_retries:
+                        wait_time = 2 ** attempt
+                        log_warning(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                    else:
+                        return {
+                            'success': False,
+                            'message_id': None,
+                            'error': error_msg
+                        }
+
+            except requests.exceptions.RequestException as e:
+                error_msg = f"WhatsApp template request failed: {str(e)}"
+                log_error(error_msg)
+
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt
+                    time.sleep(wait_time)
+                else:
+                    return {
+                        'success': False,
+                        'message_id': None,
+                        'error': error_msg
+                    }
+
+        return {
+            'success': False,
+            'message_id': None,
+            'error': 'Max retries exceeded'
+        }
+
+    def _send_video_ready_fallback(self, video_title: str, creator_studio_url: str, caption_preview: str) -> Dict:
+        """
+        Fallback to free-form message if template is not approved yet.
+        Only works if there's an active 24-hour session.
+
+        Args:
+            video_title: Title of the video
+            creator_studio_url: Creator Studio URL
+            caption_preview: Caption preview text
+
+        Returns:
+            Dictionary with success status
+        """
+        log_info("Attempting fallback to free-form message (requires active session)")
+
+        message = f"""🎬 VIDEO READY FOR MUSIC
+
+📹 {video_title}
+
+Your video has been uploaded to Facebook as a DRAFT.
+
+Next steps:
+1. Go to Creator Studio
+2. Find the video in Content Library
+3. Click "Edit Video" → "Add Music"
+4. Choose a track from Sound Collection
+5. Click "Publish" when ready
+
+🔗 Creator Studio:
+{creator_studio_url}
+
+📝 Caption preview:
+{caption_preview}
+
+⏰ Add music and publish when ready!"""
+
+        return self.send_message(self.notification_phone, message)
+
     def _generate_next_steps(self, alert_type: str, details: Dict) -> str:
         """
         Generate actionable next steps based on alert type
