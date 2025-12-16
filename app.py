@@ -4208,9 +4208,9 @@ def api_upload_to_facebook(post_id: str):
         log_info(f"📤 Uploading video to Facebook as draft for post {post_id}")
 
         # Upload to Facebook as draft
-        from social_media.facebook_poster import FacebookPoster
+        from facebook_poster import FacebookPoster
 
-        fb_poster = FacebookPoster()
+        fb_poster = FacebookPoster(page_access_token, page_id, supabase_client)
 
         # Build description with schedule hint
         description = post.get('content_text', '')
@@ -4230,15 +4230,15 @@ def api_upload_to_facebook(post_id: str):
                 log_warning(f"Could not format schedule hint: {e}")
 
         # Upload video as draft
-        fb_result = fb_poster.post_video(
-            video_url=video_url,
-            description=description,
-            title=post.get('title', 'Refiloe Video'),
-            published=False  # Draft mode
-        )
+        fb_result = fb_poster._post_video({
+            'content_text': description,
+            'video_url': video_url,
+            'post_as_draft': True,
+            'include_schedule_hint': False,  # Already added to description
+        })
 
-        if fb_result and fb_result.get('id'):
-            facebook_post_id = fb_result.get('id')
+        if fb_result and fb_result.get('success') and fb_result.get('post_id'):
+            facebook_post_id = fb_result.get('post_id')
 
             log_info(f"✅ Video uploaded to Facebook as draft: {facebook_post_id}")
 
