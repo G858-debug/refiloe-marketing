@@ -149,6 +149,149 @@ def verify_supabase_connection():
         }
 
 
+def generate_scroll_stopping_image_prompt(content_theme: str, content_text: str = "", post_type: str = "image") -> str:
+    """
+    Generate a scroll-stopping image prompt based on content theme.
+
+    These prompts are optimized for Leonardo AI with the Refiloe LoRA model
+    to create engaging, thumb-stopping social media images.
+
+    Args:
+        content_theme: The theme of the post (e.g., 'motivation', 'admin_hacks', etc.)
+        content_text: The post caption (used for context)
+        post_type: Type of post (video, image, carousel)
+
+    Returns:
+        A detailed image prompt string
+    """
+
+    # Base Refiloe character description for consistency
+    refiloe_base = """Refiloe, a confident South African woman in her early 30s with deep brown skin,
+    tightly coiled natural afro with copper highlights, warm expressive smile, gold hoop earrings."""
+
+    # Theme-specific scroll-stopping prompts
+    theme_prompts = {
+        'introduction': f"""
+            {refiloe_base}
+            Standing confidently in a modern co-working space with floor-to-ceiling windows, golden hour sunlight streaming in.
+            Wearing a stylish burnt orange blazer over a cream silk blouse.
+            Direct eye contact with camera, warm welcoming smile, one hand gesturing as if mid-conversation.
+            Background: blurred laptops, green plants, warm wood tones.
+            Style: Editorial portrait, shallow depth of field, warm color grading, Instagram-ready.
+            Mood: Approachable, professional, trustworthy, inspiring.
+        """,
+
+        'motivation': f"""
+            {refiloe_base}
+            In a bright modern gym at sunrise, dramatic golden light creating lens flare.
+            Wearing a vibrant coral athletic top, looking directly at camera with fierce determination.
+            Powerful stance, hands on hips, slight forward lean conveying energy.
+            Background: sleek gym equipment softly blurred, motivational without being cliché.
+            Style: High-contrast, cinematic lighting, bold colors, scroll-stopping intensity.
+            Mood: Empowering, unstoppable, "you've got this" energy.
+        """,
+
+        'admin_hacks': f"""
+            {refiloe_base}
+            Sitting at a clean, organized desk with a rose gold laptop, looking up at camera with a knowing smile.
+            Wearing a soft sage green cardigan over a white tee, looking effortlessly put-together.
+            One eyebrow slightly raised as if sharing a secret hack.
+            Background: minimalist home office, floating shelves with plants, warm ambient lighting.
+            Style: Lifestyle editorial, warm tones, relatable yet aspirational.
+            Mood: "I figured it out so you don't have to" energy, helpful, smart.
+        """,
+
+        'client_management': f"""
+            {refiloe_base}
+            In a cozy coffee shop corner, leaning forward engagingly as if in deep conversation.
+            Wearing a cream knit sweater, holding a latte, genuine caring expression.
+            Soft window light illuminating face, bokeh of café life behind.
+            Background: warm wood, exposed brick, blurred patrons creating life.
+            Style: Candid lifestyle shot, warm color palette, intimate feeling.
+            Mood: Understanding, empathetic, "I get it" connection.
+        """,
+
+        'relatable_trainer_life': f"""
+            {refiloe_base}
+            Candid moment: sitting on gym floor, back against mirror, phone in hand, slight exhausted but amused expression.
+            Wearing black leggings and a lived-in grey hoodie, hair slightly messy.
+            Real, unposed moment - the "between sessions" reality.
+            Background: empty gym, equipment visible, harsh fluorescent lights for authenticity.
+            Style: Documentary-style, slightly desaturated, raw and real.
+            Mood: "This is the real life" vulnerability, relatable struggle.
+        """,
+
+        'business_growth': f"""
+            {refiloe_base}
+            Standing in front of a whiteboard filled with growth charts and strategies, marker in hand.
+            Wearing a sharp navy blazer, confident teaching posture, mid-explanation gesture.
+            Warm smile but serious eyes - she means business.
+            Background: modern office space, charts showing upward trends, professional setting.
+            Style: Corporate editorial, clean lines, aspirational business aesthetic.
+            Mood: Authority, expertise, "level up" energy.
+        """,
+
+        'fitness_tips': f"""
+            {refiloe_base}
+            Mid-movement in a bright fitness studio, demonstrating perfect form on an exercise.
+            Wearing a bold purple sports bra and high-waisted black leggings, focused expression.
+            Dynamic pose captured mid-action, muscles engaged, powerful presence.
+            Background: mirrors, natural light, clean minimalist studio.
+            Style: Fitness editorial, sharp focus on movement, energetic composition.
+            Mood: Expert, capable, inspiring action.
+        """,
+
+        'community_engagement': f"""
+            {refiloe_base}
+            Laughing genuinely with hand partially covering mouth, eyes crinkled with joy.
+            Casual pose, sitting cross-legged on a yoga mat, wearing comfy athleisure.
+            Breaking the fourth wall - looking directly at viewer as if sharing a joke.
+            Background: bright airy studio, other blurred figures suggesting community.
+            Style: Candid lifestyle, high energy, contagious joy.
+            Mood: Inclusive, fun, "you belong here" warmth.
+        """,
+
+        'special_event': f"""
+            {refiloe_base}
+            Celebratory pose with confetti or sparkles, genuine excited expression.
+            Wearing something special - a statement piece that pops against the background.
+            Arms raised or clapping, caught in a moment of pure celebration.
+            Background: festive but not cluttered, color-coordinated to the occasion.
+            Style: High energy, vibrant colors, celebratory mood.
+            Mood: Exciting, milestone moment, share the joy.
+        """,
+
+        'educational': f"""
+            {refiloe_base}
+            Thoughtful expression, finger touching chin, as if considering a question.
+            Wearing smart casual - a structured top in warm terracotta.
+            Slight head tilt suggesting active thinking, engaged eyes.
+            Background: clean, simple, non-distracting - focus on her expertise.
+            Style: Portrait with negative space for text overlay potential.
+            Mood: Thoughtful, knowledgeable, approachable teacher.
+        """,
+    }
+
+    # Default prompt if theme not found
+    default_prompt = f"""
+        {refiloe_base}
+        Professional lifestyle portrait in a warm, modern setting.
+        Confident, approachable expression with direct eye contact.
+        Wearing stylish but relatable athleisure or smart casual outfit.
+        Soft natural lighting, shallow depth of field, Instagram-ready composition.
+        Style: Editorial lifestyle photography, warm color grading.
+        Mood: Professional, trustworthy, aspirational yet relatable.
+    """
+
+    # Get theme-specific prompt or default
+    prompt = theme_prompts.get(content_theme, default_prompt)
+
+    # Clean up whitespace
+    prompt = ' '.join(prompt.split())
+
+    return prompt
+
+
 def convert_carousel_format(data: dict, content_type: str = 'educational') -> dict:
     """Convert carousel data from cover/content_slides/cta format to slides format.
 
@@ -4874,6 +5017,9 @@ If that resonates, hit follow. This is just the beginning.
 
         log_info(f"📅 Scheduled time: {scheduled_time.isoformat()}")
 
+        # Generate image prompt
+        image_prompt = generate_scroll_stopping_image_prompt('introduction', content_text, 'video')
+
         # Metadata
         metadata = {
             "day": 1,
@@ -4882,7 +5028,8 @@ If that resonates, hit follow. This is just the beginning.
             "launch_content": True,
             "target_audience": "global",
             "content_theme": "introduction",
-            "post_title": "Meet Refiloe - Introduction"
+            "post_title": "Meet Refiloe - Introduction",
+            "image_prompt": image_prompt
         }
 
         # Save the post
@@ -4899,7 +5046,8 @@ If that resonates, hit follow. This is just the beginning.
             'hashtags': global_hashtags,
             'generation_prompt': json.dumps(metadata),
             'status': 'pending_approval',
-            'video_duration': 60
+            'video_duration': 60,
+            'image_prompt': image_prompt
         }
         post_id = db.save_post(post_data)
 
@@ -5029,18 +5177,24 @@ def api_generate_weekly_content():
                     "theme_description": theme_config['description'],
                     "video_script": video_script,
                     "weekly_content": True,
-                    "target_audience": "global"
+                    "target_audience": "global",
+                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
                 }
 
-                post_id = db.save_post(
-                    platform="facebook",
-                    content=content_text,
-                    post_type=theme_config['post_type'],
-                    scheduled_time=scheduled_time.isoformat(),
-                    content_theme=theme_config['theme'],
-                    hashtags=global_hashtags,
-                    generation_prompt=json.dumps(metadata)
-                )
+                post_data = {
+                    'platform': 'facebook',
+                    'content_text': content_text,
+                    'post_type': theme_config['post_type'],
+                    'scheduled_time': scheduled_time.isoformat(),
+                    'content_theme': theme_config['theme'],
+                    'hashtags': global_hashtags,
+                    'generation_prompt': json.dumps(metadata),
+                    'status': 'pending_approval',
+                    'is_pinned': False,
+                    'image_prompt': generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
+                }
+
+                post_id = db.save_post(post_data)
 
                 if post_id:
                     created_ids.append(post_id)
