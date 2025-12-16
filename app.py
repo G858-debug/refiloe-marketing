@@ -4212,29 +4212,48 @@ def api_upload_to_facebook(post_id: str):
 
         fb_poster = FacebookPoster(page_access_token, page_id, supabase_client)
 
-        # Build description with schedule hint
+        # Build description
         description = post.get('content_text', '')
+
+        # Calculate scheduled time
+        # If the post has a scheduled_time in the future, use that
+        # Otherwise, schedule 10 minutes from now as minimum
+        import time as time_module
+        from datetime import datetime as dt
+
         scheduled_time = post.get('scheduled_time')
+        schedule_timestamp = None
 
         if scheduled_time:
-            from datetime import datetime as dt
             try:
                 if isinstance(scheduled_time, str):
                     scheduled_dt = dt.fromisoformat(scheduled_time.replace('Z', '+00:00'))
                 else:
                     scheduled_dt = scheduled_time
-                scheduled_dt = scheduled_dt.astimezone(SA_TZ)
-                schedule_hint = scheduled_dt.strftime('%a, %d %b %Y at %H:%M SAST')
-                description = f"{description}\n\n---\n📅 Suggested posting: {schedule_hint}"
+
+                # Convert to Unix timestamp
+                schedule_timestamp = int(scheduled_dt.timestamp())
+
+                # If scheduled time is in the past, schedule 10 mins from now
+                current_time = int(time_module.time())
+                if schedule_timestamp < current_time + 600:  # Must be at least 10 mins in future
+                    schedule_timestamp = current_time + 600
+                    log_info(f"Scheduled time was in the past, rescheduling to 10 mins from now")
             except Exception as e:
-                log_warning(f"Could not format schedule hint: {e}")
+                log_warning(f"Could not parse scheduled_time: {e}")
+                schedule_timestamp = int(time_module.time()) + 600
+        else:
+            schedule_timestamp = int(time_module.time()) + 600
+
+        log_info(f"Will schedule video for Unix timestamp: {schedule_timestamp}")
 
         # Upload video as draft
         fb_result = fb_poster._post_video({
             'content_text': description,
             'video_url': video_url,
             'post_as_draft': True,
-            'include_schedule_hint': False,  # Already added to description
+            'include_schedule_hint': False,
+            'scheduled_publish_time': schedule_timestamp,
         })
 
         if fb_result and fb_result.get('success') and fb_result.get('post_id'):
