@@ -2581,8 +2581,8 @@
                 });
         }
 
-        function confirmRegenerateVideo() {
-            console.log('Confirm regenerate video');
+        function confirmRegenerateVideo(forceFallback) {
+            console.log('Confirm regenerate video, forceFallback:', forceFallback);
 
             if (!currentRegeneratePostId) {
                 showToast('No post selected', 'error');
@@ -2606,14 +2606,25 @@
 
             showToast('Starting video regeneration...', 'info');
 
+            var requestBody = {
+                motion_prompt: motionPrompt,
+                force_fallback: forceFallback || false
+            };
+
             fetch(API_BASE + '/api/dashboard/regenerate-video/' + currentRegeneratePostId, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motion_prompt: motionPrompt })
+                body: JSON.stringify(requestBody)
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 console.log('Regenerate response:', data);
+
+                if (data.needs_confirmation) {
+                    // Show confirmation dialog for fallback
+                    showFallbackConfirmation(data.message, data.fallback_reason);
+                    return;
+                }
 
                 if (data.success) {
                     if (data.status === 'completed') {
@@ -2639,6 +2650,60 @@
                     btn.textContent = '🎬 Regenerate Video';
                 }
             });
+        }
+
+        function showFallbackConfirmation(message, reason) {
+            // Create and show a confirmation dialog
+            var existingDialog = document.getElementById('fallback-confirm-dialog');
+            if (existingDialog) {
+                existingDialog.remove();
+            }
+
+            var dialog = document.createElement('div');
+            dialog.id = 'fallback-confirm-dialog';
+            dialog.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; justify-content: center; align-items: center;';
+
+            var content = document.createElement('div');
+            content.style.cssText = 'background: white; padding: 30px; border-radius: 16px; max-width: 450px; width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);';
+
+            content.innerHTML =
+                '<div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>' +
+                '<h3 style="margin: 0 0 15px 0; color: #333;">Fallback Required</h3>' +
+                '<p style="color: #666; margin-bottom: 20px; line-height: 1.5;">' + message + '</p>' +
+                '<div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: left;">' +
+                    '<strong style="color: #856404;">⚡ What this means:</strong>' +
+                    '<ul style="margin: 8px 0 0 0; padding-left: 20px; color: #856404; font-size: 14px;">' +
+                        '<li>The video will still be generated</li>' +
+                        '<li>Motion style will have minimal effect</li>' +
+                        '<li>Basic lip-sync only (no gestures)</li>' +
+                    '</ul>' +
+                '</div>' +
+                '<div style="display: flex; gap: 12px; justify-content: center;">' +
+                    '<button onclick="closeFallbackDialog()" style="padding: 12px 24px; border: 2px solid #ddd; background: white; border-radius: 8px; cursor: pointer; font-size: 15px;">Cancel</button>' +
+                    '<button onclick="proceedWithFallback()" style="padding: 12px 24px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold;">Proceed Anyway</button>' +
+                '</div>';
+
+            dialog.appendChild(content);
+            document.body.appendChild(dialog);
+        }
+
+        function closeFallbackDialog() {
+            var dialog = document.getElementById('fallback-confirm-dialog');
+            if (dialog) {
+                dialog.remove();
+            }
+            // Re-enable the regenerate button
+            var btn = document.getElementById('confirm-regenerate-btn');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🎬 Regenerate Video';
+            }
+        }
+
+        function proceedWithFallback() {
+            closeFallbackDialog();
+            // Call regenerate again with force_fallback = true
+            confirmRegenerateVideo(true);
         }
         // ========== END REGENERATE VIDEO FUNCTIONS ==========
 
