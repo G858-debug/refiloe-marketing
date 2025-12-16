@@ -327,12 +327,13 @@ class FacebookPoster:
 
         This is a 3-step process:
         1. Initialize upload session to get video_id and upload_url
-        2. Upload video file using file_url header (for CDN-hosted videos)
+        2. Upload video file using binary upload (local files) or file_url header (CDN URLs)
         3. Publish or schedule the reel
 
         Args:
             post_data: Dictionary containing:
                 - video_url: URL of the video (from HeyGen CDN)
+                - processed_video_path: Optional local path to video file (takes priority over video_url)
                 - content_text: Caption/description for the reel
                 - title: Optional reel title (max 255 chars)
                 - scheduled_publish_time: Optional Unix timestamp for scheduling
@@ -352,12 +353,15 @@ class FacebookPoster:
             - Post preview in database records
         """
         try:
+            # Check for local file first (processed video with title card), then URL
+            processed_video_path = post_data.get('processed_video_path')
             video_url = post_data.get('video_url')
-            if not video_url:
+
+            if not processed_video_path and not video_url:
                 return {
                     'success': False,
                     'post_id': None,
-                    'error': 'No video URL provided'
+                    'error': 'No video source provided (neither processed_video_path nor video_url)'
                 }
 
             # Extract parameters with defaults
@@ -375,7 +379,8 @@ class FacebookPoster:
                 title = title[:252] + '...'
                 log_warning(f"Title truncated to 255 characters")
 
-            log_info(f"Starting Reels API upload for video: {video_url}")
+            log_info(f"Starting Reels API upload")
+            log_info(f"Video source: {'Local file: ' + processed_video_path if processed_video_path else 'URL: ' + video_url}")
             log_info(f"Video state: {video_state}")
 
             # STEP 1: Initialize upload session
@@ -401,32 +406,65 @@ class FacebookPoster:
             upload_url = init_response['upload_url']
             log_info(f"Step 1 complete - video_id: {video_id}")
 
-            # STEP 2: Upload video using file_url header
-            log_info(f"Step 2: Uploading video from CDN: {video_url}")
-            upload_headers = {
-                'Authorization': f'OAuth {self.page_access_token}',
-                'file_url': video_url
-            }
-
+            # STEP 2: Upload video (binary for local files, file_url for URLs)
             try:
-                upload_response = requests.post(
-                    upload_url,
-                    headers=upload_headers,
-                    timeout=120  # 2 minutes for upload
-                )
-                upload_response.raise_for_status()
-                upload_result = upload_response.json()
+                if processed_video_path and os.path.exists(processed_video_path):
+                    # STEP 2.A: Binary upload for local file
+                    log_info(f"Step 2.A: Uploading video from local file: {processed_video_path}")
 
-                if not upload_result.get('success'):
-                    error_msg = upload_result.get('error', {}).get('message', 'Upload failed')
-                    log_error(f"Step 2 failed: {error_msg}")
-                    return {
-                        'success': False,
-                        'post_id': None,
-                        'error': f'Video upload failed: {error_msg}'
+                    with open(processed_video_path, 'rb') as video_file:
+                        upload_headers = {
+                            'Authorization': f'OAuth {self.page_access_token}',
+                            'offset': '0',
+                            'file_size': str(os.path.getsize(processed_video_path))
+                        }
+
+                        upload_response = requests.post(
+                            upload_url,
+                            headers=upload_headers,
+                            data=video_file,
+                            timeout=300  # 5 minutes for large file upload
+                        )
+                        upload_response.raise_for_status()
+                        upload_result = upload_response.json()
+
+                        if not upload_result.get('success'):
+                            error_msg = upload_result.get('error', {}).get('message', 'Binary upload failed')
+                            log_error(f"Step 2.A failed: {error_msg}")
+                            return {
+                                'success': False,
+                                'post_id': None,
+                                'error': f'Video binary upload failed: {error_msg}'
+                            }
+
+                        log_info("Step 2.A complete - video uploaded from local file")
+
+                else:
+                    # STEP 2.B: URL upload for CDN-hosted videos
+                    log_info(f"Step 2.B: Uploading video from CDN: {video_url}")
+                    upload_headers = {
+                        'Authorization': f'OAuth {self.page_access_token}',
+                        'file_url': video_url
                     }
 
-                log_info("Step 2 complete - video uploaded successfully")
+                    upload_response = requests.post(
+                        upload_url,
+                        headers=upload_headers,
+                        timeout=120  # 2 minutes for URL upload
+                    )
+                    upload_response.raise_for_status()
+                    upload_result = upload_response.json()
+
+                    if not upload_result.get('success'):
+                        error_msg = upload_result.get('error', {}).get('message', 'URL upload failed')
+                        log_error(f"Step 2.B failed: {error_msg}")
+                        return {
+                            'success': False,
+                            'post_id': None,
+                            'error': f'Video URL upload failed: {error_msg}'
+                        }
+
+                    log_info("Step 2.B complete - video uploaded from CDN")
 
             except requests.exceptions.RequestException as e:
                 log_error(f"Step 2 failed with exception: {e}")
@@ -445,7 +483,7 @@ class FacebookPoster:
                 'video_id': video_id,
                 'video_state': video_state,
                 'description': description,
-                'thumb_offset': post_data.get('thumb_offset', 2000)  # Default to 2 seconds into video
+                'thumb_offset': post_data.get('thumb_offset', 2000)  # Default to 2 seconds, or 0 for title cards
             }
 
             # Add optional title if provided
