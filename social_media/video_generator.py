@@ -1511,6 +1511,7 @@ class VideoGenerator:
             return {
                 'status': data.get('status'),
                 'video_url': data.get('video_url'),
+                'thumbnail_url': data.get('thumbnail_url'),
                 'error': data.get('error'),
                 'duration': data.get('duration')
             }
