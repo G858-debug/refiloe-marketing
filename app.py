@@ -3953,6 +3953,223 @@ def api_reschedule_post(post_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/create-pinned-post', methods=['POST'])
+def api_create_pinned_post():
+    """Create a pinned post for a specific date. Pushes existing posts forward if needed."""
+    log_info("📥 Request: /api/dashboard/create-pinned-post")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime, timedelta
+        from database import SocialMediaDatabase
+        import json
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        data = request.get_json()
+
+        # Required fields
+        scheduled_date = data.get('scheduled_date')  # YYYY-MM-DD format
+        content_text = data.get('content_text')
+        post_type = data.get('post_type', 'video')
+        title = data.get('title', '')
+        content_theme = data.get('content_theme', 'special_event')
+        video_script = data.get('video_script', '')
+
+        if not scheduled_date:
+            return jsonify({'success': False, 'error': 'scheduled_date is required (YYYY-MM-DD)'}), 400
+
+        if not content_text:
+            return jsonify({'success': False, 'error': 'content_text is required'}), 400
+
+        # Parse the date and set time to 14:00 SAST
+        try:
+            target_date = datetime.strptime(scheduled_date, '%Y-%m-%d')
+            target_datetime = SA_TZ.localize(target_date.replace(hour=14, minute=0, second=0))
+        except ValueError as e:
+            return jsonify({'success': False, 'error': f'Invalid date format: {e}'}), 400
+
+        log_info(f"📌 Creating pinned post for {target_datetime.date()}")
+
+        # Check if there's already a pinned post on this date
+        start_of_day = target_datetime.replace(hour=0, minute=0, second=0)
+        end_of_day = target_datetime.replace(hour=23, minute=59, second=59)
+
+        existing_pinned = supabase_client.table('social_posts').select('id, title').eq(
+            'is_pinned', True
+        ).gte('scheduled_time', start_of_day.isoformat()).lte(
+            'scheduled_time', end_of_day.isoformat()
+        ).execute()
+
+        if existing_pinned.data:
+            return jsonify({
+                'success': False,
+                'error': f'A pinned post already exists for {scheduled_date}. Remove it first.'
+            }), 400
+
+        # Check if there's a regular post on this date that needs to be pushed
+        existing_regular = supabase_client.table('social_posts').select('*').eq(
+            'is_pinned', False
+        ).neq('status', 'published').neq('status', 'rejected').gte(
+            'scheduled_time', start_of_day.isoformat()
+        ).lte('scheduled_time', end_of_day.isoformat()).execute()
+
+        posts_pushed = 0
+
+        if existing_regular.data:
+            log_info(f"📅 Found {len(existing_regular.data)} regular post(s) on {scheduled_date}. Pushing forward...")
+            posts_pushed = push_posts_forward(supabase_client, target_datetime, SA_TZ)
+            log_info(f"✅ Pushed {posts_pushed} posts forward")
+
+        # Create the pinned post
+        db = SocialMediaDatabase(supabase_client)
+
+        metadata = {
+            "is_pinned": True,
+            "pinned_reason": data.get('pinned_reason', 'Special event'),
+            "video_script": video_script,
+            "target_audience": "global"
+        }
+
+        post_data = {
+            'platform': 'facebook',
+            'content_text': content_text,
+            'post_type': post_type,
+            'title': title,
+            'scheduled_time': target_datetime.isoformat(),
+            'content_theme': content_theme,
+            'hashtags': data.get('hashtags', []),
+            'generation_prompt': json.dumps(metadata),
+            'status': 'pending_approval',
+            'is_pinned': True
+        }
+
+        post_id = db.save_post(post_data)
+
+        if not post_id:
+            return jsonify({'success': False, 'error': 'Failed to save pinned post'}), 500
+
+        log_info(f"✅ Created pinned post {post_id} for {target_datetime.date()}")
+
+        return jsonify({
+            'success': True,
+            'post_id': post_id,
+            'scheduled_date': scheduled_date,
+            'posts_pushed': posts_pushed,
+            'message': f'📌 Pinned post created for {target_datetime.strftime("%b %d, %Y")}. {posts_pushed} existing post(s) pushed forward.'
+        })
+
+    except Exception as e:
+        log_error(f"❌ Create pinned post failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def push_posts_forward(supabase_client, from_date: datetime, SA_TZ) -> int:
+    """
+    Push all regular (non-pinned) posts from a date forward by one day.
+    Recursively handles collisions with other pinned dates.
+
+    Args:
+        supabase_client: Database client
+        from_date: The date from which to start pushing posts
+        SA_TZ: South Africa timezone
+
+    Returns:
+        Number of posts pushed
+    """
+    from datetime import timedelta
+
+    posts_pushed = 0
+    current_date = from_date
+    max_iterations = 365  # Safety limit
+    iterations = 0
+
+    while iterations < max_iterations:
+        iterations += 1
+
+        # Get start and end of current date
+        start_of_day = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Find regular posts on current date
+        regular_posts = supabase_client.table('social_posts').select('id, scheduled_time').eq(
+            'is_pinned', False
+        ).neq('status', 'published').neq('status', 'rejected').gte(
+            'scheduled_time', start_of_day.isoformat()
+        ).lte('scheduled_time', end_of_day.isoformat()).execute()
+
+        if not regular_posts.data:
+            # No more posts to push
+            break
+
+        # Calculate next day
+        next_date = current_date + timedelta(days=1)
+        next_start = next_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        next_end = next_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # Check if next day has a pinned post
+        pinned_on_next = supabase_client.table('social_posts').select('id').eq(
+            'is_pinned', True
+        ).gte('scheduled_time', next_start.isoformat()).lte(
+            'scheduled_time', next_end.isoformat()
+        ).execute()
+
+        if pinned_on_next.data:
+            # Next day is pinned, continue checking the day after
+            log_info(f"📌 {next_date.date()} is pinned, skipping...")
+            current_date = next_date
+            continue
+
+        # Move posts from current_date to next_date
+        for post in regular_posts.data:
+            post_id = post['id']
+            old_time = post['scheduled_time']
+
+            # Parse old time and add one day
+            if isinstance(old_time, str):
+                old_dt = datetime.fromisoformat(old_time.replace('Z', '+00:00')).astimezone(SA_TZ)
+            else:
+                old_dt = old_time
+
+            new_dt = old_dt + timedelta(days=1)
+
+            # Check if new date is pinned, if so, keep adding days until we find a free slot
+            while True:
+                new_start = new_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                new_end = new_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+                pinned_check = supabase_client.table('social_posts').select('id').eq(
+                    'is_pinned', True
+                ).gte('scheduled_time', new_start.isoformat()).lte(
+                    'scheduled_time', new_end.isoformat()
+                ).execute()
+
+                if not pinned_check.data:
+                    break
+
+                log_info(f"📌 {new_dt.date()} is pinned, skipping to next day...")
+                new_dt = new_dt + timedelta(days=1)
+
+            # Update the post
+            supabase_client.table('social_posts').update({
+                'scheduled_time': new_dt.isoformat(),
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('id', post_id).execute()
+
+            posts_pushed += 1
+            log_info(f"📅 Moved post {post_id[:8]}... from {old_dt.date()} to {new_dt.date()}")
+
+        # Move to next date to check for cascade effects
+        current_date = next_date
+
+    return posts_pushed
+
+
 @app.route('/api/dashboard/edit/<post_id>', methods=['POST'])
 def api_edit_post(post_id):
     """API: Edit a pending post"""
@@ -4918,12 +5135,45 @@ def api_generate_weekly_content():
         ]
 
         created_ids = []
+        day_offset = 0
+        posts_created = 0
+        max_days_to_check = 30  # Safety limit
 
-        for day_offset, theme_config in enumerate(weekly_themes):
+        while posts_created < 7 and day_offset < max_days_to_check:
             scheduled_time = start_date + timedelta(days=day_offset)
 
+            # Check if this date has a pinned post
+            day_start = scheduled_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = scheduled_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            pinned_check = supabase_client.table('social_posts').select('id').eq(
+                'is_pinned', True
+            ).gte('scheduled_time', day_start.isoformat()).lte(
+                'scheduled_time', day_end.isoformat()
+            ).execute()
+
+            if pinned_check.data:
+                log_info(f"📌 Skipping {scheduled_time.date()} - has pinned post")
+                day_offset += 1
+                continue
+
+            # Also check if there's already a post scheduled for this day
+            existing_check = supabase_client.table('social_posts').select('id').neq(
+                'status', 'published'
+            ).neq('status', 'rejected').gte(
+                'scheduled_time', day_start.isoformat()
+            ).lte('scheduled_time', day_end.isoformat()).execute()
+
+            if existing_check.data:
+                log_info(f"📅 Skipping {scheduled_time.date()} - already has a scheduled post")
+                day_offset += 1
+                continue
+
+            # Get theme for this post (cycle through weekly_themes)
+            theme_config = weekly_themes[posts_created % len(weekly_themes)]
+
             try:
-                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
+                log_info(f"📝 Generating post {posts_created + 1}/7: {theme_config['description']} for {scheduled_time.date()}")
 
                 # Generate content based on post type
                 if theme_config['post_type'] == 'video':
@@ -4943,30 +5193,36 @@ def api_generate_weekly_content():
                     video_script = None
 
                 metadata = {
-                    "day": day_offset + 1,
+                    "day": posts_created + 1,
                     "theme_description": theme_config['description'],
                     "video_script": video_script,
                     "weekly_content": True,
                     "target_audience": "global"
                 }
 
-                post_id = db.save_post(
-                    platform="facebook",
-                    content=content_text,
-                    post_type=theme_config['post_type'],
-                    scheduled_time=scheduled_time.isoformat(),
-                    content_theme=theme_config['theme'],
-                    hashtags=global_hashtags,
-                    generation_prompt=json.dumps(metadata)
-                )
+                post_data = {
+                    'platform': 'facebook',
+                    'content_text': content_text,
+                    'post_type': theme_config['post_type'],
+                    'scheduled_time': scheduled_time.isoformat(),
+                    'content_theme': theme_config['theme'],
+                    'hashtags': global_hashtags,
+                    'generation_prompt': json.dumps(metadata),
+                    'status': 'pending_approval',
+                    'is_pinned': False
+                }
+
+                post_id = db.save_post(post_data)
 
                 if post_id:
                     created_ids.append(post_id)
-                    log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
+                    log_info(f"✅ Saved post {posts_created + 1}: {post_id}")
+                    posts_created += 1
 
             except Exception as e:
-                log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
-                continue
+                log_error(f"❌ Failed to generate post for {scheduled_time.date()}: {e}")
+
+            day_offset += 1
 
         # Calculate date range for message
         end_date = start_date + timedelta(days=6)

@@ -144,6 +144,7 @@ class SocialMediaDatabase:
                 'has_captions': post_data.get('has_captions', True),
                 'audio_track_id': post_data.get('audio_track_id'),
                 'video_style': post_data.get('video_style'),
+                'is_pinned': post_data.get('is_pinned', False),
                 'created_at': datetime.now(self.sa_tz).isoformat(),
                 'updated_at': datetime.now(self.sa_tz).isoformat()
             }
