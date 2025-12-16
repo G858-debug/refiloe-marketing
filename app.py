@@ -4691,16 +4691,25 @@ def api_generate_media(post_id):
                     from social_media.looks_generator import LooksGenerator
                     looks_gen = LooksGenerator(supabase_client=supabase_client)
 
-                    # Determine look type from content theme
+                    # Map content themes to valid look types
                     look_type_map = {
-                        'relatable_trainer_life': 'relatable',
-                        'admin_hacks': 'professional',
-                        'client_management': 'business',
-                        'business_growth': 'business',
-                        'fitness_tips': 'fitness',
-                        'motivation': 'motivational',
+                        'relatable_trainer_life': 'gym_trainer',
+                        'admin_hacks': 'office_professional',
+                        'client_management': 'office_professional',
+                        'business_growth': 'office_professional',
+                        'fitness_tips': 'gym_trainer',
+                        'motivation': 'motivational_speaker',
+                        'trainer_motivation': 'motivational_speaker',
+                        'client_success': 'motivational_speaker',
+                        'workout_tips': 'gym_trainer',
+                        'nutrition': 'nutrition_expert',
+                        'wellness': 'outdoor_wellness',
+                        'yoga': 'yoga_instructor',
+                        'home_fitness': 'home_workout',
                     }
-                    look_type = look_type_map.get(content_theme, 'casual')
+
+                    # Get look type from mapping, default to 'studio_portrait' if not found
+                    look_type = look_type_map.get(content_theme, 'studio_portrait')
 
                     log_info(f"Generating look with type: {look_type} (from content_theme: {content_theme})")
 
@@ -5311,16 +5320,25 @@ def api_regenerate_video(post_id: str):
                 from social_media.looks_generator import LooksGenerator
                 looks_gen = LooksGenerator(supabase_client=supabase_client)
 
-                # Determine look type from content theme
+                # Map content themes to valid look types
                 look_type_map = {
-                    'relatable_trainer_life': 'relatable',
-                    'admin_hacks': 'professional',
-                    'client_management': 'business',
-                    'business_growth': 'business',
-                    'fitness_tips': 'fitness',
-                    'motivation': 'motivational',
+                    'relatable_trainer_life': 'gym_trainer',
+                    'admin_hacks': 'office_professional',
+                    'client_management': 'office_professional',
+                    'business_growth': 'office_professional',
+                    'fitness_tips': 'gym_trainer',
+                    'motivation': 'motivational_speaker',
+                    'trainer_motivation': 'motivational_speaker',
+                    'client_success': 'motivational_speaker',
+                    'workout_tips': 'gym_trainer',
+                    'nutrition': 'nutrition_expert',
+                    'wellness': 'outdoor_wellness',
+                    'yoga': 'yoga_instructor',
+                    'home_fitness': 'home_workout',
                 }
-                look_type = look_type_map.get(content_theme, 'casual')
+
+                # Get look type from mapping, default to 'studio_portrait' if not found
+                look_type = look_type_map.get(content_theme, 'studio_portrait')
 
                 log_info(f"Generating look with type: {look_type} (from content_theme: {content_theme})")
 
