@@ -1422,7 +1422,8 @@ def generate_real_video():
             'video_style': data.get('style', 'educational'),
             'content_text': content_text,
             'content_theme': theme,
-            'title': reel_title,  # Save reel_title as title field
+            'title': reel_title,  # Save reel_title as title field for backwards compatibility
+            'reel_title': reel_title,  # Save reel_title to the reel_title database field
             'has_captions': True,
             'completion_rate': 0,
             'avg_watch_time': 0
@@ -5798,7 +5799,8 @@ def api_generate_weekly_content():
                     'post_type': theme_config['post_type'],
                     'scheduled_time': scheduled_time.isoformat(),
                     'content_theme': theme_config['theme'],
-                    'title': reel_title,  # Save reel_title for video posts
+                    'title': reel_title,  # Save reel_title as title field for backwards compatibility
+                    'reel_title': reel_title,  # Save reel_title to the reel_title database field
                     'hashtags': global_hashtags,
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
