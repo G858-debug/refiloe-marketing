@@ -4661,7 +4661,7 @@ def api_generate_media(post_id):
             log_info(f"🎥 Using VIDEO generation workflow for post {post_id}")
 
             # Get request data
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
             use_avatar_iv = data.get('use_avatar_iv', False)
             force_fallback = data.get('force_fallback', False)
 
@@ -5229,7 +5229,7 @@ def api_regenerate_video(post_id: str):
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
         # Get request data
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         motion_prompt = data.get('motion_prompt', '').strip() if data.get('motion_prompt') else None
         use_avatar_iv = data.get('use_avatar_iv', False)
         force_fallback = data.get('force_fallback', False)
