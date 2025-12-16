@@ -1015,33 +1015,37 @@
     </div>
 
     <!-- Regenerate Video Modal -->
-    <div id="regenerate-video-modal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h3>🎬 Regenerate Video</h3>
-                <span class="close-btn" onclick="closeRegenerateModal()">&times;</span>
+    <div id="regenerate-video-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="background: white; padding: 25px; border-radius: 12px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;">🎬 Regenerate Video</h3>
+                <span onclick="closeRegenerateModal()" style="cursor: pointer; font-size: 24px; color: #666;">&times;</span>
             </div>
             <div class="modal-body">
                 <p style="margin-bottom: 15px; color: #666;">
                     This will generate a new video using the current script. The old video will be replaced.
                 </p>
 
-                <div class="form-group">
-                    <label for="motion-prompt-select"><strong>🎭 Motion Style:</strong></label>
-                    <select id="motion-prompt-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-top: 5px;">
-                        <!-- Options populated by JavaScript -->
+                <div style="margin-bottom: 20px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">🎭 Motion Style:</label>
+                    <select id="motion-prompt-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;">
+                        <option value="">Loading motion styles...</option>
                     </select>
-                    <p id="motion-prompt-description" style="font-size: 12px; color: #888; margin-top: 5px;"></p>
+                    <p id="motion-prompt-description" style="font-size: 12px; color: #888; margin-top: 8px; font-style: italic;"></p>
                 </div>
 
-                <div id="current-script-preview" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px; max-height: 150px; overflow-y: auto;">
-                    <strong>📝 Current Script:</strong>
-                    <p id="script-preview-text" style="font-size: 13px; color: #555; margin-top: 5px; white-space: pre-wrap;"></p>
+                <div style="margin-bottom: 20px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">📝 Current Script:</label>
+                    <div id="script-preview-container" style="padding: 12px; background: #f8f9fa; border-radius: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #e9ecef;">
+                        <p id="script-preview-text" style="font-size: 13px; color: #555; margin: 0; white-space: pre-wrap;">Loading script...</p>
+                    </div>
                 </div>
 
-                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <button class="btn btn-secondary" onclick="closeRegenerateModal()">Cancel</button>
-                    <button class="btn btn-primary" id="confirm-regenerate-btn" onclick="confirmRegenerateVideo()">
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <button onclick="closeRegenerateModal()" style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 8px; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button id="confirm-regenerate-btn" onclick="confirmRegenerateVideo()" style="padding: 10px 20px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
                         🎬 Regenerate Video
                     </button>
                 </div>
@@ -2494,171 +2498,150 @@
             }
         }
 
-        // Motion prompts cache
-        let motionPrompts = [];
+        // ========== REGENERATE VIDEO FUNCTIONS ==========
         let currentRegeneratePostId = null;
 
-        // Load motion prompts on page load
-        async function loadMotionPrompts() {
-            try {
-                const response = await fetch(`${API_BASE}/api/dashboard/motion-prompts`);
-                const data = await response.json();
-
-                if (data.success) {
-                    motionPrompts = data.prompts;
-                    populateMotionPromptSelect();
-                }
-            } catch (error) {
-                console.error('Error loading motion prompts:', error);
-            }
-        }
-
-        // Populate the motion prompt dropdown
-        function populateMotionPromptSelect() {
-            const select = document.getElementById('motion-prompt-select');
-            if (!select) return;
-
-            select.innerHTML = '';
-
-            motionPrompts.forEach(prompt => {
-                const option = document.createElement('option');
-                option.value = prompt.id;
-                option.textContent = prompt.name;
-                option.dataset.prompt = prompt.prompt || '';
-                option.dataset.description = prompt.description;
-                select.appendChild(option);
-            });
-
-            // Update description on change
-            select.addEventListener('change', function() {
-                const selected = this.options[this.selectedIndex];
-                document.getElementById('motion-prompt-description').textContent = selected.dataset.description;
-            });
-
-            // Trigger initial description
-            if (select.options.length > 0) {
-                document.getElementById('motion-prompt-description').textContent = select.options[0].dataset.description;
-            }
-        }
-
-        // Open regenerate video modal
         async function openRegenerateModal(postId) {
+            console.log('=== Opening Regenerate Modal ===');
+            console.log('Post ID:', postId);
+
             currentRegeneratePostId = postId;
 
-            console.log('Opening regenerate modal for post:', postId);
+            // Show modal immediately
+            const modal = document.getElementById('regenerate-video-modal');
+            if (!modal) {
+                console.error('Modal element not found!');
+                alert('Error: Regenerate modal not found. Please refresh the page.');
+                return;
+            }
+            modal.style.display = 'flex';
 
-            // Always try to load motion prompts
-            try {
-                const response = await fetch(`${API_BASE}/api/dashboard/motion-prompts`);
-                console.log('Motion prompts response status:', response.status);
-                const data = await response.json();
-                console.log('Motion prompts data:', data);
+            // Load motion prompts
+            const select = document.getElementById('motion-prompt-select');
+            if (select) {
+                select.innerHTML = '<option value="">Loading...</option>';
 
-                if (data.success && data.prompts) {
-                    const select = document.getElementById('motion-prompt-select');
-                    console.log('Select element found:', !!select);
+                try {
+                    console.log('Fetching motion prompts...');
+                    const response = await fetch(`${API_BASE}/api/dashboard/motion-prompts`);
+                    const data = await response.json();
+                    console.log('Motion prompts response:', data);
 
-                    if (select) {
+                    if (data.success && data.prompts && data.prompts.length > 0) {
                         select.innerHTML = '';
-                        data.prompts.forEach(prompt => {
+                        data.prompts.forEach((prompt, index) => {
                             const option = document.createElement('option');
                             option.value = prompt.id;
                             option.textContent = prompt.name;
-                            option.dataset.prompt = prompt.prompt || '';
-                            option.dataset.description = prompt.description || '';
+                            option.setAttribute('data-prompt', prompt.prompt || '');
+                            option.setAttribute('data-description', prompt.description || '');
                             select.appendChild(option);
+                            console.log(`Added option ${index}: ${prompt.name}`);
                         });
 
                         // Set initial description
-                        if (select.options.length > 0) {
-                            const descEl = document.getElementById('motion-prompt-description');
-                            if (descEl) {
-                                descEl.textContent = select.options[0].dataset.description;
-                            }
+                        const descEl = document.getElementById('motion-prompt-description');
+                        if (descEl && select.options.length > 0) {
+                            descEl.textContent = select.options[0].getAttribute('data-description') || '';
                         }
 
-                        // Add change listener
+                        // Add change handler
                         select.onchange = function() {
-                            const selected = this.options[this.selectedIndex];
+                            const selectedOpt = this.options[this.selectedIndex];
                             const descEl = document.getElementById('motion-prompt-description');
-                            if (descEl) {
-                                descEl.textContent = selected.dataset.description;
+                            if (descEl && selectedOpt) {
+                                descEl.textContent = selectedOpt.getAttribute('data-description') || '';
                             }
                         };
+
+                        console.log('Motion prompts loaded successfully:', data.prompts.length, 'options');
+                    } else {
+                        select.innerHTML = '<option value="">No motion styles available</option>';
+                        console.warn('No motion prompts in response');
                     }
+                } catch (error) {
+                    console.error('Error loading motion prompts:', error);
+                    select.innerHTML = '<option value="">Error loading styles</option>';
                 }
-            } catch (error) {
-                console.error('Error loading motion prompts:', error);
-            }
-
-            // Fetch post details for script preview
-            try {
-                const response = await fetch(`${API_BASE}/api/dashboard/post/${postId}`);
-                const data = await response.json();
-
-                if (data.success && data.post) {
-                    const script = data.post.video_script || 'No script found';
-                    const previewEl = document.getElementById('script-preview-text');
-                    if (previewEl) {
-                        previewEl.textContent = script.substring(0, 500) + (script.length > 500 ? '...' : '');
-                    }
-                }
-            } catch (error) {
-                console.error('Error fetching post:', error);
-            }
-
-            // Show modal
-            const modal = document.getElementById('regenerate-video-modal');
-            if (modal) {
-                modal.style.display = 'flex';
             } else {
-                console.error('Regenerate modal not found!');
-                alert('Regenerate modal not found. Please refresh the page.');
+                console.error('Select element not found!');
+            }
+
+            // Load post script preview
+            const scriptPreview = document.getElementById('script-preview-text');
+            if (scriptPreview) {
+                scriptPreview.textContent = 'Loading script...';
+
+                try {
+                    console.log('Fetching post details...');
+                    const response = await fetch(`${API_BASE}/api/dashboard/post/${postId}`);
+                    const data = await response.json();
+                    console.log('Post details response:', data);
+
+                    if (data.success && data.post) {
+                        const script = data.post.video_script || 'No script found';
+                        scriptPreview.textContent = script.length > 500 ? script.substring(0, 500) + '...' : script;
+                    } else {
+                        scriptPreview.textContent = 'Could not load script';
+                    }
+                } catch (error) {
+                    console.error('Error loading post:', error);
+                    scriptPreview.textContent = 'Error loading script';
+                }
             }
         }
 
-        // Close regenerate video modal
         function closeRegenerateModal() {
-            document.getElementById('regenerate-video-modal').style.display = 'none';
+            console.log('Closing regenerate modal');
+            const modal = document.getElementById('regenerate-video-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
             currentRegeneratePostId = null;
         }
 
-        // Confirm and regenerate video
         async function confirmRegenerateVideo() {
+            console.log('=== Confirm Regenerate Video ===');
+            console.log('Post ID:', currentRegeneratePostId);
+
             if (!currentRegeneratePostId) {
                 showToast('No post selected', 'error');
                 return;
             }
 
+            // Get selected motion prompt
             const select = document.getElementById('motion-prompt-select');
             let motionPrompt = null;
 
             if (select && select.selectedIndex >= 0) {
                 const selectedOption = select.options[select.selectedIndex];
-                motionPrompt = selectedOption.dataset.prompt || null;
-                console.log('Selected motion prompt:', motionPrompt);
+                motionPrompt = selectedOption.getAttribute('data-prompt') || null;
+                console.log('Selected motion style:', selectedOption.textContent);
+                console.log('Motion prompt value:', motionPrompt);
             }
 
+            // Disable button
             const btn = document.getElementById('confirm-regenerate-btn');
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '⏳ Generating...';
+                btn.textContent = '⏳ Generating...';
             }
 
             try {
                 showToast('Starting video regeneration...', 'info');
 
+                const requestBody = { motion_prompt: motionPrompt };
+                console.log('Request body:', requestBody);
+
                 const response = await fetch(`${API_BASE}/api/dashboard/regenerate-video/${currentRegeneratePostId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        motion_prompt: motionPrompt
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
-                console.log('Regenerate response status:', response.status);
+                console.log('Response status:', response.status);
                 const data = await response.json();
-                console.log('Regenerate response data:', data);
+                console.log('Response data:', data);
 
                 if (data.success) {
                     if (data.status === 'completed') {
@@ -2667,20 +2650,23 @@
                         showToast('⏳ Video generation started. Check back in a few minutes.', 'info');
                     }
                     closeRegenerateModal();
-                    refreshPosts();
+                    if (typeof refreshPosts === 'function') {
+                        refreshPosts();
+                    }
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                console.error('Error regenerating video:', error);
+                console.error('Regenerate error:', error);
                 showToast('Failed to regenerate video: ' + error.message, 'error');
             } finally {
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = '🎬 Regenerate Video';
+                    btn.textContent = '🎬 Regenerate Video';
                 }
             }
         }
+        // ========== END REGENERATE VIDEO FUNCTIONS ==========
 
         async function backfillImagePrompts() {
             if (!confirm('This will generate image prompts for all posts that don\'t have one. Continue?')) {
