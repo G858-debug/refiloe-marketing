@@ -321,7 +321,6 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
 
         # Process video with title card if we have all required data
         processed_video_path = None
-        thumb_offset = 2000  # Default to 2 seconds
 
         if video_url and source_image_url and title_text:
             try:
@@ -344,9 +343,7 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
                 if result.get('success'):
                     processed_video_path = result.get('video_path')
                     thumbnail_path = result.get('thumbnail_path')
-                    thumb_offset = 0  # Use first frame (our title card) as thumbnail
                     log_info(f"✓ Title card added successfully: {processed_video_path}")
-                    log_info(f"✓ Using thumb_offset={thumb_offset} (title card frame)")
 
                     # Save processed video URL and thumbnail to database
                     log_info("Updating post with processed_video_url and thumbnail_url...")
@@ -373,13 +370,19 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
             log_info(f"  source_image_url: {bool(source_image_url)}")
             log_info(f"  title_text: {bool(title_text)}")
 
+        # Prefer processed_video_url (with title card) over original video_url
+        video_to_upload = post.get('processed_video_url') or video_url
+        thumb_offset = 0 if post.get('processed_video_url') else 2000
+
+        log_info(f"Video to upload: {video_to_upload}")
+        log_info(f"Using thumb_offset={thumb_offset} ({'title card frame' if thumb_offset == 0 else 'default 2s offset'})")
+
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
         # Prepare post data with schedule hint and scheduled_publish_time
         post_data = {
             'content_text': post.get('content_text', ''),
-            'video_url': video_url,
-            'processed_video_path': processed_video_path,  # Local path if title card was added
+            'video_url': video_to_upload,
             'title': title_text,
             'post_as_draft': True,
             'include_schedule_hint': True,
