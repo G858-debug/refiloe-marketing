@@ -16,6 +16,7 @@ from flask import (
     url_for,
 )
 from social_media.database import SocialMediaDatabase
+from social_media.title_card_service import TitleCardService
 from utils.supabase_rest import SupabaseRestClient
 from utils.logger import log_error, log_info, log_warning
 from facebook_poster import FacebookPoster
@@ -269,6 +270,7 @@ def _delete_post_cascade(db: SocialMediaDatabase, post_id: str) -> bool:
 def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict:
     """
     Upload a video post to Facebook as a scheduled post immediately upon approval.
+    Automatically adds title card if source image and title are available.
     """
     import time as time_module
 
@@ -312,17 +314,65 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
             log_info("No scheduled_time on post, defaulting to 10 mins from now")
             schedule_timestamp = int(time_module.time()) + 600
 
+        # Get video and title card data
+        video_url = post.get('video_url')
+        source_image_url = post.get('image_url') or post.get('preview_url')
+        title_text = post.get('reel_title') or post.get('title', '')
+
+        # Process video with title card if we have all required data
+        processed_video_path = None
+        thumb_offset = 2000  # Default to 2 seconds
+
+        if video_url and source_image_url and title_text:
+            try:
+                log_info("=" * 60)
+                log_info("TITLE CARD INTEGRATION - Starting")
+                log_info(f"Video URL: {video_url}")
+                log_info(f"Source image: {source_image_url}")
+                log_info(f"Title: {title_text}")
+                log_info("=" * 60)
+
+                title_card_service = TitleCardService()
+
+                result = title_card_service.create_video_with_title_card(
+                    source_image_url=source_image_url,
+                    video_url=video_url,
+                    title_text=title_text,
+                    title_card_duration=1.0
+                )
+
+                if result.get('success'):
+                    processed_video_path = result.get('video_path')
+                    thumb_offset = 0  # Use first frame (our title card) as thumbnail
+                    log_info(f"✓ Title card added successfully: {processed_video_path}")
+                    log_info(f"✓ Using thumb_offset={thumb_offset} (title card frame)")
+                else:
+                    log_warning(f"Title card processing failed: {result.get('error')}")
+                    log_warning("Falling back to original video")
+            except Exception as e:
+                log_error(f"Title card service error: {e}")
+                import traceback
+                log_error(traceback.format_exc())
+                log_warning("Falling back to original video")
+        else:
+            log_info("Skipping title card - missing required data")
+            log_info(f"  video_url: {bool(video_url)}")
+            log_info(f"  source_image_url: {bool(source_image_url)}")
+            log_info(f"  title_text: {bool(title_text)}")
+
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
         # Prepare post data with schedule hint and scheduled_publish_time
         post_data = {
             'content_text': post.get('content_text', ''),
-            'video_url': post.get('video_url'),
-            'title': post.get('title') or post.get('reel_title', ''),  # Reel title for Facebook
+            'video_url': video_url,
+            'processed_video_path': processed_video_path,  # Local path if title card was added
+            'title': title_text,
             'post_as_draft': True,
             'include_schedule_hint': True,
             'scheduled_time': post.get('scheduled_time'),
             'scheduled_publish_time': schedule_timestamp,  # Pass the calculated timestamp
+            'thumb_offset': thumb_offset,  # 0 for title card, 2000 for original
         }
 
         # Upload to Facebook as scheduled post
@@ -332,6 +382,8 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
 
     except Exception as e:
         log_error(f"Error uploading video draft: {e}")
+        import traceback
+        log_error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
 
 
