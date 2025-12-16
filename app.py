@@ -3953,99 +3953,181 @@ def api_reschedule_post(post_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/dashboard/edit/<post_id>', methods=['POST'])
-def api_edit_post(post_id):
-    """API: Edit a pending post"""
+@app.route('/api/dashboard/edit/<string:post_id>', methods=['POST'])
+def api_edit_post(post_id: str):
+    """Edit a post's content, script, or prompts."""
     log_info(f"📥 Request: /api/dashboard/edit/{post_id}")
 
-    # Validate post_id format (should be UUID)
-    try:
-        uuid.UUID(post_id)
-    except ValueError:
-        log_error(f"❌ Invalid post_id format: {post_id}")
-        return api_error_response(
-            'Invalid post ID format',
-            400,
-            {'post_id': post_id, 'expected': 'UUID'}
-        )
-
-    # Check Supabase connection
-    if not app.config.get('SUPABASE_CONNECTED'):
-        log_error("❌ Supabase not connected")
-        return api_error_response('Database not connected', 503)
-
-    if not supabase_client:
-        log_error("❌ Supabase client is None")
-        return api_error_response('Database client not available', 503)
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
 
     try:
-        # Get update data from request
-        update_data = request.get_json()
-        if not update_data:
-            log_error("❌ No data provided in request")
-            return api_error_response('No data provided', 400)
+        import pytz
+        from datetime import datetime
+        import json
 
-        log_info(f"📝 Edit data received: {list(update_data.keys())}")
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
 
-        # Only allow editing pending posts
-        log_info(f"🔍 Checking if post {post_id} is pending approval")
-        post_check = supabase_client.table('social_posts').select('status').eq(
-            'id', post_id
-        ).execute()
+        data = request.get_json()
 
-        if not post_check.data:
-            log_error(f"❌ Post {post_id} not found")
-            return api_error_response('Post not found', 404, {'post_id': post_id})
+        # Validate the post exists and is not published
+        log_info(f"🔍 Checking if post {post_id} exists")
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
 
-        current_status = post_check.data[0]['status']
-        if current_status != 'pending_approval':
-            log_error(f"❌ Cannot edit post with status: {current_status}")
-            return api_error_response(
-                'Can only edit pending posts',
-                400,
-                {'post_id': post_id, 'current_status': current_status}
-            )
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
 
-        log_info(f"✅ Post {post_id} is pending approval, proceeding with update")
+        post = result.data[0]
 
-        # Update the post
-        start_time = datetime.now()
-        update_payload = {
-            'title': update_data.get('title'),
-            'content_text': update_data.get('content_text'),
-            'generation_prompt': update_data.get('generation_prompt'),
-            'scheduled_time': update_data.get('scheduled_time'),
+        if post.get('status') == 'published':
+            return jsonify({'success': False, 'error': 'Cannot edit a published post'}), 400
+
+        # Build update data from provided fields
+        update_data = {
             'updated_at': datetime.now(SA_TZ).isoformat()
         }
 
-        result = supabase_client.table('social_posts').update(update_payload).eq('id', post_id).execute()
+        # Update content_text (caption)
+        if 'content_text' in data:
+            update_data['content_text'] = data['content_text']
+            log_info(f"📝 Updating content_text")
 
-        update_time = (datetime.now() - start_time).total_seconds()
+        # Update title
+        if 'title' in data:
+            update_data['title'] = data['title']
+            log_info(f"📝 Updating title")
 
-        if result.data:
-            log_info(f"✅ Post {post_id} updated successfully in {update_time:.2f}s")
+        # Update hashtags
+        if 'hashtags' in data:
+            # Handle both string and array input
+            hashtags = data['hashtags']
+            if isinstance(hashtags, str):
+                # Parse comma-separated or space-separated hashtags
+                hashtags = [h.strip() for h in hashtags.replace(',', ' ').split() if h.strip()]
+            update_data['hashtags'] = hashtags
+            log_info(f"📝 Updating hashtags")
+
+        # Update generation_prompt (contains video_script, image_prompt, etc.)
+        # We need to merge with existing data
+        existing_prompt = {}
+        if post.get('generation_prompt'):
+            try:
+                if isinstance(post['generation_prompt'], str):
+                    existing_prompt = json.loads(post['generation_prompt'])
+                else:
+                    existing_prompt = post['generation_prompt']
+            except:
+                existing_prompt = {}
+
+        # Update video_script
+        if 'video_script' in data:
+            existing_prompt['video_script'] = data['video_script']
+            log_info(f"📝 Updating video_script")
+
+        # Update image_prompt
+        if 'image_prompt' in data:
+            existing_prompt['image_prompt'] = data['image_prompt']
+            update_data['image_prompt'] = data['image_prompt']  # Also update direct field if exists
+            log_info(f"📝 Updating image_prompt")
+
+        # Save updated generation_prompt
+        if 'video_script' in data or 'image_prompt' in data:
+            update_data['generation_prompt'] = json.dumps(existing_prompt)
+
+        # Update content_theme if provided
+        if 'content_theme' in data:
+            update_data['content_theme'] = data['content_theme']
+
+        # Perform update
+        log_info(f"💾 Saving edits to post {post_id}")
+        update_result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        if update_result.data:
+            log_info(f"✅ Post {post_id} updated successfully")
             return jsonify({
                 'success': True,
-                'message': 'Post updated',
                 'post_id': post_id,
-                'update_time': update_time
+                'message': 'Post updated successfully'
             })
         else:
-            log_error(f"❌ Failed to update post {post_id}")
-            return api_error_response(
-                'Update failed',
-                500,
-                {'post_id': post_id}
-            )
+            return jsonify({'success': False, 'error': 'Failed to update post'}), 500
 
     except Exception as e:
-        log_error(f"❌ Error editing post {post_id}: {e}")
+        log_error(f"❌ Edit post failed: {e}")
+        import traceback
         log_error(traceback.format_exc())
-        return api_error_response(
-            str(e),
-            500,
-            {'post_id': post_id, 'traceback': traceback.format_exc()}
-        )
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/post/<string:post_id>', methods=['GET'])
+def api_get_post(post_id: str):
+    """Get full details of a single post for editing."""
+    log_info(f"📥 Request: /api/dashboard/post/{post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import json
+
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Parse generation_prompt to extract video_script and image_prompt
+        video_script = ''
+        image_prompt = ''
+
+        if post.get('generation_prompt'):
+            try:
+                if isinstance(post['generation_prompt'], str):
+                    prompt_data = json.loads(post['generation_prompt'])
+                else:
+                    prompt_data = post['generation_prompt']
+                video_script = prompt_data.get('video_script', '')
+                image_prompt = prompt_data.get('image_prompt', '')
+            except:
+                pass
+
+        # Also check direct image_prompt field
+        if not image_prompt and post.get('image_prompt'):
+            image_prompt = post['image_prompt']
+
+        # Format hashtags for display
+        hashtags = post.get('hashtags', [])
+        if isinstance(hashtags, list):
+            hashtags_str = ' '.join(hashtags)
+        else:
+            hashtags_str = hashtags or ''
+
+        return jsonify({
+            'success': True,
+            'post': {
+                'id': post['id'],
+                'title': post.get('title', ''),
+                'content_text': post.get('content_text', ''),
+                'post_type': post.get('post_type', ''),
+                'platform': post.get('platform', ''),
+                'status': post.get('status', ''),
+                'scheduled_time': post.get('scheduled_time', ''),
+                'content_theme': post.get('content_theme', ''),
+                'hashtags': hashtags_str,
+                'video_script': video_script,
+                'image_prompt': image_prompt,
+                'is_pinned': post.get('is_pinned', False),
+                'video_url': post.get('video_url', ''),
+                'media_url': post.get('media_url', '')
+            }
+        })
+
+    except Exception as e:
+        log_error(f"❌ Get post failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/dashboard/generate-media/<post_id>', methods=['POST'])
