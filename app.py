@@ -1353,6 +1353,20 @@ def generate_real_video():
         voice_id = data.get('voice_id') or os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
         avatar_id = data.get('avatar_id') or '5637676d31d54946b7585b012a3ce182'
 
+        # Get look information for source_image_url
+        look_image_url = None
+        try:
+            from social_media.avatar_mapping import get_avatar_and_look_for_content
+            _, look_info = get_avatar_and_look_for_content(
+                content_text=content_text,
+                content_type=theme
+            )
+            if look_info:
+                look_image_url = look_info.get('preview_url') or look_info.get('image_url')
+                log_info(f"Retrieved look image URL for source_image_url: {look_image_url[:50] if look_image_url else 'None'}...")
+        except Exception as e:
+            log_warning(f"Could not retrieve look information: {e}")
+
         result = video_gen.generate_avatar_video(
             script_text=script_text,
             avatar_id=avatar_id,
@@ -1416,6 +1430,7 @@ def generate_real_video():
             'status': 'pending_approval',
             'scheduled_time': scheduled_time.isoformat(),
             'video_url': result.get('video_url'),
+            'source_image_url': look_image_url,  # HeyGen avatar source image (from look)
             'thumbnail_url': custom_thumbnail_path or result.get('thumbnail_url'),  # Use custom thumbnail if available
             'video_duration': int(result.get('duration') or 0),
             'video_type': 'marketing_video',
@@ -5315,9 +5330,11 @@ def api_regenerate_video(post_id: str):
         log_info(f"📹 Video ID: {video_id}")
         log_info(f"📹 Video URL: {video_url or 'Processing...'}")
 
-        # Update generation_prompt with motion_prompt
+        # Update generation_prompt with motion_prompt and image_url
         if motion_prompt:
             gen_data['motion_prompt'] = motion_prompt
+        if image_url:
+            gen_data['image_url'] = image_url  # Store for scheduler to retrieve later
 
         # Update post with video info
         update_data = {
@@ -5325,6 +5342,10 @@ def api_regenerate_video(post_id: str):
             'generation_prompt': json.dumps(gen_data),
             'updated_at': datetime.now(SA_TZ).isoformat()
         }
+
+        # Add source_image_url if available (HeyGen avatar source image)
+        if image_url:
+            update_data['source_image_url'] = image_url
 
         if video_url:
             # Video completed immediately

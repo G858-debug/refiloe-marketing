@@ -210,12 +210,46 @@ class SocialMediaScheduler:
                         # Video is ready! Update post
                         log_info(f"✅ Video completed: {video_url}")
 
-                        self.supabase_client.table('social_posts').update({
+                        # Try to get source_image_url from post's generation_prompt
+                        source_image_url = None
+                        try:
+                            # Get full post data to extract generation_prompt
+                            full_post_result = self.supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+                            if full_post_result.data and len(full_post_result.data) > 0:
+                                full_post = full_post_result.data[0]
+                                generation_prompt = full_post.get('generation_prompt')
+
+                                # Parse generation_prompt to get image_url if available
+                                if generation_prompt:
+                                    import json
+                                    try:
+                                        if isinstance(generation_prompt, str):
+                                            gen_data = json.loads(generation_prompt)
+                                        else:
+                                            gen_data = generation_prompt
+
+                                        # Try to get image_url from generation_prompt
+                                        source_image_url = gen_data.get('image_url') or gen_data.get('look_image_url')
+
+                                        if source_image_url:
+                                            log_info(f"Found source_image_url in generation_prompt: {source_image_url[:50]}...")
+                                    except json.JSONDecodeError:
+                                        pass
+                        except Exception as e:
+                            log_warning(f"Could not retrieve source_image_url for post {post_id}: {e}")
+
+                        update_data = {
                             'video_url': video_url,
                             'status': 'pending_approval',
                             'media_generation_completed_at': datetime.now(SA_TIMEZONE).isoformat(),
                             'updated_at': datetime.now(SA_TIMEZONE).isoformat()
-                        }).eq('id', post_id).execute()
+                        }
+
+                        # Add source_image_url if we found it
+                        if source_image_url:
+                            update_data['source_image_url'] = source_image_url
+
+                        self.supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
 
                         log_info(f"✅ Post {post_id} updated to pending_approval")
                         videos_completed += 1
