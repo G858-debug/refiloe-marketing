@@ -57,6 +57,70 @@ HEYGEN_API_KEY_ENV = "HEYGEN_API_KEY"
 # South African timezone
 SA_TZ = pytz.timezone('Africa/Johannesburg')
 
+# Predefined motion prompts for video generation
+MOTION_PROMPTS = [
+    {
+        'id': 'auto',
+        'name': '🤖 Auto (Let AI decide)',
+        'prompt': None,
+        'description': 'Avatar IV automatically generates natural gestures based on script content'
+    },
+    {
+        'id': 'warm_encouraging',
+        'name': '😊 Warm & Encouraging',
+        'prompt': 'Warm and encouraging demeanor, uses open hand gestures, friendly smile, welcoming body language',
+        'description': 'Perfect for motivational and supportive content'
+    },
+    {
+        'id': 'energetic_presenter',
+        'name': '⚡ Energetic Presenter',
+        'prompt': 'Energetic and dynamic presenter, emphatic hand gestures, points for emphasis, animated expressions',
+        'description': 'Great for exciting announcements and tips'
+    },
+    {
+        'id': 'calm_professional',
+        'name': '💼 Calm & Professional',
+        'prompt': 'Calm and professional, minimal but purposeful gestures, confident posture, measured movements',
+        'description': 'Ideal for educational and business content'
+    },
+    {
+        'id': 'empathetic_understanding',
+        'name': '🤝 Empathetic & Understanding',
+        'prompt': 'Empathetic and understanding, gentle hand movements, soft expressions, occasional nods, compassionate demeanor',
+        'description': 'Best for relatable and emotional content'
+    },
+    {
+        'id': 'excited_enthusiastic',
+        'name': '🎉 Excited & Enthusiastic',
+        'prompt': 'Excited and enthusiastic, big expressive gestures, wide eyes, animated facial expressions, high energy',
+        'description': 'Perfect for celebrations and exciting news'
+    },
+    {
+        'id': 'thoughtful_expert',
+        'name': '🧠 Thoughtful Expert',
+        'prompt': 'Thoughtful expert sharing insights, chin touches, contemplative pauses, knowing nods, authoritative but approachable',
+        'description': 'Great for sharing expertise and insights'
+    },
+    {
+        'id': 'conversational_friendly',
+        'name': '💬 Conversational & Friendly',
+        'prompt': 'Casual conversational style, natural hand movements, relaxed posture, like talking to a friend',
+        'description': 'Ideal for casual, relatable content'
+    },
+    {
+        'id': 'inspirational_leader',
+        'name': '🌟 Inspirational Leader',
+        'prompt': 'Inspirational leader, strong purposeful gestures, direct eye contact, commanding presence, motivating energy',
+        'description': 'Best for leadership and motivational speeches'
+    },
+    {
+        'id': 'storyteller',
+        'name': '📖 Storyteller',
+        'prompt': 'Engaging storyteller, varied expressions matching narrative, descriptive hand movements, dramatic pauses',
+        'description': 'Perfect for sharing stories and experiences'
+    }
+]
+
 
 def init_supabase():
     """Initialize Supabase client with connection verification"""
@@ -4274,9 +4338,10 @@ def api_get_post(post_id: str):
 
         post = result.data[0]
 
-        # Parse generation_prompt to extract video_script and image_prompt
+        # Parse generation_prompt to extract video_script, image_prompt, and motion_prompt
         video_script = ''
         image_prompt = ''
+        motion_prompt = None
 
         if post.get('generation_prompt'):
             try:
@@ -4286,6 +4351,7 @@ def api_get_post(post_id: str):
                     prompt_data = post['generation_prompt']
                 video_script = prompt_data.get('video_script', '')
                 image_prompt = prompt_data.get('image_prompt', '')
+                motion_prompt = prompt_data.get('motion_prompt')
             except:
                 pass
 
@@ -4314,6 +4380,7 @@ def api_get_post(post_id: str):
                 'hashtags': hashtags_str,
                 'video_script': video_script,
                 'image_prompt': image_prompt,
+                'motion_prompt': motion_prompt,
                 'is_pinned': post.get('is_pinned', False),
                 'video_url': post.get('video_url', ''),
                 'media_url': post.get('media_url', '')
@@ -4816,6 +4883,227 @@ def api_regenerate_media(post_id):
 
     except Exception as e:
         log_error(f"❌ Error resetting media for {post_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/motion-prompts', methods=['GET'])
+def api_get_motion_prompts():
+    """Get list of available motion prompts for video generation."""
+    return jsonify({
+        'success': True,
+        'prompts': MOTION_PROMPTS
+    })
+
+
+@app.route('/api/dashboard/regenerate-video/<string:post_id>', methods=['POST'])
+def api_regenerate_video(post_id: str):
+    """Regenerate video for a post using the current script and selected motion prompt."""
+    log_info(f"📥 Request: /api/dashboard/regenerate-video/{post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime
+        import json
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Get request data
+        data = request.get_json() or {}
+        motion_prompt = data.get('motion_prompt', '').strip() or None
+
+        # Fetch the post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Check if post is a video type
+        if post.get('post_type') != 'video' and not post.get('video_url'):
+            return jsonify({'success': False, 'error': 'This post is not a video post'}), 400
+
+        # Don't allow regenerating published posts
+        if post.get('status') == 'published':
+            return jsonify({'success': False, 'error': 'Cannot regenerate a published video'}), 400
+
+        # Get the video script from generation_prompt
+        generation_prompt = post.get('generation_prompt')
+        video_script = None
+
+        if generation_prompt:
+            try:
+                if isinstance(generation_prompt, str):
+                    gen_data = json.loads(generation_prompt)
+                else:
+                    gen_data = generation_prompt
+                video_script = gen_data.get('video_script', '')
+            except:
+                pass
+
+        if not video_script:
+            return jsonify({'success': False, 'error': 'No video script found for this post'}), 400
+
+        log_info(f"🎬 Regenerating video for post {post_id}")
+        log_info(f"📝 Script length: {len(video_script)} chars")
+        log_info(f"🎭 Motion prompt: {motion_prompt or 'None (auto)'}")
+
+        # Update post status to generating
+        supabase_client.table('social_posts').update({
+            'status': 'generating',
+            'video_url': None,
+            'video_id': None,
+            'media_generation_started_at': datetime.now(SA_TZ).isoformat(),
+            'media_generation_completed_at': None,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        # Initialize video generator
+        from social_media.video_generator import VideoGenerator
+
+        config_path = os.path.join(os.path.dirname(__file__), 'social_media', 'config.yaml')
+        video_gen = VideoGenerator(config_path, supabase_client)
+
+        # Get content theme for avatar selection
+        content_theme = post.get('content_theme', 'general')
+        content_type = content_theme
+
+        # Get voice ID
+        voice_id = os.getenv('HEYGEN_DEFAULT_VOICE_ID', '1bd001e7e50f421d891986aad5158bc8')
+
+        # Generate video using Avatar IV if possible, otherwise standard
+        # Try to get a look/image for Avatar IV
+        from social_media.avatar_mapping import get_avatar_and_look_for_content
+
+        avatar_id, look_info = get_avatar_and_look_for_content(
+            content_text=video_script,
+            content_type=content_type
+        )
+
+        image_url = look_info.get('image_url') if look_info else None
+
+        log_info(f"🎭 Avatar ID: {avatar_id}")
+        log_info(f"🖼️ Image URL: {image_url[:50] if image_url else 'None'}...")
+
+        # Generate video
+        if image_url:
+            # Use Avatar IV (supports gestures)
+            log_info("Using Avatar IV API (supports gestures)")
+            result = video_gen.generate_avatar_iv_video(
+                script=video_script,
+                image_url=image_url,
+                voice_id=voice_id,
+                custom_motion_prompt=motion_prompt,
+                enhance_motion=True,
+                aspect_ratio="9:16",
+                title=post.get('title', 'Regenerated Video'),
+                metadata={
+                    'post_id': post_id,
+                    'regenerated': True,
+                    'motion_prompt': motion_prompt,
+                    'content_theme': content_theme
+                }
+            )
+        else:
+            # Use standard Photo Avatar API
+            log_info("Using Photo Avatar API (standard)")
+            result = video_gen.generate_avatar_video(
+                script_text=video_script,
+                avatar_id=avatar_id,
+                voice_id=voice_id,
+                style='educational',
+                background_music=True,
+                metadata={
+                    'post_id': post_id,
+                    'regenerated': True,
+                    'motion_prompt': motion_prompt
+                },
+                content_type=content_type,
+                wait_for_completion=False
+            )
+
+        if not result:
+            # Reset status on failure
+            supabase_client.table('social_posts').update({
+                'status': 'pending_approval',
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('id', post_id).execute()
+
+            return jsonify({'success': False, 'error': 'Video generation failed'}), 500
+
+        video_id = result.get('video_id')
+        video_url = result.get('video_url')
+
+        log_info(f"📹 Video ID: {video_id}")
+        log_info(f"📹 Video URL: {video_url or 'Processing...'}")
+
+        # Update post with video info
+        update_data = {
+            'video_id': video_id,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Store motion prompt in generation_prompt
+        if motion_prompt:
+            try:
+                if isinstance(generation_prompt, str):
+                    gen_data = json.loads(generation_prompt)
+                else:
+                    gen_data = generation_prompt or {}
+                gen_data['motion_prompt'] = motion_prompt
+                update_data['generation_prompt'] = json.dumps(gen_data)
+            except:
+                pass
+
+        if video_url:
+            # Video completed immediately
+            update_data['video_url'] = video_url
+            update_data['status'] = 'pending_approval'
+            update_data['media_generation_completed_at'] = datetime.now(SA_TZ).isoformat()
+
+            supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+            log_info(f"✅ Video regenerated successfully for post {post_id}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Video regenerated successfully!',
+                'video_id': video_id,
+                'video_url': video_url,
+                'status': 'completed'
+            })
+        else:
+            # Video still processing
+            update_data['status'] = 'generating'
+
+            supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+            log_info(f"⏳ Video generation started for post {post_id}, video_id: {video_id}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Video generation started. Check back in a few minutes.',
+                'video_id': video_id,
+                'status': 'processing'
+            })
+
+    except Exception as e:
+        log_error(f"❌ Regenerate video failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+
+        # Try to reset status
+        try:
+            supabase_client.table('social_posts').update({
+                'status': 'pending_approval',
+                'updated_at': datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+            }).eq('id', post_id).execute()
+        except:
+            pass
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
