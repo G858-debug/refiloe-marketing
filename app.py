@@ -4160,6 +4160,129 @@ def api_reschedule_post(post_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/upload-to-facebook/<string:post_id>', methods=['POST'])
+def api_upload_to_facebook(post_id: str):
+    """Manually upload a scheduled video post to Facebook as a draft."""
+    log_info(f"📥 Request: /api/dashboard/upload-to-facebook/{post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        import pytz
+        from datetime import datetime
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Fetch the post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Check if it's a video post
+        if post.get('post_type') != 'video' and not post.get('video_url'):
+            return jsonify({'success': False, 'error': 'This is not a video post'}), 400
+
+        # Check if already uploaded to Facebook
+        if post.get('facebook_post_id'):
+            return jsonify({
+                'success': False,
+                'error': 'Already uploaded to Facebook',
+                'facebook_post_id': post.get('facebook_post_id')
+            }), 400
+
+        # Check credentials
+        page_access_token = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN')
+        page_id = os.getenv('FACEBOOK_PAGE_ID')
+
+        if not page_access_token or not page_id:
+            return jsonify({'success': False, 'error': 'Facebook credentials not configured'}), 500
+
+        video_url = post.get('video_url')
+        if not video_url:
+            return jsonify({'success': False, 'error': 'No video URL found for this post'}), 400
+
+        log_info(f"📤 Uploading video to Facebook as draft for post {post_id}")
+
+        # Upload to Facebook as draft
+        from social_media.facebook_poster import FacebookPoster
+
+        fb_poster = FacebookPoster()
+
+        # Build description with schedule hint
+        description = post.get('content_text', '')
+        scheduled_time = post.get('scheduled_time')
+
+        if scheduled_time:
+            from datetime import datetime as dt
+            try:
+                if isinstance(scheduled_time, str):
+                    scheduled_dt = dt.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                else:
+                    scheduled_dt = scheduled_time
+                scheduled_dt = scheduled_dt.astimezone(SA_TZ)
+                schedule_hint = scheduled_dt.strftime('%a, %d %b %Y at %H:%M SAST')
+                description = f"{description}\n\n---\n📅 Suggested posting: {schedule_hint}"
+            except Exception as e:
+                log_warning(f"Could not format schedule hint: {e}")
+
+        # Upload video as draft
+        fb_result = fb_poster.post_video(
+            video_url=video_url,
+            description=description,
+            title=post.get('title', 'Refiloe Video'),
+            published=False  # Draft mode
+        )
+
+        if fb_result and fb_result.get('id'):
+            facebook_post_id = fb_result.get('id')
+
+            log_info(f"✅ Video uploaded to Facebook as draft: {facebook_post_id}")
+
+            # Update post with Facebook ID and status
+            supabase_client.table('social_posts').update({
+                'facebook_post_id': facebook_post_id,
+                'status': 'awaiting_music',
+                'updated_at': datetime.now(SA_TZ).isoformat()
+            }).eq('id', post_id).execute()
+
+            # Send WhatsApp notification
+            try:
+                from utils.whatsapp_notifier import WhatsAppNotifier
+                notifier = WhatsAppNotifier()
+
+                creator_studio_url = f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}"
+
+                notifier.send_video_ready_template(
+                    video_title=post.get('title', 'Video'),
+                    creator_studio_url=creator_studio_url,
+                    caption_preview=post.get('content_text', '')[:150]
+                )
+                log_info("✅ WhatsApp notification sent")
+            except Exception as e:
+                log_warning(f"Could not send WhatsApp notification: {e}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Video uploaded to Facebook as draft!',
+                'facebook_post_id': facebook_post_id,
+                'creator_studio_url': f"https://business.facebook.com/latest/content_library?asset_id={facebook_post_id}",
+                'status': 'awaiting_music'
+            })
+        else:
+            log_error(f"Facebook upload failed: {fb_result}")
+            return jsonify({'success': False, 'error': 'Facebook upload failed'}), 500
+
+    except Exception as e:
+        log_error(f"❌ Upload to Facebook failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/mark-published/<string:post_id>', methods=['POST'])
 def api_mark_published(post_id: str):
     """Manually mark a post as published (for videos after adding music in Creator Studio)."""

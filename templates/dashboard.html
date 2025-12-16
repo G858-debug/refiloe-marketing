@@ -1669,6 +1669,11 @@
                 buttons = `
                     <p class="status-message">📅 Will post automatically at scheduled time</p>
                     <div class="post-actions">
+                        ${(post.post_type === 'video' || post.video_url) && !post.facebook_post_id ? `
+                            <button class="btn btn-sm" style="background-color: #1877f2; color: white;" onclick="uploadToFacebook('${post.id}')" title="Upload to Facebook as draft">
+                                📤 Upload to Facebook
+                            </button>
+                        ` : ''}
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
@@ -1939,6 +1944,39 @@
             } catch (error) {
                 console.error('Error marking post as published:', error);
                 showToast('Failed to update post status', 'error');
+            }
+        }
+
+        async function uploadToFacebook(postId) {
+            if (!confirm('Upload this video to Facebook as a draft?\n\nYou can then add music in Creator Studio.')) {
+                return;
+            }
+
+            showToast('Uploading to Facebook...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/upload-to-facebook/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Uploaded to Facebook! Check WhatsApp for Creator Studio link.', 'success');
+
+                    // Open Creator Studio in new tab
+                    if (data.creator_studio_url) {
+                        window.open(data.creator_studio_url, '_blank');
+                    }
+
+                    loadPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showToast('Failed to upload to Facebook', 'error');
             }
         }
 
