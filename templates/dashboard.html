@@ -654,6 +654,14 @@
             .post-actions { width: 100%; }
             .post-actions .btn { flex: 1; justify-content: center; }
         }
+
+        /* Pinned Post Modal */
+        #pinned-post-modal {
+            display: none;
+        }
+        #pinned-post-modal.active {
+            display: flex;
+        }
     </style>
 </head>
 <body>
@@ -715,6 +723,9 @@
             </button>
             <button class="btn btn-success" onclick="generateWeeklyContent()">
                 📅 Generate Weekly Content (7 days)
+            </button>
+            <button class="btn" onclick="openPinnedPostModal()" style="background-color: #9333ea; border-color: #9333ea; color: white;">
+                📌 Create Pinned Post
             </button>
             <button class="btn btn-primary" onclick="approveAll()">
                 ✅ Approve All Pending
@@ -849,6 +860,96 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="confirmReschedule()">Reschedule</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pinned Post Modal -->
+    <div class="modal-overlay" id="pinned-post-modal">
+        <div class="modal" style="max-width: 500px;">
+            <h3>📌 Create Pinned Post</h3>
+            <p style="color: #6b7280; margin-bottom: 15px;">
+                Create a post for a specific date. Existing posts will be pushed forward automatically.
+            </p>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-date" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Date (cannot be changed later):
+                </label>
+                <input
+                    type="date"
+                    id="pinned-date"
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+                >
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-title" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Title (e.g., "Christmas Post"):
+                </label>
+                <input
+                    type="text"
+                    id="pinned-title"
+                    placeholder="Christmas Day Post"
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+                >
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-reason" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Reason (for your reference):
+                </label>
+                <input
+                    type="text"
+                    id="pinned-reason"
+                    placeholder="Holiday special, Product launch, etc."
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+                >
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-type" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Post Type:
+                </label>
+                <select
+                    id="pinned-type"
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+                >
+                    <option value="video">Video</option>
+                    <option value="image">Image</option>
+                    <option value="carousel">Carousel</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-content" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Post Content / Caption:
+                </label>
+                <textarea
+                    id="pinned-content"
+                    rows="5"
+                    placeholder="Write your post content here..."
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"
+                ></textarea>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label for="pinned-script" style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    Video Script (if video post):
+                </label>
+                <textarea
+                    id="pinned-script"
+                    rows="4"
+                    placeholder="Script for HeyGen video generation (optional)..."
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"
+                ></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closePinnedPostModal()">Cancel</button>
+                <button class="btn" onclick="createPinnedPost()" style="background-color: #9333ea; border-color: #9333ea; color: white;">
+                    📌 Create Pinned Post
+                </button>
             </div>
         </div>
     </div>
@@ -1174,6 +1275,7 @@
             card.innerHTML = `
                 <div class="post-header">
                     <span class="post-type ${postType}">${postType}</span>
+                    ${post.is_pinned ? '<span style="color: #9333ea; margin-left: 5px;" title="Pinned - date cannot be changed">📌</span>' : ''}
                     ${statusBadge}
                 </div>
 
@@ -1328,9 +1430,7 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="approvePost('${post.id}')" class="btn btn-success">✅ Approve Content (Stage 1)</button>
-                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
-                            📅 Reschedule
-                        </button>
+                        ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1339,9 +1439,7 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
-                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
-                            📅 Reschedule
-                        </button>
+                        ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1350,9 +1448,7 @@
                 buttons = `
                     <p class="status-message">⏱️ Generating media... This takes 30-90 seconds.</p>
                     <div class="post-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
-                            📅 Reschedule
-                        </button>
+                        ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1373,9 +1469,7 @@
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
                             🔄 Regenerate ${mediaType}
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
-                            📅 Reschedule
-                        </button>
+                        ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1384,9 +1478,7 @@
                 buttons = `
                     <p class="status-message">📅 Will post automatically at scheduled time</p>
                     <div class="post-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">
-                            📅 Reschedule
-                        </button>
+                        ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
                 `;
@@ -1959,6 +2051,79 @@
             } catch (error) {
                 console.error('Error rescheduling:', error);
                 showToast('Failed to reschedule post', 'error');
+            }
+        }
+
+        // Pinned Post functions
+        function openPinnedPostModal() {
+            // Set default date to tomorrow
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateStr = tomorrow.toISOString().split('T')[0];
+            document.getElementById('pinned-date').value = dateStr;
+
+            // Clear other fields
+            document.getElementById('pinned-title').value = '';
+            document.getElementById('pinned-reason').value = '';
+            document.getElementById('pinned-content').value = '';
+            document.getElementById('pinned-script').value = '';
+            document.getElementById('pinned-type').value = 'video';
+
+            // Show modal
+            document.getElementById('pinned-post-modal').classList.add('active');
+        }
+
+        function closePinnedPostModal() {
+            document.getElementById('pinned-post-modal').classList.remove('active');
+        }
+
+        async function createPinnedPost() {
+            const scheduledDate = document.getElementById('pinned-date').value;
+            const title = document.getElementById('pinned-title').value;
+            const reason = document.getElementById('pinned-reason').value;
+            const postType = document.getElementById('pinned-type').value;
+            const contentText = document.getElementById('pinned-content').value;
+            const videoScript = document.getElementById('pinned-script').value;
+
+            if (!scheduledDate) {
+                showToast('Please select a date', 'error');
+                return;
+            }
+
+            if (!contentText) {
+                showToast('Please enter post content', 'error');
+                return;
+            }
+
+            try {
+                showToast('Creating pinned post...', 'info');
+
+                const response = await fetch(`${API_BASE}/api/dashboard/create-pinned-post`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scheduled_date: scheduledDate,
+                        title: title || `Pinned Post - ${scheduledDate}`,
+                        pinned_reason: reason,
+                        post_type: postType,
+                        content_text: contentText,
+                        video_script: videoScript,
+                        content_theme: 'special_event'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(data.message || 'Pinned post created!', 'success');
+                    closePinnedPostModal();
+                    refreshPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error creating pinned post:', error);
+                showToast('Failed to create pinned post', 'error');
             }
         }
 
