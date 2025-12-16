@@ -262,9 +262,9 @@ class SocialMediaScheduler:
                         if source_image_url:
                             update_data['source_image_url'] = source_image_url
 
-                        # Add video_duration if available
+                        # Add video_duration if available (convert float to int for INTEGER column)
                         if duration:
-                            update_data['video_duration'] = duration
+                            update_data['video_duration'] = int(duration)
 
                         self.supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
 
