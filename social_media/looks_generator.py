@@ -840,6 +840,57 @@ class LooksGenerator:
             log_error(f"Error updating look with motion: {exc}")
             return False
 
+    def wait_for_look_ready(self, photo_avatar_id: str, max_wait_seconds: int = 120, poll_interval: int = 5) -> Dict:
+        """Wait for a photo avatar look to be ready for use.
+
+        Args:
+            photo_avatar_id: The photo avatar ID to check
+            max_wait_seconds: Maximum time to wait (default 120 seconds)
+            poll_interval: Seconds between status checks (default 5)
+
+        Returns:
+            Dict with 'ready': True/False and 'status': current status
+        """
+        log_info(f"Waiting for look {photo_avatar_id} to be ready (max {max_wait_seconds}s)...")
+
+        start_time = time.time()
+        attempts = 0
+
+        while time.time() - start_time < max_wait_seconds:
+            attempts += 1
+
+            try:
+                # Get the photo avatar status
+                response = self._get_with_retry(
+                    f"/v2/photo_avatar/{photo_avatar_id}"
+                )
+
+                if response:
+                    data = response.get('data', {})
+                    status = data.get('status', 'unknown')
+
+                    log_info(f"Look status check #{attempts}: {status}")
+
+                    if status == 'completed':
+                        log_info(f"✅ Look {photo_avatar_id} is ready after {int(time.time() - start_time)}s")
+                        return {'ready': True, 'status': status, 'data': data}
+                    elif status == 'failed':
+                        log_error(f"❌ Look {photo_avatar_id} failed to process")
+                        return {'ready': False, 'status': status, 'error': 'Look processing failed'}
+                    # If pending, continue polling
+                else:
+                    log_warning(f"Status check returned empty response")
+
+            except Exception as e:
+                log_warning(f"Error checking look status: {e}")
+
+            # Wait before next poll
+            time.sleep(poll_interval)
+
+        # Timeout
+        log_error(f"❌ Timeout waiting for look {photo_avatar_id} after {max_wait_seconds}s")
+        return {'ready': False, 'status': 'timeout', 'error': f'Timeout after {max_wait_seconds} seconds'}
+
     def generate_look_with_motion(
         self,
         group_id: Optional[str] = None,
