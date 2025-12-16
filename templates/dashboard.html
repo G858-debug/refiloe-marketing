@@ -1543,6 +1543,53 @@
             return badges[status] || '<span class="status-badge">Unknown</span>';
         }
 
+        function getPostHashtags(post) {
+            // First try the hashtags field
+            let hashtags = post.hashtags;
+
+            // Check if it's valid
+            if (hashtags && typeof hashtags === 'string') {
+                try {
+                    const parsed = JSON.parse(hashtags);
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0] !== '[]') {
+                        return parsed;
+                    }
+                } catch (e) {
+                    // Not valid JSON, treat as comma-separated string
+                    if (hashtags.includes('#')) {
+                        return hashtags.split(/[\s,]+/).filter(h => h.startsWith('#'));
+                    }
+                }
+            } else if (Array.isArray(hashtags) && hashtags.length > 0 && hashtags[0] !== '[]') {
+                return hashtags;
+            }
+
+            // Fallback: extract from generation_prompt
+            if (post.generation_prompt) {
+                try {
+                    let genData = post.generation_prompt;
+                    if (typeof genData === 'string') {
+                        genData = JSON.parse(genData);
+                    }
+                    if (genData.hashtags && Array.isArray(genData.hashtags)) {
+                        return genData.hashtags;
+                    }
+                } catch (e) {
+                    // Could not parse
+                }
+            }
+
+            // Fallback: extract from content_text
+            if (post.content_text) {
+                const hashtagMatches = post.content_text.match(/#\w+/g);
+                if (hashtagMatches) {
+                    return hashtagMatches;
+                }
+            }
+
+            return [];
+        }
+
         function getActionButtons(post, status) {
             console.log(`Getting action buttons for post ${post.id}, status: ${status}, type: ${post.post_type}`);
 
@@ -1552,6 +1599,11 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="approvePost('${post.id}')" class="btn btn-success">✅ Approve Content (Stage 1)</button>
+                        ${(post.post_type === 'video' || post.video_url) ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
+                                🎬 Regenerate
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
@@ -1562,6 +1614,11 @@
                 buttons = `
                     <div class="post-actions">
                         <button onclick="generateMedia('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                        ${(post.post_type === 'video' || post.video_url) ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
+                                🎬 Regenerate
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
@@ -1572,6 +1629,11 @@
                 buttons = `
                     <p class="status-message">⏱️ Generating media... This takes 30-90 seconds.</p>
                     <div class="post-actions">
+                        ${(post.post_type === 'video' || post.video_url) ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
+                                🎬 Regenerate
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
@@ -1615,6 +1677,11 @@
                         <button class="btn btn-success btn-sm" onclick="markAsPublished('${post.id}')">
                             ✅ Mark as Published
                         </button>
+                        ${(post.post_type === 'video' || post.video_url) ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
+                                🎬 Regenerate
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
@@ -1624,6 +1691,11 @@
                 buttons = `
                     <p class="status-message">📅 Will post automatically at scheduled time</p>
                     <div class="post-actions">
+                        ${(post.post_type === 'video' || post.video_url) ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
+                                🎬 Regenerate
+                            </button>
+                        ` : ''}
                         <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
@@ -2264,7 +2336,10 @@
                 document.getElementById('edit-content').value = post.content_text || '';
                 document.getElementById('edit-video-script').value = post.video_script || '';
                 document.getElementById('edit-image-prompt').value = post.image_prompt || '';
-                document.getElementById('edit-hashtags').value = post.hashtags || '';
+
+                // Get hashtags using the helper function
+                const hashtags = getPostHashtags(post);
+                document.getElementById('edit-hashtags').value = Array.isArray(hashtags) ? hashtags.join(' ') : (hashtags || '');
 
                 // Show/hide video script section based on post type
                 const videoScriptSection = document.getElementById('edit-video-script-section');

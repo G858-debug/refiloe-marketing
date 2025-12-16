@@ -4260,13 +4260,31 @@ def api_edit_post(post_id: str):
 
         # Update hashtags
         if 'hashtags' in data:
-            # Handle both string and array input
-            hashtags = data['hashtags']
-            if isinstance(hashtags, str):
-                # Parse comma-separated or space-separated hashtags
-                hashtags = [h.strip() for h in hashtags.replace(',', ' ').split() if h.strip()]
-            update_data['hashtags'] = hashtags
-            log_info(f"📝 Updating hashtags")
+            hashtags_value = data['hashtags']
+
+            # If it's a string that looks like comma-separated tags, convert to array
+            if isinstance(hashtags_value, str):
+                if hashtags_value.startswith('['):
+                    # Already JSON-like, try to parse
+                    try:
+                        hashtags_list = json.loads(hashtags_value)
+                        update_data['hashtags'] = json.dumps(hashtags_list)
+                    except:
+                        # Split by comma or space
+                        tags = [t.strip() for t in hashtags_value.replace(',', ' ').split() if t.strip()]
+                        # Ensure each tag starts with #
+                        tags = ['#' + t.lstrip('#') for t in tags if t]
+                        update_data['hashtags'] = json.dumps(tags)
+                else:
+                    # Plain string, split into tags
+                    tags = [t.strip() for t in hashtags_value.replace(',', ' ').split() if t.strip()]
+                    # Ensure each tag starts with #
+                    tags = ['#' + t.lstrip('#') for t in tags if t]
+                    update_data['hashtags'] = json.dumps(tags)
+            elif isinstance(hashtags_value, list):
+                update_data['hashtags'] = json.dumps(hashtags_value)
+
+            log_info(f"📝 Updating hashtags: {update_data.get('hashtags')}")
 
         # Update generation_prompt (contains video_script, image_prompt, etc.)
         # We need to merge with existing data
