@@ -35,8 +35,8 @@ DEFAULT_LORA_WEIGHT = 1.00  # Recommended strength
 
 # Default generation settings
 # Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
-# Using 832x1024 for approximately 4:5 portrait ratio
-DEFAULT_WIDTH = 832
+# Using 576x1024 for 9:16 portrait ratio (Facebook Reels/HeyGen Avatar IV compatibility)
+DEFAULT_WIDTH = 576
 DEFAULT_HEIGHT = 1024
 
 # Alternative supported dimensions for reference:
@@ -476,7 +476,7 @@ class LeonardoGenerator:
 
             Style: High-quality professional photography, natural lighting,
             Instagram-ready, warm color palette with beige and earthy tones.
-            4:5 portrait aspect ratio optimized for mobile viewing.
+            9:16 portrait aspect ratio optimized for mobile viewing and Reels.
             """
             return enhanced
 
