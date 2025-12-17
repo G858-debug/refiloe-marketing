@@ -588,6 +588,24 @@ class FacebookPoster:
 
                     if uploaded_ids:
                         post_data['image_ids'] = uploaded_ids
+            # Check for carousel images
+            elif post_record.get('carousel_image_urls'):
+                log_info(f"Posting carousel with {len(post_record['carousel_image_urls'])} images")
+                carousel_urls = post_record.get('carousel_image_urls', [])
+                if carousel_urls and isinstance(carousel_urls, list):
+                    uploaded_ids = []
+                    for img_url in carousel_urls:
+                        try:
+                            fb_image_id = self.upload_image(img_url)
+                            uploaded_ids.append({'media_fbid': fb_image_id})
+                        except Exception as img_error:
+                            log_warning(f"Failed to upload carousel image {img_url}: {img_error}")
+
+                    if uploaded_ids:
+                        post_data['image_ids'] = uploaded_ids
+                        log_info(f"Uploaded {len(uploaded_ids)} carousel images to Facebook")
+                    else:
+                        log_warning("No carousel images could be uploaded, posting as text-only")
 
             # Post to Facebook
             result = self.post_to_page(post_data)
