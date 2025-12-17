@@ -13,6 +13,7 @@ import os
 import time
 import requests
 import yaml
+import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import pytz
@@ -101,9 +102,14 @@ class FacebookPoster:
                 'access_token': self.page_access_token
             }
 
-            # Add images if provided
+            # Add images if provided (multi-photo post)
             if post_data.get('image_ids'):
-                post_params['attached_media'] = post_data['image_ids']
+                # Facebook requires indexed parameters for attached_media
+                # Format: attached_media[0]={"media_fbid":"123"}, attached_media[1]={"media_fbid":"456"}
+                for idx, media_item in enumerate(post_data['image_ids']):
+                    # Each item should be a dict like {'media_fbid': '123'}
+                    # Convert to JSON string as Facebook expects
+                    post_params[f'attached_media[{idx}]'] = json.dumps(media_item)
 
             # Add scheduled time if provided
             if post_data.get('scheduled_time'):
