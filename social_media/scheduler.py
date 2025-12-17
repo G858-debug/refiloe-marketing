@@ -683,14 +683,8 @@ class SocialMediaScheduler:
 
             poster = FacebookPoster(page_access_token, page_id, self.supabase_client)
 
-            # Prepare post data
-            post_data = {
-                "content_text": post.get("content_text", ""),
-                "image_ids": post.get("image_ids") or [],
-            }
-
-            # Call Facebook API
-            result = poster.post_to_page(post_data)
+            # Pass full post record to handle videos, images, and carousels
+            result = poster.post_approved_content(post)
 
             if result.get("success"):
                 facebook_post_id = result.get("post_id")
