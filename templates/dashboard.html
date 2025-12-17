@@ -1719,6 +1719,11 @@
                                 📤 Upload to Facebook
                             </button>
                         ` : ''}
+                        ${(post.post_type === 'image' || post.post_type === 'carousel') ? `
+                            <button class="btn btn-sm" style="background-color: #22c55e; color: white;" onclick="postNow('${post.id}')" title="Post to Facebook immediately">
+                                🚀 Post Now
+                            </button>
+                        ` : ''}
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
@@ -2022,6 +2027,34 @@
             } catch (error) {
                 console.error('Upload error:', error);
                 showToast('Failed to upload to Facebook', 'error');
+            }
+        }
+
+        // Post image/carousel immediately
+        async function postNow(postId) {
+            if (!confirm('Post this content to Facebook now?')) {
+                return;
+            }
+
+            showToast('Posting to Facebook...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/approval/post-now/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Posted to Facebook successfully!', 'success');
+                    loadPosts();
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Post now error:', error);
+                showToast('Failed to post to Facebook', 'error');
             }
         }
 
