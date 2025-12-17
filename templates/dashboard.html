@@ -675,6 +675,24 @@
         #pinned-post-modal.active {
             display: flex;
         }
+
+        /* Change Look Modal Styles */
+        .look-btn {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .look-btn:hover {
+            background: #fff8e8;
+            border-color: #AAB396;
+        }
+
+        .look-btn strong {
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -1093,6 +1111,57 @@
                 <button id="confirm-generate-btn" onclick="confirmGenerateMedia()" style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold;">
                     🎬 Generate Video
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Cover Look Modal -->
+    <div id="change-look-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="close-modal" onclick="closeChangeLookModal()">&times;</span>
+            <h3>🎨 Change Refiloe's Look</h3>
+            <p style="color: #666; margin-bottom: 15px;">Select a style for the carousel cover image:</p>
+
+            <input type="hidden" id="change-look-post-id" value="">
+
+            <div class="look-options" style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn look-btn" onclick="regenerateCover('workout')" style="text-align: left; padding: 12px 15px;">
+                    🏋️ <strong>Gym/Workout</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Athletic wear, gym setting with equipment</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('fitness')" style="text-align: left; padding: 12px 15px;">
+                    💪 <strong>Fitness Studio</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Instructor look, bright studio with mirrors</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('professional')" style="text-align: left; padding: 12px 15px;">
+                    👔 <strong>Professional</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Blazer, modern co-working space</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('business')" style="text-align: left; padding: 12px 15px;">
+                    💼 <strong>Business/Corporate</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Executive office, power blazer</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('educational')" style="text-align: left; padding: 12px 15px;">
+                    📚 <strong>Educational</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Home office, cardigan, teaching gesture</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('motivational')" style="text-align: left; padding: 12px 15px;">
+                    ✨ <strong>Motivational</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Inspiring space, energetic pose</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('casual')" style="text-align: left; padding: 12px 15px;">
+                    ☀️ <strong>Casual/Outdoor</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Relaxed outfit, outdoor café setting</span>
+                </button>
+                <button class="btn look-btn" onclick="regenerateCover('community')" style="text-align: left; padding: 12px 15px;">
+                    🤝 <strong>Community</strong>
+                    <span style="display: block; font-size: 12px; color: #666;">Friendly casual, coffee shop vibe</span>
+                </button>
+            </div>
+
+            <div id="change-look-loading" style="display: none; text-align: center; padding: 20px;">
+                <p>⏳ Generating new cover image...</p>
+                <p style="font-size: 12px; color: #666;">This takes about 15-20 seconds</p>
             </div>
         </div>
     </div>
@@ -1678,6 +1747,11 @@
                         <button onclick="approveMedia('${post.id}')" class="btn btn-success">
                             ✅ Approve ${mediaType} (Stage 2)
                         </button>
+                        ${post.post_type === 'carousel' ? `
+                            <button class="btn btn-sm" style="background-color: #f59e0b; color: white;" onclick="openChangeLookModal('${post.id}')" title="Change Refiloe's look on the cover">
+                                🎨 Change Look
+                            </button>
+                        ` : ''}
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
                             🔄 Regenerate ${mediaType}
                         </button>
@@ -2630,6 +2704,60 @@
             currentRegeneratePostId = null;
             regenerateModalOpen = false;
         }
+
+        // Change Look Modal functions
+        function openChangeLookModal(postId) {
+            document.getElementById('change-look-post-id').value = postId;
+            document.getElementById('change-look-modal').style.display = 'flex';
+            document.getElementById('change-look-loading').style.display = 'none';
+            document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+        }
+
+        function closeChangeLookModal() {
+            document.getElementById('change-look-modal').style.display = 'none';
+        }
+
+        async function regenerateCover(contentType) {
+            const postId = document.getElementById('change-look-post-id').value;
+
+            // Show loading, hide buttons
+            document.getElementById('change-look-loading').style.display = 'block';
+            document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'none');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-cover/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content_type: contentType })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`✅ Cover updated with ${contentType} look!`, 'success');
+                    closeChangeLookModal();
+                    loadPosts(); // Refresh to show new cover
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    // Show buttons again
+                    document.getElementById('change-look-loading').style.display = 'none';
+                    document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+                }
+            } catch (error) {
+                console.error('Error regenerating cover:', error);
+                showToast('Failed to regenerate cover', 'error');
+                // Show buttons again
+                document.getElementById('change-look-loading').style.display = 'none';
+                document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+            }
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('change-look-modal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeChangeLookModal();
+            }
+        });
 
         function loadMotionPromptsForModal() {
             var select = document.getElementById('motion-prompt-select');
