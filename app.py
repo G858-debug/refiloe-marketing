@@ -4007,8 +4007,12 @@ def api_approve_media(post_id):
         has_media = False
         if post.get('post_type') == 'video' and post.get('video_url'):
             has_media = True
-        elif post.get('post_type') in ['image', 'carousel'] and post.get('media_url'):
+        elif post.get('post_type') == 'image' and (post.get('media_url') or post.get('image_url')):
             has_media = True
+        elif post.get('post_type') == 'carousel':
+            carousel_urls = post.get('carousel_image_urls')
+            if carousel_urls and isinstance(carousel_urls, list) and len(carousel_urls) > 0:
+                has_media = True
 
         if not has_media:
             log_error(f"❌ Post {post_id} has no media generated yet")
