@@ -168,9 +168,14 @@ class FacebookPoster:
                     image_data = f.read()
             
             # Prepare upload parameters
+            # Set published=False so image is uploaded but NOT posted individually
+            # This allows the image to be used in multi-image posts via attached_media
             files = {'source': image_data}
-            data = {'access_token': self.page_access_token}
-            
+            data = {
+                'access_token': self.page_access_token,
+                'published': 'false'  # Critical: prevents individual posting
+            }
+
             # Upload to Facebook
             url = f"{self.base_url}/{self.page_id}/photos"
             response = self._make_api_request('POST', url, files=files, data=data)
