@@ -726,9 +726,6 @@ class CarouselTemplateGenerator:
 
         current_y = content_start_y
 
-        # Determine if we should use numbers (only if multiple bullets)
-        use_numbers = len(bullets) > 1
-
         for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets
             # Clean the bullet text
             clean_bullet = ''.join(char for char in bullet if ord(char) < 128 and ord(char) >= 32)
@@ -755,12 +752,8 @@ class CarouselTemplateGenerator:
                 lines_to_draw[-1] = last_line
 
             for i, line in enumerate(lines_to_draw):
-                # CENTER ALIGN all text
-                if use_numbers and i == 0:
-                    # Add number prefix for multiple bullets
-                    display_line = f"{idx + 1}. {line}"
-                else:
-                    display_line = line
+                # CENTER ALIGN all text - no numbering
+                display_line = line
 
                 # Calculate center position
                 bbox = draw.textbbox((0, 0), display_line, font=large_body_font)
