@@ -5409,7 +5409,7 @@ def regenerate_carousel_look(post_id):
             return jsonify({'success': False, 'error': 'Post is not a carousel'}), 400
 
         # Get the avatar look
-        look_result = supabase_client.table('avatar_looks').select('*').eq('id', look_id).execute()
+        look_result = supabase_client.table('photo_avatar_looks').select('*').eq('id', look_id).execute()
         if not look_result.data or len(look_result.data) == 0:
             return jsonify({'success': False, 'error': 'Avatar look not found'}), 404
 
