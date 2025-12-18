@@ -2728,7 +2728,7 @@
             container.innerHTML = '';
 
             try {
-                const response = await fetch(`${API_BASE}/admin/api/avatar-looks`);
+                const response = await fetch('/admin/api/avatar-looks');
                 const data = await response.json();
 
                 if (data.success && data.looks && data.looks.length > 0) {
