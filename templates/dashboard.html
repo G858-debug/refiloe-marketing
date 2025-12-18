@@ -1694,7 +1694,7 @@
             else if (status === 'approved') {
                 buttons = `
                     <div class="post-actions">
-                        <button onclick="openGenerateMediaModal('${post.id}')" class="btn btn-primary">🎬 Generate Media</button>
+                        <button onclick="openGenerateMediaModal('${post.id}', '${post.post_type}')" class="btn btn-primary">🎬 Generate Media</button>
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
@@ -3031,10 +3031,69 @@
         // ========== END REGENERATE VIDEO FUNCTIONS ==========
 
         // ========== GENERATE MEDIA MODAL FUNCTIONS ==========
-        function openGenerateMediaModal(postId) {
-            document.getElementById('generate-media-post-id').value = postId;
-            document.getElementById('generate-use-avatar-iv-checkbox').checked = false; // Default to Photo Avatar
-            document.getElementById('generate-media-modal').style.display = 'flex';
+        function openGenerateMediaModal(postId, postType) {
+            console.log('Generate media for post:', postId, 'type:', postType);
+
+            if (postType === 'carousel') {
+                // For carousels, call generation directly (no modal needed)
+                generateCarouselMedia(postId);
+            } else if (postType === 'image') {
+                // For images, call generation directly
+                generateImageMedia(postId);
+            } else {
+                // For videos, show the existing modal with Avatar IV option
+                document.getElementById('generate-media-post-id').value = postId;
+                document.getElementById('generate-use-avatar-iv-checkbox').checked = false;
+                document.getElementById('generate-media-modal').style.display = 'flex';
+            }
+        }
+
+        // Add new function for carousel generation
+        async function generateCarouselMedia(postId) {
+            showToast('Generating carousel images...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Carousel images generated!', 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error generating carousel:', error);
+                showToast('Failed to generate carousel', 'error');
+            }
+        }
+
+        // Add new function for image generation
+        async function generateImageMedia(postId) {
+            showToast('Generating image...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Image generated!', 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error generating image:', error);
+                showToast('Failed to generate image', 'error');
+            }
         }
 
         function closeGenerateMediaModal() {
