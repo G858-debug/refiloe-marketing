@@ -662,11 +662,11 @@ def view_post(post_id: str):
     images = _fetch_post_images(db, post_id)
     video = _fetch_post_video(db, post_id)
 
-    # Debug logging for video data
+    # Debug logging for video data (only warn if this is actually a video post)
     if video:
         log_info(f"Fetched video data: {json.dumps(video, indent=2, default=str)}")
-    else:
-        log_warning(f"No video found for post {post_id}")
+    elif post.get('post_type') == 'video':
+        log_warning(f"No video found for video post {post_id}")
 
     return render_template(
         "approval/view.html",
