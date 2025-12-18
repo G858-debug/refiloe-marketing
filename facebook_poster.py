@@ -583,11 +583,16 @@ class FacebookPoster:
             if post_record.get('video_url'):
                 log_info(f"Posting as video: {post_record['video_url']}")
                 post_data['video_url'] = post_record['video_url']
-            # Otherwise check for images
-            elif post_record.get('image_ids'):
+            # Otherwise check for images (image_ids array OR single image_url)
+            elif post_record.get('image_ids') or post_record.get('image_url'):
                 log_info(f"Posting with images")
-                # If image_ids are URLs, we need to upload them first
+                # Get image URLs - either from image_ids array or single image_url
                 image_urls = post_record.get('image_ids', [])
+
+                # If image_ids is empty but image_url exists, use that
+                if not image_urls and post_record.get('image_url'):
+                    image_urls = [post_record.get('image_url')]
+                    log_info(f"Using image_url field: {image_urls[0][:50]}...")
                 if image_urls and isinstance(image_urls, list):
                     uploaded_ids = []
                     for img_url in image_urls:
