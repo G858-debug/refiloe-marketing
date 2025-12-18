@@ -2787,13 +2787,17 @@
                 return;
             }
 
-            // Show loading state
-            document.getElementById('change-look-loading').style.display = 'block';
-            document.getElementById('look-cards-container').style.display = 'none';
-            document.getElementById('confirm-change-look-btn').disabled = true;
+            console.log('Regenerating carousel with look:', selectedLookId);
+
+            // Disable button to prevent double-clicks
+            var confirmBtn = document.getElementById('confirm-change-look-btn');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = '⏳ Regenerating...';
+            }
 
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-look/${currentChangeLookPostId}`, {
+                const response = await fetch('/api/dashboard/regenerate-carousel-look/' + currentChangeLookPostId, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ look_id: selectedLookId })
@@ -2802,23 +2806,23 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('✅ Cover regenerated with new look!', 'success');
+                    showToast('✅ Carousel queued for regeneration with new look!', 'success');
                     closeChangeLookModal();
-                    loadPosts(); // Refresh to show new cover
+                    setTimeout(function() { location.reload(); }, 1500);
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                    // Restore UI
-                    document.getElementById('change-look-loading').style.display = 'none';
-                    document.getElementById('look-cards-container').style.display = 'grid';
-                    document.getElementById('confirm-change-look-btn').disabled = false;
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Regenerate with Selected Look';
+                    }
                 }
             } catch (error) {
-                console.error('Error regenerating cover:', error);
-                showToast('Failed to regenerate cover', 'error');
-                // Restore UI
-                document.getElementById('change-look-loading').style.display = 'none';
-                document.getElementById('look-cards-container').style.display = 'grid';
-                document.getElementById('confirm-change-look-btn').disabled = false;
+                console.error('Error regenerating carousel:', error);
+                showToast('Failed to regenerate carousel', 'error');
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Regenerate with Selected Look';
+                }
             }
         }
 
