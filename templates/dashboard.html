@@ -693,6 +693,28 @@
         .look-btn strong {
             color: #333;
         }
+
+        /* Look Card Styles */
+        .look-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            position: relative;
+        }
+
+        .look-card:hover {
+            border-color: #f59e0b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+        }
+
+        .look-card:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -1117,48 +1139,34 @@
 
     <!-- Change Cover Look Modal -->
     <div id="change-look-modal" class="modal" style="display:none;">
-        <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-content" style="max-width: 600px;">
             <span class="close-modal" onclick="closeChangeLookModal()">&times;</span>
             <h3>🎨 Change Refiloe's Look</h3>
             <p style="color: #666; margin-bottom: 15px;">Select a style for the carousel cover image:</p>
 
             <input type="hidden" id="change-look-post-id" value="">
 
-            <div class="look-options" style="display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn look-btn" onclick="regenerateCover('workout')" style="text-align: left; padding: 12px 15px;">
-                    🏋️ <strong>Gym/Workout</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Athletic wear, gym setting with equipment</span>
+            <!-- Loading state while fetching looks -->
+            <div id="looks-loading" style="display: none; text-align: center; padding: 20px;">
+                <p>⏳ Loading available looks...</p>
+            </div>
+
+            <!-- Container for dynamically loaded look cards -->
+            <div id="look-cards-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <!-- Look cards will be inserted here -->
+            </div>
+
+            <!-- Regenerate button -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn" onclick="closeChangeLookModal()" style="background-color: #ddd; color: #333;">
+                    Cancel
                 </button>
-                <button class="btn look-btn" onclick="regenerateCover('fitness')" style="text-align: left; padding: 12px 15px;">
-                    💪 <strong>Fitness Studio</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Instructor look, bright studio with mirrors</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('professional')" style="text-align: left; padding: 12px 15px;">
-                    👔 <strong>Professional</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Blazer, modern co-working space</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('business')" style="text-align: left; padding: 12px 15px;">
-                    💼 <strong>Business/Corporate</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Executive office, power blazer</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('educational')" style="text-align: left; padding: 12px 15px;">
-                    📚 <strong>Educational</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Home office, cardigan, teaching gesture</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('motivational')" style="text-align: left; padding: 12px 15px;">
-                    ✨ <strong>Motivational</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Inspiring space, energetic pose</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('casual')" style="text-align: left; padding: 12px 15px;">
-                    ☀️ <strong>Casual/Outdoor</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Relaxed outfit, outdoor café setting</span>
-                </button>
-                <button class="btn look-btn" onclick="regenerateCover('community')" style="text-align: left; padding: 12px 15px;">
-                    🤝 <strong>Community</strong>
-                    <span style="display: block; font-size: 12px; color: #666;">Friendly casual, coffee shop vibe</span>
+                <button id="confirm-change-look-btn" class="btn" onclick="confirmChangeLook()" style="background-color: #f59e0b; color: white;" disabled>
+                    Regenerate with Selected Look
                 </button>
             </div>
 
+            <!-- Loading state while regenerating -->
             <div id="change-look-loading" style="display: none; text-align: center; padding: 20px;">
                 <p>⏳ Generating new cover image...</p>
                 <p style="font-size: 12px; color: #666;">This takes about 15-20 seconds</p>
@@ -2706,49 +2714,167 @@
         }
 
         // Change Look Modal functions
+        let currentChangeLookPostId = null;
+        let selectedLookId = null;
+
         function openChangeLookModal(postId) {
-            document.getElementById('change-look-post-id').value = postId;
+            currentChangeLookPostId = postId;
+            selectedLookId = null;
+
+            // Show modal
             document.getElementById('change-look-modal').style.display = 'flex';
+
+            // Reset states
             document.getElementById('change-look-loading').style.display = 'none';
-            document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+            document.getElementById('looks-loading').style.display = 'none';
+            document.getElementById('look-cards-container').style.display = 'grid';
+            document.getElementById('confirm-change-look-btn').disabled = true;
+
+            // Load available looks
+            loadAvailableLooks();
         }
 
         function closeChangeLookModal() {
             document.getElementById('change-look-modal').style.display = 'none';
+            currentChangeLookPostId = null;
+            selectedLookId = null;
         }
 
-        async function regenerateCover(contentType) {
-            const postId = document.getElementById('change-look-post-id').value;
+        async function loadAvailableLooks() {
+            const container = document.getElementById('look-cards-container');
+            const loadingDiv = document.getElementById('looks-loading');
 
-            // Show loading, hide buttons
-            document.getElementById('change-look-loading').style.display = 'block';
-            document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'none');
+            // Show loading state
+            loadingDiv.style.display = 'block';
+            container.innerHTML = '';
 
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-cover/${postId}`, {
+                const response = await fetch(`${API_BASE}/admin/api/avatar-looks`);
+                const data = await response.json();
+
+                if (data.success && data.looks && data.looks.length > 0) {
+                    // Hide loading
+                    loadingDiv.style.display = 'none';
+
+                    // Filter only active looks
+                    const activeLooks = data.looks.filter(look => look.is_active);
+
+                    if (activeLooks.length === 0) {
+                        container.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No active looks available</p>';
+                        return;
+                    }
+
+                    // Create cards for each look
+                    activeLooks.forEach(look => {
+                        const card = document.createElement('div');
+                        card.className = 'look-card';
+                        card.setAttribute('data-look-id', look.id);
+                        card.onclick = () => selectLook(look.id);
+
+                        // Build description
+                        let description = look.outfit_description || '';
+                        if (look.environment_description) {
+                            description += (description ? ', ' : '') + look.environment_description;
+                        }
+
+                        // Truncate if too long
+                        if (description.length > 100) {
+                            description = description.substring(0, 97) + '...';
+                        }
+
+                        // Get emoji for content type
+                        const emojiMap = {
+                            'workout': '🏋️',
+                            'fitness': '💪',
+                            'professional': '👔',
+                            'business': '💼',
+                            'educational': '📚',
+                            'motivational': '✨',
+                            'casual': '☀️',
+                            'community': '🤝',
+                            'default': '🎨'
+                        };
+                        const emoji = emojiMap[look.content_type] || emojiMap['default'];
+
+                        card.innerHTML = `
+                            <div style="font-size: 24px; margin-bottom: 8px;">${emoji}</div>
+                            <div style="font-weight: bold; margin-bottom: 4px;">${look.label || look.content_type}</div>
+                            <div style="font-size: 12px; color: #666; line-height: 1.4;">${description}</div>
+                            ${look.is_default ? '<div style="margin-top: 8px; font-size: 11px; color: #f59e0b; font-weight: bold;">DEFAULT</div>' : ''}
+                        `;
+
+                        container.appendChild(card);
+                    });
+                } else {
+                    loadingDiv.style.display = 'none';
+                    container.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No looks available</p>';
+                }
+            } catch (error) {
+                console.error('Error loading avatar looks:', error);
+                loadingDiv.style.display = 'none';
+                container.innerHTML = '<p style="text-align: center; color: #d32f2f; grid-column: 1/-1;">Failed to load looks</p>';
+                showToast('Failed to load avatar looks', 'error');
+            }
+        }
+
+        function selectLook(lookId) {
+            selectedLookId = lookId;
+
+            // Update visual selection
+            document.querySelectorAll('.look-card').forEach(card => {
+                if (card.getAttribute('data-look-id') === lookId) {
+                    card.style.borderColor = '#f59e0b';
+                    card.style.backgroundColor = '#fff7ed';
+                    card.style.transform = 'scale(1.02)';
+                } else {
+                    card.style.borderColor = '#ddd';
+                    card.style.backgroundColor = 'white';
+                    card.style.transform = 'scale(1)';
+                }
+            });
+
+            // Enable confirm button
+            document.getElementById('confirm-change-look-btn').disabled = false;
+        }
+
+        async function confirmChangeLook() {
+            if (!selectedLookId || !currentChangeLookPostId) {
+                showToast('Please select a look first', 'error');
+                return;
+            }
+
+            // Show loading state
+            document.getElementById('change-look-loading').style.display = 'block';
+            document.getElementById('look-cards-container').style.display = 'none';
+            document.getElementById('confirm-change-look-btn').disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-look/${currentChangeLookPostId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content_type: contentType })
+                    body: JSON.stringify({ look_id: selectedLookId })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(`✅ Cover updated with ${contentType} look!`, 'success');
+                    showToast('✅ Cover regenerated with new look!', 'success');
                     closeChangeLookModal();
                     loadPosts(); // Refresh to show new cover
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                    // Show buttons again
+                    // Restore UI
                     document.getElementById('change-look-loading').style.display = 'none';
-                    document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+                    document.getElementById('look-cards-container').style.display = 'grid';
+                    document.getElementById('confirm-change-look-btn').disabled = false;
                 }
             } catch (error) {
                 console.error('Error regenerating cover:', error);
                 showToast('Failed to regenerate cover', 'error');
-                // Show buttons again
+                // Restore UI
                 document.getElementById('change-look-loading').style.display = 'none';
-                document.querySelectorAll('.look-btn').forEach(btn => btn.style.display = 'block');
+                document.getElementById('look-cards-container').style.display = 'grid';
+                document.getElementById('confirm-change-look-btn').disabled = false;
             }
         }
 
