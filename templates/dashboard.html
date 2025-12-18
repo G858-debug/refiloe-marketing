@@ -2697,17 +2697,24 @@
         let selectedLookId = null;
 
         function openChangeLookModal(postId) {
+            console.log('Opening change look modal for post:', postId);
             currentChangeLookPostId = postId;
             selectedLookId = null;
 
             // Show modal
-            document.getElementById('change-look-modal').style.display = 'flex';
+            var modal = document.getElementById('change-look-modal');
+            if (!modal) {
+                console.error('Modal not found');
+                alert('Error: Modal not found');
+                return;
+            }
+            modal.style.display = 'flex';
 
-            // Reset states
-            document.getElementById('change-look-loading').style.display = 'none';
-            document.getElementById('looks-loading').style.display = 'none';
-            document.getElementById('look-cards-container').style.display = 'grid';
-            document.getElementById('confirm-change-look-btn').disabled = true;
+            // Reset confirm button
+            var confirmBtn = document.getElementById('confirm-change-look-btn');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+            }
 
             // Load available looks
             loadAvailableLooks();
