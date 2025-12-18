@@ -5390,169 +5390,66 @@ def regenerate_carousel_cover(post_id):
 
 @app.route('/api/dashboard/regenerate-carousel-look/<post_id>', methods=['POST'])
 def regenerate_carousel_look(post_id):
-    """Regenerate carousel cover with a specific avatar look from the database."""
-    from social_media.carousel_template_generator import CarouselTemplateGenerator
-    from social_media.leonardo_generator import LeonardoGenerator
-    from utils.supabase_storage import upload_to_supabase_storage
-    import requests
-    from io import BytesIO
-    from PIL import Image
-
-    log_info(f"📥 Request: /api/dashboard/regenerate-carousel-look/{post_id}")
-
+    """Queue carousel for regeneration with a different avatar look."""
     try:
-        # Get look_id from request
         data = request.get_json() or {}
         look_id = data.get('look_id')
 
         if not look_id:
-            return jsonify({'success': False, 'error': 'look_id is required'}), 400
+            return jsonify({'success': False, 'error': 'No look_id provided'}), 400
 
-        log_info(f"🎨 Regenerating cover with look_id: {look_id}")
-
-        # Fetch the avatar look from database
-        look_result = supabase_client.table('photo_avatar_looks').select('*').eq('id', look_id).execute()
-        if not look_result.data:
-            return jsonify({'success': False, 'error': 'Avatar look not found'}), 404
-
-        avatar_look = look_result.data[0]
-        content_type = avatar_look.get('content_type', 'educational')
-        look_label = avatar_look.get('label', content_type)
-
-        log_info(f"📝 Using avatar look: {look_label} (content_type: {content_type})")
-
-        # Fetch the post
-        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
-        if not result.data:
+        # Get the post
+        post_result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+        if not post_result.data or len(post_result.data) == 0:
             return jsonify({'success': False, 'error': 'Post not found'}), 404
 
-        post = result.data[0]
+        post = post_result.data[0]
 
-        # Verify it's a carousel
         if post.get('post_type') != 'carousel':
             return jsonify({'success': False, 'error': 'Post is not a carousel'}), 400
 
-        # Get carousel URLs
-        carousel_urls = post.get('carousel_image_urls', [])
-        if not carousel_urls:
-            return jsonify({'success': False, 'error': 'No carousel images found'}), 400
+        # Get the avatar look
+        look_result = supabase_client.table('avatar_looks').select('*').eq('id', look_id).execute()
+        if not look_result.data or len(look_result.data) == 0:
+            return jsonify({'success': False, 'error': 'Avatar look not found'}), 404
 
-        # Get title from generation_prompt or title field
-        title = post.get('title', 'Carousel')
-        if post.get('generation_prompt'):
+        look = look_result.data[0]
+
+        # Update the post's generation_prompt with the new look
+        import json
+        generation_prompt = post.get('generation_prompt', '{}')
+        if isinstance(generation_prompt, str):
             try:
-                import json
-                gen_data = json.loads(post['generation_prompt']) if isinstance(post['generation_prompt'], str) else post['generation_prompt']
-                if gen_data.get('carousel_slides'):
-                    first_slide = gen_data['carousel_slides'][0]
-                    title = first_slide.get('text', title)
+                generation_prompt = json.loads(generation_prompt)
             except:
-                pass
+                generation_prompt = {}
 
-        log_info(f"📝 Generating new cover for title: '{title[:50]}...'")
+        generation_prompt['selected_look_id'] = look_id
+        generation_prompt['photo_avatar_id'] = look.get('photo_avatar_id')
+        generation_prompt['look_label'] = look.get('label', look.get('content_type', 'custom'))
 
-        # Generate new cover with Leonardo using the selected look's content_type
-        leonardo = LeonardoGenerator()
-        result = leonardo.generate_carousel_cover(
-            title=title,
-            content_type=content_type,
-            width=1080,
-            height=1350,
-        )
-
-        image_url = result.get('image_url')
-        if not image_url:
-            return jsonify({'success': False, 'error': 'Leonardo generation failed'}), 500
-
-        log_info(f"✅ New cover generated: {image_url}")
-
-        # Download the image
-        response = requests.get(image_url, timeout=30)
-        response.raise_for_status()
-        image = Image.open(BytesIO(response.content))
-        image = image.convert('RGB')
-        image = image.resize((1080, 1350), Image.Resampling.LANCZOS)
-
-        # Initialize carousel generator just for the overlay
-        carousel_gen = CarouselTemplateGenerator()
-
-        # Add brand overlay (accent bar, slide number)
-        total_slides = len(carousel_urls)
-        image = carousel_gen._add_cover_overlay(image, 1, total_slides)
-
-        # Save to temp file
-        import tempfile
-        import os
-        temp_path = os.path.join(tempfile.gettempdir(), f"cover_{post_id}.png")
-        image.save(temp_path, 'PNG', quality=95)
-
-        # Upload to Supabase Storage (overwrite existing)
-        storage_path = f"carousel-images/{post_id}/slide_01.png"
-
-        with open(temp_path, 'rb') as f:
-            file_data = f.read()
-
-        # Upload using the storage client
-        from utils.supabase_storage import upload_to_supabase_storage
-        public_url, error = upload_to_supabase_storage(
-            supabase_client,
-            'media',
-            storage_path,
-            file_data,
-            'image/png'
-        )
-
-        if error:
-            log_error(f"Failed to upload new cover: {error}")
-            return jsonify({'success': False, 'error': f'Upload failed: {error}'}), 500
-
-        # Update the first URL in carousel_image_urls (add cache buster)
-        import time
-        cache_buster = int(time.time())
-        new_cover_url = f"{public_url}?v={cache_buster}"
-        carousel_urls[0] = new_cover_url
-
-        # Update database - also store the look_id in generation_prompt for future reference
-        gen_prompt = post.get('generation_prompt', {})
-        if isinstance(gen_prompt, str):
-            try:
-                import json
-                gen_prompt = json.loads(gen_prompt)
-            except:
-                gen_prompt = {}
-
-        # Update the look_id in generation_prompt
-        if isinstance(gen_prompt, dict):
-            gen_prompt['look_id'] = look_id
-            gen_prompt['content_type'] = content_type
-
-        supabase_client.table('social_posts').update({
-            'carousel_image_urls': carousel_urls,
-            'generation_prompt': gen_prompt,
+        # Update post: reset status to approved and clear existing images to trigger regeneration
+        update_data = {
+            'generation_prompt': json.dumps(generation_prompt),
+            'status': 'approved',
+            'carousel_image_urls': None,
             'updated_at': datetime.now(SA_TZ).isoformat()
-        }).eq('id', post_id).execute()
+        }
 
-        log_info(f"✅ Cover regenerated successfully for post {post_id} with look '{look_label}'")
+        supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
 
-        # Cleanup temp file
-        try:
-            os.remove(temp_path)
-        except:
-            pass
+        log_info(f"Carousel {post_id} queued for regeneration with look: {look.get('label', look_id)}")
 
         return jsonify({
             'success': True,
-            'message': f'Cover regenerated with {look_label} look',
-            'new_cover_url': new_cover_url,
-            'look_id': look_id,
-            'look_label': look_label,
-            'content_type': content_type
+            'message': f"Carousel queued for regeneration with '{look.get('label', 'selected')}' look. Generate media to see the new look.",
+            'look_label': look.get('label')
         })
 
     except Exception as e:
-        log_error(f"❌ Error regenerating carousel look: {e}")
+        log_error(f"Error in regenerate_carousel_look: {e}")
         import traceback
-        log_error(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
