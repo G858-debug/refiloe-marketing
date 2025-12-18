@@ -2720,79 +2720,37 @@
         }
 
         async function loadAvailableLooks() {
-            const container = document.getElementById('look-cards-container');
-            const loadingDiv = document.getElementById('looks-loading');
+            var container = document.getElementById('looks-grid');
+            if (!container) {
+                console.error('looks-grid container not found');
+                return;
+            }
 
-            // Show loading state
-            loadingDiv.style.display = 'block';
-            container.innerHTML = '';
+            container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #666;">Loading looks...</p>';
 
             try {
                 const response = await fetch('/admin/api/avatar-looks');
                 const data = await response.json();
 
+                console.log('Avatar looks data:', data);
+
                 if (data.success && data.looks && data.looks.length > 0) {
-                    // Hide loading
-                    loadingDiv.style.display = 'none';
-
-                    // Filter only active looks
-                    const activeLooks = data.looks.filter(look => look.is_active);
-
-                    if (activeLooks.length === 0) {
-                        container.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No active looks available</p>';
-                        return;
-                    }
-
-                    // Create cards for each look
-                    activeLooks.forEach(look => {
-                        const card = document.createElement('div');
-                        card.className = 'look-card';
-                        card.setAttribute('data-look-id', look.id);
-                        card.onclick = () => selectLook(look.id);
-
-                        // Build description
-                        let description = look.outfit_description || '';
-                        if (look.environment_description) {
-                            description += (description ? ', ' : '') + look.environment_description;
-                        }
-
-                        // Truncate if too long
-                        if (description.length > 100) {
-                            description = description.substring(0, 97) + '...';
-                        }
-
-                        // Get emoji for content type
-                        const emojiMap = {
-                            'workout': '🏋️',
-                            'fitness': '💪',
-                            'professional': '👔',
-                            'business': '💼',
-                            'educational': '📚',
-                            'motivational': '✨',
-                            'casual': '☀️',
-                            'community': '🤝',
-                            'default': '🎨'
-                        };
-                        const emoji = emojiMap[look.content_type] || emojiMap['default'];
-
-                        card.innerHTML = `
-                            <div style="font-size: 24px; margin-bottom: 8px;">${emoji}</div>
-                            <div style="font-weight: bold; margin-bottom: 4px;">${look.label || look.content_type}</div>
-                            <div style="font-size: 12px; color: #666; line-height: 1.4;">${description}</div>
-                            ${look.is_default ? '<div style="margin-top: 8px; font-size: 11px; color: #f59e0b; font-weight: bold;">DEFAULT</div>' : ''}
-                        `;
-
-                        container.appendChild(card);
+                    let html = '';
+                    data.looks.forEach(function(look) {
+                        if (look.is_active === false) return;
+                        html += '<div class="look-card" data-look-id="' + look.id + '" onclick="selectLook(\'' + look.id + '\')">' +
+                            '<div class="look-label">' + (look.label || look.content_type || 'Unknown') + '</div>' +
+                            '<div class="look-type">' + (look.content_type || '') + '</div>' +
+                            '</div>';
                     });
+                    container.innerHTML = html;
+                    console.log('Loaded', data.looks.length, 'avatar looks');
                 } else {
-                    loadingDiv.style.display = 'none';
-                    container.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No looks available</p>';
+                    container.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">No looks available</p>';
                 }
             } catch (error) {
-                console.error('Error loading avatar looks:', error);
-                loadingDiv.style.display = 'none';
-                container.innerHTML = '<p style="text-align: center; color: #d32f2f; grid-column: 1/-1;">Failed to load looks</p>';
-                showToast('Failed to load avatar looks', 'error');
+                console.error('Error loading looks:', error);
+                container.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: red;">Error loading looks</p>';
             }
         }
 
