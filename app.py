@@ -5501,15 +5501,25 @@ def change_carousel_look(post_id):
 
         log_info(f"✅ Found look: {look.get('label')} (content_type: {content_type})")
 
-        # Step 5: Get carousel data from generation_prompt
-        generation_prompt = post.get('generation_prompt', '{}')
-        if isinstance(generation_prompt, str):
-            try:
-                generation_prompt = json.loads(generation_prompt)
-            except:
-                generation_prompt = {}
+        # Step 5: Get carousel data from post (check carousel_data field first, then generation_prompt)
+        carousel_data = post.get('carousel_data')
 
-        carousel_data = generation_prompt.get('carousel_data') or generation_prompt.get('carousel_slides')
+        # If carousel_data doesn't exist, try generation_prompt
+        if not carousel_data:
+            generation_prompt = post.get('generation_prompt', '{}')
+            if isinstance(generation_prompt, str):
+                try:
+                    generation_prompt = json.loads(generation_prompt)
+                except:
+                    generation_prompt = {}
+            carousel_data = generation_prompt.get('carousel_data') or generation_prompt.get('carousel_slides')
+
+        # Parse carousel_data if it's a string
+        if isinstance(carousel_data, str):
+            try:
+                carousel_data = json.loads(carousel_data)
+            except:
+                carousel_data = None
 
         if not carousel_data:
             return jsonify({'success': False, 'error': 'No carousel data found in post'}), 400
@@ -5523,12 +5533,30 @@ def change_carousel_look(post_id):
         if not slides or len(slides) == 0:
             return jsonify({'success': False, 'error': 'No slides found in carousel data'}), 400
 
-        # Step 6: Extract cover slide data and update content_type
-        cover_slide = slides[0]
+        # Step 6: Extract cover title from carousel data
+        # The title may be stored in carousel_data.cover.title or in the first slide
+        cover_title = carousel_data.get('cover', {}).get('title', '')
+
+        # If no title in cover key, try the first slide's title
+        if not cover_title:
+            cover_slide = slides[0]
+            cover_title = cover_slide.get('title', 'Untitled')
+        else:
+            cover_slide = slides[0]
+
+        log_info(f"📝 Extracted cover title: {cover_title}")
+
+        # Ensure the cover slide has the proper title
+        cover_slide_with_title = {
+            'type': 'COVER',
+            'title': cover_title,
+            'avatar_path': cover_slide.get('avatar_path', ''),
+            'text': cover_title  # Some templates might use 'text' instead of 'title'
+        }
 
         # Create carousel data for just the cover slide with new content_type
         cover_carousel_data = {
-            'slides': [cover_slide],
+            'slides': [cover_slide_with_title],
             'content_type': content_type
         }
 
