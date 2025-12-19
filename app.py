@@ -1679,8 +1679,10 @@ def reset_to_approved(post_id):
             update_data['image_url'] = None
             log_info(f"Clearing image_url for post {post_id}")
         elif post_type == 'carousel':
-            update_data['carousel_image_urls'] = None
-            log_info(f"Clearing carousel_image_urls for post {post_id}")
+            # NOTE: We do NOT clear carousel_image_urls during reset
+            # This preserves existing slides when changing looks or regenerating individual slides
+            # carousel_image_urls should only be cleared when explicitly regenerating ALL slides
+            log_info(f"Preserving carousel_image_urls for post {post_id} during status reset")
 
         # Update the post
         result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
