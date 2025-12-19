@@ -715,6 +715,19 @@
         .look-card:active {
             transform: translateY(0);
         }
+
+        .look-label {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+
+        .look-type {
+            font-size: 13px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -2695,11 +2708,13 @@
         // Change Look Modal functions
         let currentChangeLookPostId = null;
         let selectedLookId = null;
+        let selectedLookLabel = null;
 
         function openChangeLookModal(postId) {
             console.log('Opening change look modal for post:', postId);
             currentChangeLookPostId = postId;
             selectedLookId = null;
+            selectedLookLabel = null;
 
             // Show modal
             var modal = document.getElementById('change-look-modal');
@@ -2724,6 +2739,7 @@
             document.getElementById('change-look-modal').style.display = 'none';
             currentChangeLookPostId = null;
             selectedLookId = null;
+            selectedLookLabel = null;
         }
 
         async function loadAvailableLooks() {
@@ -2745,8 +2761,9 @@
                     let html = '';
                     data.looks.forEach(function(look) {
                         if (look.is_active === false) return;
-                        html += '<div class="look-card" data-look-id="' + look.id + '" onclick="selectLook(\'' + look.id + '\')">' +
-                            '<div class="look-label">' + (look.label || look.content_type || 'Unknown') + '</div>' +
+                        const lookLabel = look.label || look.content_type || 'Unknown';
+                        html += '<div class="look-card" data-look-id="' + look.id + '" data-look-label="' + lookLabel + '" onclick="selectLook(\'' + look.id + '\', \'' + lookLabel + '\')">' +
+                            '<div class="look-label">' + lookLabel + '</div>' +
                             '<div class="look-type">' + (look.content_type || '') + '</div>' +
                             '</div>';
                     });
@@ -2761,8 +2778,11 @@
             }
         }
 
-        function selectLook(lookId) {
+        function selectLook(lookId, lookLabel) {
             selectedLookId = lookId;
+            selectedLookLabel = lookLabel;
+
+            console.log('Selected look:', lookId, lookLabel);
 
             // Update visual selection
             document.querySelectorAll('.look-card').forEach(card => {
@@ -2782,12 +2802,12 @@
         }
 
         async function confirmChangeLook() {
-            if (!selectedLookId || !currentChangeLookPostId) {
+            if (!selectedLookLabel || !currentChangeLookPostId) {
                 showToast('Please select a look first', 'error');
                 return;
             }
 
-            console.log('Regenerating carousel with look:', selectedLookId);
+            console.log('Changing carousel look to:', selectedLookLabel);
 
             // Disable button to prevent double-clicks
             var confirmBtn = document.getElementById('confirm-change-look-btn');
@@ -2797,16 +2817,16 @@
             }
 
             try {
-                const response = await fetch('/api/dashboard/regenerate-carousel-look/' + currentChangeLookPostId, {
+                const response = await fetch('/api/carousel/change-look/' + currentChangeLookPostId, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ look_id: selectedLookId })
+                    body: JSON.stringify({ look_label: selectedLookLabel })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('✅ Carousel queued for regeneration with new look!', 'success');
+                    showToast('✅ Carousel cover regenerated with new look!', 'success');
                     closeChangeLookModal();
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
@@ -2817,8 +2837,8 @@
                     }
                 }
             } catch (error) {
-                console.error('Error regenerating carousel:', error);
-                showToast('Failed to regenerate carousel', 'error');
+                console.error('Error changing carousel look:', error);
+                showToast('Failed to change carousel look', 'error');
                 if (confirmBtn) {
                     confirmBtn.disabled = false;
                     confirmBtn.textContent = 'Regenerate with Selected Look';
