@@ -1529,9 +1529,12 @@
                         <div style="margin-top:15px; padding-top:15px; border-top:1px solid #e0e0e0;">
                             <div class="media-label">
                                 🖼️ Thumbnail (Facebook Reels Cover)
-                                <button onclick="window.open('${post.thumbnail_url}', '_blank')" class="fullscreen-btn">🔗 View Full Size</button>
+                                <div>
+                                    <button onclick="window.open('${post.thumbnail_url}', '_blank')" class="fullscreen-btn">🔗 View Full Size</button>
+                                    <button onclick="regenerateThumbnail('${post.id}')" class="fullscreen-btn" style="background:#9333ea; margin-left:5px;">🔄 Regenerate</button>
+                                </div>
                             </div>
-                            <img src="${post.thumbnail_url}" alt="Video thumbnail" style="max-width:200px; max-height:356px; border-radius:8px; border:2px solid #ddd; cursor:pointer; object-fit:cover;" onclick="window.open('${post.thumbnail_url}', '_blank')">
+                            <img id="thumbnail-${post.id}" src="${post.thumbnail_url}" alt="Video thumbnail" style="max-width:200px; max-height:356px; border-radius:8px; border:2px solid #ddd; cursor:pointer; object-fit:cover;" onclick="window.open('${post.thumbnail_url}', '_blank')">
                         </div>
                     `;
                 }
@@ -2412,6 +2415,37 @@
             } catch (error) {
                 alert('Error: ' + error.message);
                 location.reload();
+            }
+        }
+
+        // Regenerate thumbnail for a video post
+        async function regenerateThumbnail(postId) {
+            if (!confirm('Regenerate thumbnail with updated styling?')) return;
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Generating...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-thumbnail/${postId}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    alert('✅ Thumbnail regenerated successfully!');
+                    // Update the thumbnail image without full page reload
+                    const thumbnailImg = document.getElementById(`thumbnail-${postId}`);
+                    if (thumbnailImg && data.thumbnail_url) {
+                        thumbnailImg.src = data.thumbnail_url;
+                    }
+                } else {
+                    alert('❌ Failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('❌ Error: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 
