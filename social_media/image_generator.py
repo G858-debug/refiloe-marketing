@@ -190,7 +190,6 @@ class ImageGenerator:
             ]
 
             full_prompt = ', '.join(filter(None, prompt_segments))
-            full_prompt = self.add_lora_to_prompt(full_prompt, self.config.get('image_generation', {}).get('lora_trigger', ''))
             return full_prompt
 
         except Exception as e:
@@ -808,22 +807,6 @@ class ImageGenerator:
 
         return validated_results
 
-    def add_lora_to_prompt(self, prompt: str, lora_trigger: str) -> str:
-        """Add Lora trigger words to prompt
-        
-        Args:
-            prompt: Base prompt
-            lora_trigger: Lora trigger words (currently placeholder)
-            
-        Returns:
-            str: Prompt with Lora trigger words added
-        """
-        # PLACEHOLDER: For when Lora file arrives
-        # Currently returns prompt unchanged
-        if lora_trigger:
-            return f"{lora_trigger}, {prompt}"
-        return prompt
-    
     def check_existing_image(self, prompt_hash: str) -> Optional[Dict]:
         """Check if a similar image already exists to avoid regeneration
 

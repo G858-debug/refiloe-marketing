@@ -445,11 +445,6 @@ image_generation:
     - "High contrast and clear visibility"
     - "Motivational and inspiring mood"
   
-  lora_configuration:
-    status: "Pending - will be updated when Lora file arrives"
-    description: "Specific Lora settings for consistent Refiloe appearance"
-    placeholder: "Configuration to be added when Lora model is available"
-  
   image_specifications:
     carousel_images: "1080x1080px"
     single_images: "1080x1080px or 1080x1350px"
