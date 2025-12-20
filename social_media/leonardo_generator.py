@@ -263,14 +263,15 @@ class LeonardoGenerator:
                 "prompt": enhanced_prompt,
                 "quantity": num_images,
                 "prompt_enhance": "OFF",
-            }
+            },
+            "public": False
         }
 
         # Add reference image guidances for character consistency
         # Only add if use_reference=True and content features Refiloe
         config = CONTENT_TYPE_PROMPTS.get(content_type, {})
         if use_reference and config.get("features_refiloe", True):
-            payload["guidances"] = {
+            payload["parameters"]["guidances"] = {
                 "image_reference": [
                     {
                         "image": {
