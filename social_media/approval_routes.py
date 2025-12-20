@@ -19,6 +19,7 @@ from social_media.database import SocialMediaDatabase
 from social_media.title_card_service import TitleCardService
 from utils.supabase_rest import SupabaseRestClient
 from utils.logger import log_error, log_info, log_warning
+from utils.supabase_storage import get_storage_client
 from facebook_poster import FacebookPoster
 import pytz
 
@@ -345,14 +346,48 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
                     thumbnail_path = result.get('thumbnail_path')
                     log_info(f"✓ Title card added successfully: {processed_video_path}")
 
+                    # Upload processed video to Supabase Storage
+                    processed_video_url = None
+                    storage_client = get_storage_client()
+
+                    if storage_client and processed_video_path:
+                        log_info("Uploading processed video to Supabase Storage...")
+                        storage_dest = f"processed_videos/{post['id']}.mp4"
+
+                        upload_success, public_url, upload_error = storage_client.upload_file(
+                            bucket='media',
+                            file_path=processed_video_path,
+                            destination_path=storage_dest,
+                            content_type='video/mp4'
+                        )
+
+                        if upload_success and public_url:
+                            processed_video_url = public_url
+                            log_info(f"✓ Processed video uploaded to Supabase: {public_url}")
+
+                            # Clean up local processed video file
+                            try:
+                                os.remove(processed_video_path)
+                                log_info(f"✓ Cleaned up local file: {processed_video_path}")
+                            except Exception as cleanup_err:
+                                log_warning(f"Could not delete local file {processed_video_path}: {cleanup_err}")
+                        else:
+                            log_warning(f"Failed to upload processed video to Supabase: {upload_error}")
+                            log_warning("Will use local file path as fallback")
+                            processed_video_url = processed_video_path
+                    else:
+                        if not storage_client:
+                            log_warning("Storage client not available, using local file path")
+                        processed_video_url = processed_video_path
+
                     # Save processed video URL and thumbnail to database
                     log_info("Updating post with processed_video_url and thumbnail_url...")
                     update_fields = {
-                        'processed_video_url': processed_video_path,
+                        'processed_video_url': processed_video_url,
                         'thumbnail_url': thumbnail_path
                     }
                     if _update_post_fields(db, post['id'], update_fields):
-                        log_info(f"✓ Database updated: processed_video_url={processed_video_path}")
+                        log_info(f"✓ Database updated: processed_video_url={processed_video_url}")
                         log_info(f"✓ Database updated: thumbnail_url={thumbnail_path}")
                     else:
                         log_warning("Failed to update post with processed video URL - continuing anyway")
