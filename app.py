@@ -5980,6 +5980,102 @@ def api_regenerate_video(post_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/regenerate-thumbnail/<string:post_id>', methods=['POST'])
+def api_regenerate_thumbnail(post_id: str):
+    """Regenerate thumbnail for a video post without regenerating the video."""
+    log_info(f"📥 Request: /api/dashboard/regenerate-thumbnail/{post_id}")
+
+    try:
+        # Fetch the post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Get required data
+        source_image_url = post.get('source_image_url') or post.get('thumbnail_url')
+        reel_title = post.get('reel_title') or post.get('title')
+
+        if not source_image_url:
+            return jsonify({'success': False, 'error': 'No source image URL available for thumbnail generation'}), 400
+
+        if not reel_title:
+            return jsonify({'success': False, 'error': 'No reel_title or title available for thumbnail generation'}), 400
+
+        log_info(f"🎨 Regenerating thumbnail for post {post_id}")
+        log_info(f"📝 Title: {reel_title[:50]}...")
+        log_info(f"🖼️ Source: {source_image_url[:50]}...")
+
+        # Generate thumbnail
+        from social_media.thumbnail_generator import ThumbnailGenerator
+        import tempfile
+
+        thumbnail_gen = ThumbnailGenerator()
+        local_thumbnail_path = os.path.join(tempfile.gettempdir(), f"thumbnail_{post_id}.jpg")
+
+        thumbnail_result = thumbnail_gen.generate_thumbnail(
+            image_url=source_image_url,
+            title_text=reel_title,
+            output_path=local_thumbnail_path
+        )
+
+        if not thumbnail_result.get('success'):
+            return jsonify({'success': False, 'error': f"Thumbnail generation failed: {thumbnail_result.get('error')}"}), 500
+
+        log_info(f"✅ Thumbnail generated locally: {local_thumbnail_path}")
+
+        # Upload to Supabase Storage
+        from utils.supabase_storage import get_storage_client
+
+        storage_client = get_storage_client()
+        if not storage_client:
+            return jsonify({'success': False, 'error': 'Storage client not available'}), 500
+
+        storage_dest = f"thumbnails/{post_id}.jpg"
+        upload_success, public_url, upload_error = storage_client.upload_file(
+            bucket='media',
+            file_path=local_thumbnail_path,
+            destination_path=storage_dest,
+            content_type='image/jpeg'
+        )
+
+        if not upload_success or not public_url:
+            return jsonify({'success': False, 'error': f"Upload failed: {upload_error}"}), 500
+
+        log_info(f"✅ Thumbnail uploaded: {public_url}")
+
+        # Clean up local file
+        try:
+            os.remove(local_thumbnail_path)
+        except Exception:
+            pass
+
+        # Update database with cache buster to force refresh
+        import time
+        cache_buster = int(time.time())
+        thumbnail_url_with_cache = f"{public_url}?v={cache_buster}"
+
+        supabase_client.table('social_posts').update({
+            'thumbnail_url': thumbnail_url_with_cache,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        log_info(f"✅ Post {post_id} thumbnail updated successfully")
+
+        return jsonify({
+            'success': True,
+            'message': 'Thumbnail regenerated successfully',
+            'thumbnail_url': thumbnail_url_with_cache
+        })
+
+    except Exception as e:
+        log_error(f"❌ Regenerate thumbnail failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/fetch-videos', methods=['POST'])
 def api_fetch_videos_now():
     """Manually trigger video fetching from HeyGen"""
