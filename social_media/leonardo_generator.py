@@ -321,11 +321,11 @@ class LeonardoGenerator:
                 log_error(f"Leonardo error details: {e.response.text}")
             raise LeonardoGenerationError(f"Failed to start generation: {e}")
 
-        # V2 API returns generation ID directly
-        generation_id = generation_data.get("id")
+        # V2 API returns generation ID in nested structure
+        generation_id = generation_data.get("generate", {}).get("generationId")
         if not generation_id:
-            log_error(f"No generation ID in V2 response: {generation_data}")
-            raise LeonardoGenerationError("No generation ID returned")
+            log_error(f"Missing 'generate.generationId' in V2 response. Full response: {generation_data}")
+            raise LeonardoGenerationError("No generation ID found in response - expected 'generate.generationId' field")
 
         log_info(f"Generation started: {generation_id}")
 
