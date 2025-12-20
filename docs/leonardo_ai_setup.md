@@ -12,7 +12,7 @@ Add these to your Railway deployment:
 |----------|----------|-------------|
 | `LEONARDO_API_KEY` | Yes | Your Leonardo AI API key |
 | `LEONARDO_REFILOE_REFERENCE_ID` | No | Image ID of Refiloe reference image for character consistency |
-| `LEONARDO_MODEL_ID` | No | Model ID to use (defaults to Phoenix) |
+| `LEONARDO_MODEL_ID` | No | Model ID to use (defaults to Nano Banana Pro) |
 
 ## Getting Your API Key
 

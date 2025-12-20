@@ -217,7 +217,7 @@ def generate_scroll_stopping_image_prompt(content_theme: str, content_text: str 
     """
     Generate a scroll-stopping image prompt based on content theme.
 
-    These prompts are optimized for Leonardo AI with the Refiloe LoRA model
+    These prompts are optimized for Leonardo AI with the Nano Banana Pro model
     to create engaging, thumb-stopping social media images.
 
     Args:
