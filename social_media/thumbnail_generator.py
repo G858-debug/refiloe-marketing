@@ -43,10 +43,24 @@ class ThumbnailGenerator:
     def _find_bold_font(self) -> Optional[str]:
         """Find a suitable bold sans-serif font on the system."""
         font_candidates = [
+            # DejaVu fonts (commonly available on Linux/Railway)
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            # Liberation fonts
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            # FreeFonts
             "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+            # Ubuntu fonts
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
+            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+            # Noto fonts (very common)
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            # Alternative paths
             "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
         ]
         for font_path in font_candidates:
             if os.path.exists(font_path):
@@ -100,7 +114,15 @@ class ThumbnailGenerator:
         """Get font at specified size."""
         if self._font_path:
             return ImageFont.truetype(self._font_path, size)
-        return ImageFont.load_default()
+
+        # Fallback: Try Pillow 10.1+ load_default with size parameter
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:
+            # Older Pillow - load_default doesn't accept size
+            # Last resort: use load_default (will be tiny)
+            log_warning(f"Pillow version doesn't support sized default font. Text will be very small.")
+            return ImageFont.load_default()
 
     def _calculate_font_size(
         self,
