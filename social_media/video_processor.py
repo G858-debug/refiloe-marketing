@@ -109,7 +109,8 @@ class VideoProcessor:
         self,
         image_path: str,
         output_path: Optional[str] = None,
-        duration: float = DEFAULT_TITLE_CARD_DURATION
+        duration: float = DEFAULT_TITLE_CARD_DURATION,
+        fps: Optional[float] = None
     ) -> str:
         """Convert an image to a video clip (title card).
 
@@ -117,6 +118,7 @@ class VideoProcessor:
             image_path: Path to the thumbnail image (JPEG)
             output_path: Optional output path. Auto-generated if not provided.
             duration: Duration of the title card in seconds.
+            fps: Frame rate. Defaults to FRAME_RATE constant if not provided.
 
         Returns:
             Path to the title card video file.
@@ -124,7 +126,10 @@ class VideoProcessor:
         if output_path is None:
             output_path = os.path.join(self.temp_dir, f"title_card_{os.getpid()}.mp4")
 
-        log_info(f"Creating {duration}s title card from: {image_path}")
+        if fps is None:
+            fps = self.FRAME_RATE
+
+        log_info(f"Creating {duration}s title card from: {image_path} at {fps} fps")
 
         # FFmpeg command to create video from image
         # -loop 1: loop the image
@@ -137,7 +142,7 @@ class VideoProcessor:
             '-c:v', self.VIDEO_CODEC,
             '-t', str(duration),
             '-pix_fmt', self.PIXEL_FORMAT,
-            '-r', str(self.FRAME_RATE),
+            '-r', str(fps),
             output_path
         ]
 
@@ -188,11 +193,35 @@ class VideoProcessor:
 
         return props
 
+    def get_video_info(self, video_path: str) -> dict:
+        """Get video frame rate and audio sample rate using ffprobe."""
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_streams', video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        import json
+        data = json.loads(result.stdout)
+
+        info = {'fps': 30, 'sample_rate': 48000}  # defaults
+
+        for stream in data.get('streams', []):
+            if stream['codec_type'] == 'video':
+                # Parse frame rate (e.g., "30/1" or "25/1")
+                fps_str = stream.get('r_frame_rate', '30/1')
+                num, den = map(int, fps_str.split('/'))
+                info['fps'] = num / den if den else 30
+            elif stream['codec_type'] == 'audio':
+                info['sample_rate'] = int(stream.get('sample_rate', 48000))
+
+        return info
+
     def concatenate_videos(
         self,
         title_card_path: str,
         main_video_path: str,
-        output_path: Optional[str] = None
+        output_path: Optional[str] = None,
+        sample_rate: Optional[int] = None
     ) -> str:
         """Concatenate title card with main video.
 
@@ -202,6 +231,7 @@ class VideoProcessor:
             title_card_path: Path to title card video
             main_video_path: Path to main HeyGen video
             output_path: Optional output path. Auto-generated if not provided.
+            sample_rate: Audio sample rate. Defaults to 48000 if not provided.
 
         Returns:
             Path to concatenated video file.
@@ -211,13 +241,17 @@ class VideoProcessor:
 
         log_info("Concatenating title card with main video...")
 
+        # Default sample rate if not provided
+        if sample_rate is None:
+            sample_rate = 48000
+
         # Get properties of main video
         main_props = self.get_video_properties(main_video_path)
         has_audio = main_props.get('has_audio', True)
         width = main_props.get('width', 1080)
         height = main_props.get('height', 1920)
 
-        log_info(f"Main video: {width}x{height}, has_audio={has_audio}")
+        log_info(f"Main video: {width}x{height}, has_audio={has_audio}, sample_rate={sample_rate}")
 
         # Create concat file list
         concat_list_path = os.path.join(self.temp_dir, f"concat_{os.getpid()}.txt")
@@ -228,11 +262,11 @@ class VideoProcessor:
                 self.temp_dir, f"title_card_audio_{os.getpid()}.mp4"
             )
 
-            # Add silent audio to title card
+            # Add silent audio to title card using detected sample rate
             args = [
                 '-i', title_card_path,
                 '-f', 'lavfi',
-                '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+                '-i', f'anullsrc=channel_layout=stereo:sample_rate={sample_rate}',
                 '-c:v', 'copy',
                 '-c:a', self.AUDIO_CODEC,
                 '-shortest',
@@ -250,11 +284,14 @@ class VideoProcessor:
             f.write(f"file '{main_video_path}'\n")
 
         # Concatenate using concat demuxer
+        # Re-encode audio to ensure sync even if there are slight differences
         args = [
             '-f', 'concat',
             '-safe', '0',
             '-i', concat_list_path,
-            '-c', 'copy',
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-ar', str(sample_rate),
             output_path
         ]
 
@@ -299,20 +336,28 @@ class VideoProcessor:
             # Step 1: Download main video
             main_video_path = self.download_video(video_url)
 
-            # Step 2: Create title card video from thumbnail
+            # Step 2: Probe main video to get fps and sample_rate
+            video_info = self.get_video_info(main_video_path)
+            fps = video_info.get('fps', 30)
+            sample_rate = video_info.get('sample_rate', 48000)
+            log_info(f"Detected video properties: fps={fps}, sample_rate={sample_rate}")
+
+            # Step 3: Create title card video from thumbnail with matching fps
             title_card_path = self.create_title_card_video(
                 thumbnail_path,
-                duration=title_card_duration
+                duration=title_card_duration,
+                fps=fps
             )
 
-            # Step 3: Concatenate
+            # Step 4: Concatenate with matching sample_rate
             if output_path is None:
                 output_path = os.path.join(self.temp_dir, f"final_{os.getpid()}.mp4")
 
             combined_path = self.concatenate_videos(
                 title_card_path,
                 main_video_path,
-                output_path
+                output_path,
+                sample_rate=sample_rate
             )
 
             # Clean up intermediate files
