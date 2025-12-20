@@ -316,7 +316,7 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
 
         # Get video and title card data
         video_url = post.get('video_url')
-        source_image_url = post.get('image_url') or post.get('preview_url')
+        source_image_url = post.get('source_image_url') or post.get('image_url') or post.get('preview_url')
         title_text = post.get('reel_title') or post.get('title', '')
 
         # Process video with title card if we have all required data
@@ -372,10 +372,12 @@ def _upload_video_draft_immediately(db: SocialMediaDatabase, post: Dict) -> Dict
 
         # Prefer processed_video_url (with title card) over original video_url
         video_to_upload = post.get('processed_video_url') or video_url
-        thumb_offset = 0 if post.get('processed_video_url') else 2000
+
+        # Use thumb_offset=0 if we have a processed video with title card, otherwise 2s
+        thumb_offset = 0 if processed_video_path else 2000
 
         log_info(f"Video to upload: {video_to_upload}")
-        log_info(f"Using thumb_offset={thumb_offset} ({'title card frame' if thumb_offset == 0 else 'default 2s offset'})")
+        log_info(f"Using thumb_offset={thumb_offset} ({'title card as thumbnail' if processed_video_path else 'default 2s offset'})")
 
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
