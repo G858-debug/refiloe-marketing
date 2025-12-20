@@ -27,6 +27,7 @@ import traceback
 
 from utils.logger import log_error, log_info, log_warning
 from utils.whatsapp_notifier import WhatsAppNotifier
+from utils.supabase_storage import get_storage_client
 from social_media.weekly_report import WeeklyReportGenerator
 from social_media.thumbnail_generator import ThumbnailGenerator
 
@@ -286,8 +287,35 @@ class SocialMediaScheduler:
                                 )
 
                                 if thumbnail_result.get('success'):
-                                    custom_thumbnail_path = thumbnail_result.get('thumbnail_path')
-                                    log_info(f"✅ Custom thumbnail generated: {custom_thumbnail_path}")
+                                    local_thumbnail_path = thumbnail_result.get('thumbnail_path')
+                                    log_info(f"✅ Custom thumbnail generated locally: {local_thumbnail_path}")
+
+                                    # Upload to Supabase Storage
+                                    storage_client = get_storage_client()
+                                    if storage_client and local_thumbnail_path:
+                                        storage_dest = f"thumbnails/{post_id}.jpg"
+                                        upload_success, public_url, upload_error = storage_client.upload_file(
+                                            bucket='media',
+                                            file_path=local_thumbnail_path,
+                                            destination_path=storage_dest,
+                                            content_type='image/jpeg'
+                                        )
+
+                                        if upload_success and public_url:
+                                            custom_thumbnail_path = public_url
+                                            log_info(f"✅ Thumbnail uploaded to storage: {public_url}")
+
+                                            # Clean up local file
+                                            try:
+                                                os.remove(local_thumbnail_path)
+                                            except Exception:
+                                                pass
+                                        else:
+                                            log_warning(f"⚠️ Failed to upload thumbnail: {upload_error}")
+                                            custom_thumbnail_path = None
+                                    else:
+                                        log_warning("⚠️ Storage client not available, thumbnail not uploaded")
+                                        custom_thumbnail_path = None
                                 else:
                                     log_warning(f"⚠️ Custom thumbnail generation failed: {thumbnail_result.get('error')}")
                             else:
