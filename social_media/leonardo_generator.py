@@ -490,7 +490,10 @@ class LeonardoGenerator:
 
 
     def _poll_for_completion(self, generation_id: str) -> str:
-        """Poll Leonardo V2 API until generation completes.
+        """Poll Leonardo V1 API until generation completes.
+
+        Note: V1 endpoint is used for polling even when using V2 for generation.
+        The V2 API doesn't have a generations status endpoint.
 
         Args:
             generation_id: The generation ID to poll.
@@ -502,11 +505,13 @@ class LeonardoGenerator:
             LeonardoGenerationError: If generation fails or times out.
         """
         start_time = time.time()
+        # Use V1 endpoint for polling (V2 doesn't have a generations status endpoint)
+        poll_url = f"https://cloud.leonardo.ai/api/rest/v1/generations/{generation_id}"
 
         while time.time() - start_time < self.poll_timeout:
             try:
                 response = self.session.get(
-                    f"{LEONARDO_API_BASE}/generations/{generation_id}",
+                    poll_url,
                     timeout=30,
                 )
                 response.raise_for_status()
@@ -516,11 +521,12 @@ class LeonardoGenerator:
                 time.sleep(self.poll_interval)
                 continue
 
-            # V2 API response structure
-            status = data.get("status")
+            # V1 API response structure: {"generations_by_pk": {"generated_images": [...], "status": "..."}}
+            generation_data = data.get("generations_by_pk", {})
+            status = generation_data.get("status")
 
             if status == "COMPLETE":
-                images = data.get("images", [])
+                images = generation_data.get("generated_images", [])
                 if images:
                     image_url = images[0].get("url")
                     log_info(f"Generation complete: {image_url}")
