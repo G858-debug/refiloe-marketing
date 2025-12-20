@@ -219,8 +219,8 @@ class ThumbnailGenerator:
         try:
             log_info(f"Generating thumbnail with text: '{title_text[:50]}...'")
 
-            # Convert to all caps for thumbnail impact
-            title_text = title_text.upper()
+            # Convert to title case for cleaner look
+            title_text = title_text.title()
 
             # Download source image
             image = self._download_image(image_url)
@@ -308,7 +308,7 @@ class ThumbnailGenerator:
 
                 # Draw text outline/stroke for extra thickness (draw text multiple times offset)
                 outline_color = self.SHADOW_COLOR
-                stroke_width = 8  # Pixels of outline thickness for very bold look
+                stroke_width = 20  # Pixels of outline thickness for ultra bold look
 
                 for dx in range(-stroke_width, stroke_width + 1):
                     for dy in range(-stroke_width, stroke_width + 1):
