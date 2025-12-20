@@ -19,18 +19,18 @@ class ThumbnailGenerator:
     # Text styling - high contrast white with shadow
     TEXT_COLOR = (255, 255, 255)  # White
     SHADOW_COLOR = (0, 0, 0)  # Black
-    SHADOW_OFFSET = 4
+    SHADOW_OFFSET = 6
 
     # Semi-transparent bar behind text
     BAR_COLOR = (0, 0, 0)  # Black
-    BAR_OPACITY = 180  # 0-255, where 180 ≈ 70% opacity for better contrast
-    BAR_PADDING_VERTICAL = 50  # Pixels above/below text
-    BAR_PADDING_HORIZONTAL = 60  # Pixels left/right of text
+    BAR_OPACITY = 200  # 0-255, where 200 ≈ 78% opacity for better contrast
+    BAR_PADDING_VERTICAL = 70  # Pixels above/below text
+    BAR_PADDING_HORIZONTAL = 80  # Pixels left/right of text
 
     # Font settings - sized for 1080x1920 vertical video thumbnails
-    DEFAULT_FONT_SIZE = 120
-    MIN_FONT_SIZE = 80
-    MAX_TEXT_WIDTH_RATIO = 0.90  # Text should fit within 90% of image width
+    DEFAULT_FONT_SIZE = 200
+    MIN_FONT_SIZE = 140
+    MAX_TEXT_WIDTH_RATIO = 0.92  # Text should fit within 92% of image width
 
     def __init__(self):
         """Initialize the thumbnail generator."""
