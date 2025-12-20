@@ -28,9 +28,11 @@ class ThumbnailGenerator:
     BAR_PADDING_HORIZONTAL = 80  # Pixels left/right of text
 
     # Font settings - sized for 1080x1920 vertical video thumbnails
-    DEFAULT_FONT_SIZE = 200
-    MIN_FONT_SIZE = 140
-    MAX_TEXT_WIDTH_RATIO = 0.92  # Text should fit within 92% of image width
+    DEFAULT_FONT_SIZE = 180
+    MIN_FONT_SIZE = 100
+    MAX_TEXT_WIDTH_RATIO = 0.85  # Text should fit within 85% of image width (leaves padding on sides)
+    EDGE_PADDING = 40  # Minimum pixels from edge
+    MAX_TEXT_LINES = 3  # Maximum number of text lines
 
     def __init__(self):
         """Initialize the thumbnail generator."""
@@ -129,25 +131,70 @@ class ThumbnailGenerator:
         text: str,
         max_width: int,
         draw: ImageDraw.Draw
-    ) -> Tuple[ImageFont.FreeTypeFont, int, int]:
-        """Calculate appropriate font size to fit text within max_width."""
+    ) -> Tuple[ImageFont.FreeTypeFont, list, int, int]:
+        """Calculate appropriate font size to fit text, with multi-line support.
+
+        Returns: (font, lines, total_width, total_height)
+        """
         font_size = self.DEFAULT_FONT_SIZE
+        line_spacing = 1.2  # 20% extra space between lines
 
         while font_size >= self.MIN_FONT_SIZE:
             font = self._get_font(font_size)
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
+            lines = self._wrap_text(text, font, max_width, draw)
 
-            if text_width <= max_width:
-                return font, text_width, text_height
+            # Check if lines fit within max allowed
+            if len(lines) <= self.MAX_TEXT_LINES:
+                # Calculate total dimensions
+                max_line_width = 0
+                total_height = 0
+
+                for line in lines:
+                    bbox = draw.textbbox((0, 0), line, font=font)
+                    line_width = bbox[2] - bbox[0]
+                    line_height = bbox[3] - bbox[1]
+                    max_line_width = max(max_line_width, line_width)
+                    total_height += int(line_height * line_spacing)
+
+                return font, lines, max_line_width, total_height
 
             font_size -= 4
 
-        # Return minimum size
+        # Return minimum size with wrapped text
         font = self._get_font(self.MIN_FONT_SIZE)
-        bbox = draw.textbbox((0, 0), text, font=font)
-        return font, bbox[2] - bbox[0], bbox[3] - bbox[1]
+        lines = self._wrap_text(text, font, max_width, draw)[:self.MAX_TEXT_LINES]
+
+        max_line_width = 0
+        total_height = 0
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            max_line_width = max(max_line_width, bbox[2] - bbox[0])
+            total_height += int((bbox[3] - bbox[1]) * line_spacing)
+
+        return font, lines, max_line_width, total_height
+
+    def _wrap_text(self, text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.Draw) -> list:
+        """Wrap text to fit within max_width, returning list of lines."""
+        words = text.split()
+        lines = []
+        current_line = []
+
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            bbox = draw.textbbox((0, 0), test_line, font=font)
+            test_width = bbox[2] - bbox[0]
+
+            if test_width <= max_width:
+                current_line.append(word)
+            else:
+                if current_line:
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+
+        if current_line:
+            lines.append(' '.join(current_line))
+
+        return lines
 
     def generate_thumbnail(
         self,
@@ -192,15 +239,14 @@ class ThumbnailGenerator:
             # Create drawing context for measurements
             temp_draw = ImageDraw.Draw(image)
 
-            # Calculate font size and text dimensions
-            max_text_width = int(width * self.MAX_TEXT_WIDTH_RATIO)
-            font, text_width, text_height = self._calculate_font_size(
+            # Calculate font size and text dimensions (with multi-line support)
+            max_text_width = int(width * self.MAX_TEXT_WIDTH_RATIO) - (self.EDGE_PADDING * 2)
+            font, text_lines, text_width, text_height = self._calculate_font_size(
                 title_text, max_text_width, temp_draw
             )
 
             # Calculate bar and text coordinates
             bar_height = text_height + (self.BAR_PADDING_VERTICAL * 2)
-            text_x = (width - text_width) // 2  # Center horizontally
 
             if position == "top":
                 bar_y = 0
@@ -243,17 +289,33 @@ class ThumbnailGenerator:
 
             image = Image.alpha_composite(image, bar_overlay)
 
-            # Draw text with shadow
+            # Draw text with shadow (multi-line support)
             draw = ImageDraw.Draw(image)
 
-            # Shadow
-            draw.text(
-                (text_x + self.SHADOW_OFFSET, text_y + self.SHADOW_OFFSET),
-                title_text, font=font, fill=self.SHADOW_COLOR
-            )
+            # Calculate line height for spacing
+            sample_bbox = draw.textbbox((0, 0), "Ag", font=font)
+            line_height = int((sample_bbox[3] - sample_bbox[1]) * 1.2)
 
-            # Main text
-            draw.text((text_x, text_y), title_text, font=font, fill=self.TEXT_COLOR)
+            current_y = text_y
+            for line in text_lines:
+                # Calculate x position for this line (center each line)
+                line_bbox = draw.textbbox((0, 0), line, font=font)
+                line_width = line_bbox[2] - line_bbox[0]
+                line_x = (width - line_width) // 2
+
+                # Ensure minimum edge padding
+                line_x = max(self.EDGE_PADDING, line_x)
+
+                # Shadow
+                draw.text(
+                    (line_x + self.SHADOW_OFFSET, current_y + self.SHADOW_OFFSET),
+                    line, font=font, fill=self.SHADOW_COLOR
+                )
+
+                # Main text
+                draw.text((line_x, current_y), line, font=font, fill=self.TEXT_COLOR)
+
+                current_y += line_height
 
             # Convert to RGB (remove alpha)
             output_image = image.convert('RGB')
