@@ -271,9 +271,18 @@ class SocialMediaScheduler:
                             if source_image_url and reel_title:
                                 log_info(f"🎨 Generating custom thumbnail with title: {reel_title[:50]}...")
                                 thumbnail_gen = ThumbnailGenerator()
+
+                                # Create output path for thumbnail
+                                import tempfile
+                                thumbnail_output_path = os.path.join(
+                                    tempfile.gettempdir(),
+                                    f"thumbnail_{post_id}.jpg"
+                                )
+
                                 thumbnail_result = thumbnail_gen.generate_thumbnail(
                                     image_url=source_image_url,
-                                    title_text=reel_title
+                                    title_text=reel_title,
+                                    output_path=thumbnail_output_path
                                 )
 
                                 if thumbnail_result.get('success'):
