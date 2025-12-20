@@ -28,6 +28,7 @@ import traceback
 from utils.logger import log_error, log_info, log_warning
 from utils.whatsapp_notifier import WhatsAppNotifier
 from social_media.weekly_report import WeeklyReportGenerator
+from social_media.thumbnail_generator import ThumbnailGenerator
 
 try:
     from social_media.utils.avatar_iv_tracker import get_avatar_iv_credit_status
@@ -247,6 +248,47 @@ class SocialMediaScheduler:
                             source_image_url = thumbnail_url
                             log_info(f"Using HeyGen thumbnail as source_image_url: {thumbnail_url[:50]}...")
 
+                        # Generate custom thumbnail with reel_title overlay
+                        custom_thumbnail_path = None
+                        try:
+                            # Get reel_title from the post data
+                            reel_title = None
+                            if full_post:
+                                reel_title = full_post.get('reel_title') or full_post.get('title')
+
+                            # Also try to get from generation_prompt
+                            if not reel_title and generation_prompt:
+                                if isinstance(generation_prompt, dict):
+                                    reel_title = generation_prompt.get('reel_title') or generation_prompt.get('title')
+                                elif isinstance(generation_prompt, str):
+                                    try:
+                                        gen_data = json.loads(generation_prompt)
+                                        reel_title = gen_data.get('reel_title') or gen_data.get('title')
+                                    except json.JSONDecodeError:
+                                        pass
+
+                            # Generate custom thumbnail if we have both source image and title
+                            if source_image_url and reel_title:
+                                log_info(f"🎨 Generating custom thumbnail with title: {reel_title[:50]}...")
+                                thumbnail_gen = ThumbnailGenerator()
+                                thumbnail_result = thumbnail_gen.generate_thumbnail(
+                                    image_url=source_image_url,
+                                    title_text=reel_title
+                                )
+
+                                if thumbnail_result.get('success'):
+                                    custom_thumbnail_path = thumbnail_result.get('thumbnail_path')
+                                    log_info(f"✅ Custom thumbnail generated: {custom_thumbnail_path}")
+                                else:
+                                    log_warning(f"⚠️ Custom thumbnail generation failed: {thumbnail_result.get('error')}")
+                            else:
+                                if not source_image_url:
+                                    log_info("ℹ️ No source_image_url available for custom thumbnail")
+                                if not reel_title:
+                                    log_info("ℹ️ No reel_title available for custom thumbnail")
+                        except Exception as thumb_err:
+                            log_warning(f"⚠️ Error generating custom thumbnail: {thumb_err}")
+
                         update_data = {
                             'video_url': video_url,
                             'status': 'pending_approval',
@@ -254,8 +296,10 @@ class SocialMediaScheduler:
                             'updated_at': datetime.now(SA_TIMEZONE).isoformat()
                         }
 
-                        # Add thumbnail_url from HeyGen (for display/preview)
-                        if thumbnail_url:
+                        # Add thumbnail_url - prefer custom thumbnail, fallback to HeyGen
+                        if custom_thumbnail_path:
+                            update_data['thumbnail_url'] = custom_thumbnail_path
+                        elif thumbnail_url:
                             update_data['thumbnail_url'] = thumbnail_url
 
                         # Add source_image_url for title card generation
@@ -270,8 +314,10 @@ class SocialMediaScheduler:
 
                         # Log what was saved
                         saved_fields = []
-                        if thumbnail_url:
-                            saved_fields.append(f"thumbnail_url")
+                        if custom_thumbnail_path:
+                            saved_fields.append("custom_thumbnail")
+                        elif thumbnail_url:
+                            saved_fields.append("thumbnail_url")
                         if source_image_url:
                             saved_fields.append(f"source_image_url")
                         if duration:
