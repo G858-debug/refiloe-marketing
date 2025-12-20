@@ -27,15 +27,16 @@ LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v2"
 DEFAULT_MODEL_ID = "gemini-image-2"
 
 # Default generation settings
-# Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
-# Using 832x1024 for approximately 4:5 portrait ratio
-DEFAULT_WIDTH = 832
-DEFAULT_HEIGHT = 1024
+# Nano Banana Pro requires specific supported dimensions
+# Using 928x1152 for 4:5 portrait ratio (perfect for Instagram/social media)
+# These are the closest valid Nano Banana Pro dimensions to the 4:5 aspect ratio
+DEFAULT_WIDTH = 928
+DEFAULT_HEIGHT = 1152
 
-# Alternative supported dimensions for reference:
+# Alternative supported Nano Banana Pro dimensions for reference:
 # 1024x1024 (1:1 square)
-# 832x1024 (~4:5 portrait)
-# 1024x832 (~5:4 landscape)
+# 928x1152 (4:5 portrait) - recommended for social media
+# 1152x928 (~5:4 landscape)
 # 768x1024 (3:4 portrait)
 # 1152x896 (~4:3 landscape)
 
@@ -43,10 +44,10 @@ DEFAULT_NUM_IMAGES = 1
 
 
 def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
-    """Adjust dimensions to Leonardo-supported values.
+    """Adjust dimensions to Nano Banana Pro supported values.
 
-    Leonardo requires dimensions divisible by 8, preferably 64.
-    This function rounds to nearest valid dimensions.
+    Nano Banana Pro only accepts specific dimension values.
+    This function finds the closest valid dimensions.
 
     Args:
         width: Requested width
@@ -55,17 +56,15 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
     Returns:
         Tuple of (valid_width, valid_height)
     """
-    # Round to nearest multiple of 64 for best results
-    valid_width = round(width / 64) * 64
-    valid_height = round(height / 64) * 64
+    # Nano Banana Pro specific supported dimensions (from Leonardo documentation)
+    VALID_WIDTHS = [768, 848, 896, 928, 1024, 1152, 1200, 1264, 1376, 1536, 1584, 1696, 1792, 1856]
+    VALID_HEIGHTS = [672, 768, 848, 896, 928, 1024, 1152, 1200, 1264, 1344, 1376, 1536, 1696, 1792, 1856]
 
-    # Ensure minimum dimensions
-    valid_width = max(valid_width, 512)
-    valid_height = max(valid_height, 512)
+    # Find closest valid width
+    valid_width = min(VALID_WIDTHS, key=lambda x: abs(x - width))
 
-    # Ensure maximum dimensions (Leonardo limit)
-    valid_width = min(valid_width, 1536)
-    valid_height = min(valid_height, 1536)
+    # Find closest valid height
+    valid_height = min(VALID_HEIGHTS, key=lambda x: abs(x - height))
 
     return valid_width, valid_height
 
@@ -303,6 +302,17 @@ class LeonardoGenerator:
             response.raise_for_status()
             generation_data = response.json()
             log_info(f"Leonardo V2 API success response: {generation_data}")
+
+            # Handle case where API returns a list instead of dict (error response)
+            if isinstance(generation_data, list):
+                log_error(f"Leonardo V2 API returned list response: {generation_data}")
+                # Extract error information from the list if available
+                if generation_data and isinstance(generation_data[0], dict):
+                    error_msg = generation_data[0].get("message", "Unknown error")
+                    error_code = generation_data[0].get("code", "N/A")
+                    raise LeonardoGenerationError(f"API error [{error_code}]: {error_msg}")
+                else:
+                    raise LeonardoGenerationError(f"API returned unexpected list response: {generation_data}")
 
         except requests.RequestException as e:
             log_error(f"Leonardo V2 API request failed: {e}")
