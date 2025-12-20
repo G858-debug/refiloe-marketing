@@ -1,11 +1,11 @@
 """Leonardo AI image generation for Refiloe marketing content.
 
-This module provides image generation using Leonardo AI's Phoenix model,
+This module provides image generation using Leonardo AI's Nano Banana Pro (Gemini Image 2),
 with support for character consistency using reference images.
 
 Features:
-- Photorealistic image generation
-- Character reference support for Refiloe consistency
+- Photorealistic image generation with Nano Banana Pro
+- Character reference support for Refiloe consistency via image references
 - Quote graphic generation for text-focused content
 - Automatic content type to prompt mapping
 """
@@ -18,20 +18,13 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
 
 from utils.logger import log_info, log_error, log_warning, log_debug
+from social_media.refiloe_reference_ids import REFILOE_REFERENCE_IDS
 
 
-LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
+LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v2"
 
-# Leonardo model IDs
-PHOENIX_MODEL_ID = "6b645e3a-d64f-4341-a6d8-7a3690fbf042"
-FLUX_DEV_MODEL_ID = "b2614463-296c-462a-9586-aafdb8f00e36"  # Flux Dev - from Leonardo docs
-
-# Default model - use Flux Dev for LoRA/Element support
-DEFAULT_MODEL_ID = FLUX_DEV_MODEL_ID
-
-# Refiloe 2.0 LoRA configuration
-DEFAULT_REFILOE_LORA_ID = 169703  # User-trained Refiloe 2.0 character
-DEFAULT_LORA_WEIGHT = 1.00  # Recommended strength
+# Default model - use Nano Banana Pro (Gemini Image 2)
+DEFAULT_MODEL_ID = "gemini-image-2"
 
 # Default generation settings
 # Leonardo AI supported dimensions (must be divisible by 8, ideally 64)
@@ -187,31 +180,22 @@ class LeonardoGenerationError(Exception):
 
 
 class LeonardoGenerator:
-    """Generate images using Leonardo AI with character consistency."""
+    """Generate images using Leonardo AI Nano Banana Pro with character consistency via reference images."""
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        reference_image_id: Optional[str] = None,
     ):
         """Initialize Leonardo AI generator.
 
         Args:
             api_key: Leonardo AI API key. Defaults to LEONARDO_API_KEY env var.
-            reference_image_id: Leonardo AI image ID for Refiloe reference.
-                              Defaults to LEONARDO_REFILOE_REFERENCE_ID env var.
         """
         self.api_key = api_key or os.getenv("LEONARDO_API_KEY")
         if not self.api_key:
             raise ValueError("LEONARDO_API_KEY environment variable required")
 
-        self.reference_image_id = reference_image_id or os.getenv("LEONARDO_REFILOE_REFERENCE_ID")
         self.model_id = os.getenv("LEONARDO_MODEL_ID", DEFAULT_MODEL_ID)
-
-        # User-trained LoRA configuration for Refiloe character
-        lora_id_str = os.getenv("LEONARDO_REFILOE_LORA_ID", str(DEFAULT_REFILOE_LORA_ID))
-        self.refiloe_lora_id = int(lora_id_str) if lora_id_str else DEFAULT_REFILOE_LORA_ID
-        self.lora_weight = float(os.getenv("LEONARDO_LORA_WEIGHT", str(DEFAULT_LORA_WEIGHT)))
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -224,9 +208,8 @@ class LeonardoGenerator:
         self.poll_interval = 5  # seconds
         self.poll_timeout = 120  # seconds
 
-        model_name = "Flux Dev" if self.model_id == FLUX_DEV_MODEL_ID else "Phoenix" if self.model_id == PHOENIX_MODEL_ID else "Unknown"
-        log_info(f"LeonardoGenerator initialized with model: {model_name} ({self.model_id})")
-        log_info(f"Refiloe 2.0 LoRA configured: ID={self.refiloe_lora_id}, weight={self.lora_weight}")
+        log_info(f"LeonardoGenerator initialized with Nano Banana Pro model: {self.model_id}")
+        log_info(f"Using {len(REFILOE_REFERENCE_IDS)} Refiloe reference images for character consistency")
 
     def generate_image(
         self,
@@ -237,7 +220,7 @@ class LeonardoGenerator:
         num_images: int = DEFAULT_NUM_IMAGES,
         use_reference: bool = True,
     ) -> Dict[str, Any]:
-        """Generate an image using Leonardo AI.
+        """Generate an image using Leonardo AI Nano Banana Pro.
 
         Args:
             prompt: The image generation prompt.
@@ -245,7 +228,7 @@ class LeonardoGenerator:
             width: Image width in pixels.
             height: Image height in pixels.
             num_images: Number of images to generate.
-            use_reference: Whether to use Refiloe reference image.
+            use_reference: Whether to use Refiloe reference images.
 
         Returns:
             Dict containing:
@@ -257,7 +240,7 @@ class LeonardoGenerator:
         # Build enhanced prompt based on content type
         enhanced_prompt = self._build_prompt(prompt, content_type, use_reference)
 
-        log_info(f"Starting Leonardo image generation for content_type: {content_type}")
+        log_info(f"Starting Nano Banana Pro image generation for content_type: {content_type}")
         log_debug(f"Enhanced prompt: {enhanced_prompt[:200]}...")
 
         # Leonardo has a 1500 character limit for prompts
@@ -271,28 +254,39 @@ class LeonardoGenerator:
         if valid_width != width or valid_height != height:
             log_info(f"Adjusted dimensions from {width}x{height} to {valid_width}x{valid_height} for Leonardo compatibility")
 
-        # Build generation payload
+        # Build V2 API payload for Nano Banana Pro
         payload = {
-            "modelId": self.model_id,
-            "prompt": enhanced_prompt,
-            "width": valid_width,
-            "height": valid_height,
-            "num_images": num_images,
-            "public": False,
+            "model": self.model_id,
+            "parameters": {
+                "width": valid_width,
+                "height": valid_height,
+                "prompt": enhanced_prompt,
+                "quantity": num_images,
+                "prompt_enhance": "OFF",
+            }
         }
 
-        # Add Refiloe 2.0 user-trained Element for character consistency
-        # Per Leonardo AI docs: userElements with userLoraId for user-trained LoRAs
-        if use_reference and self.refiloe_lora_id and self._content_type_features_refiloe(content_type):
-            payload["userElements"] = [{
-                "userLoraId": self.refiloe_lora_id,
-                "weight": self.lora_weight,
-            }]
-            log_info(f"Using Refiloe 2.0 Element (userLoraId: {self.refiloe_lora_id}) with weight {self.lora_weight}")
+        # Add reference image guidances for character consistency
+        # Only add if use_reference=True and content features Refiloe
+        config = CONTENT_TYPE_PROMPTS.get(content_type, {})
+        if use_reference and config.get("features_refiloe", True):
+            payload["guidances"] = {
+                "image_reference": [
+                    {
+                        "image": {
+                            "id": image_id,
+                            "type": "UPLOADED"
+                        },
+                        "strength": "MID"
+                    }
+                    for image_id in REFILOE_REFERENCE_IDS
+                ]
+            }
+            log_info(f"Using {len(REFILOE_REFERENCE_IDS)} Refiloe reference images with MID strength")
 
         # Create generation
         try:
-            log_info(f"Leonardo API payload: {json.dumps(payload, indent=2)}")
+            log_info(f"Leonardo V2 API payload: {json.dumps(payload, indent=2)}")
 
             response = self.session.post(
                 f"{LEONARDO_API_BASE}/generations",
@@ -302,23 +296,24 @@ class LeonardoGenerator:
 
             # Log full response for debugging
             if not response.ok:
-                log_error(f"Leonardo API error status: {response.status_code}")
-                log_error(f"Leonardo API error response: {response.text}")
+                log_error(f"Leonardo V2 API error status: {response.status_code}")
+                log_error(f"Leonardo V2 API error response: {response.text}")
 
             response.raise_for_status()
             generation_data = response.json()
-            log_info(f"Leonardo API success response: {generation_data}")
+            log_info(f"Leonardo V2 API success response: {generation_data}")
 
         except requests.RequestException as e:
-            log_error(f"Leonardo API request failed: {e}")
+            log_error(f"Leonardo V2 API request failed: {e}")
             # Try to get response body if available
             if hasattr(e, 'response') and e.response is not None:
                 log_error(f"Leonardo error details: {e.response.text}")
             raise LeonardoGenerationError(f"Failed to start generation: {e}")
 
-        generation_id = generation_data.get("sdGenerationJob", {}).get("generationId")
+        # V2 API returns generation ID directly
+        generation_id = generation_data.get("id")
         if not generation_id:
-            log_error(f"No generation ID in response: {generation_data}")
+            log_error(f"No generation ID in V2 response: {generation_data}")
             raise LeonardoGenerationError("No generation ID returned")
 
         log_info(f"Generation started: {generation_id}")
@@ -482,23 +477,9 @@ class LeonardoGenerator:
 
         return base_prompt
 
-    def _content_type_features_refiloe(self, content_type: Optional[str]) -> bool:
-        """Check if content type should feature Refiloe.
-
-        Args:
-            content_type: The content type to check.
-
-        Returns:
-            True if content type should feature Refiloe.
-        """
-        if not content_type:
-            return True  # Default to featuring Refiloe
-
-        config = CONTENT_TYPE_PROMPTS.get(content_type, {})
-        return config.get("features_refiloe", True)
 
     def _poll_for_completion(self, generation_id: str) -> str:
-        """Poll Leonardo API until generation completes.
+        """Poll Leonardo V2 API until generation completes.
 
         Args:
             generation_id: The generation ID to poll.
@@ -524,11 +505,11 @@ class LeonardoGenerator:
                 time.sleep(self.poll_interval)
                 continue
 
-            generation = data.get("generations_by_pk", {})
-            status = generation.get("status")
+            # V2 API response structure
+            status = data.get("status")
 
             if status == "COMPLETE":
-                images = generation.get("generated_images", [])
+                images = data.get("images", [])
                 if images:
                     image_url = images[0].get("url")
                     log_info(f"Generation complete: {image_url}")
@@ -537,7 +518,7 @@ class LeonardoGenerator:
                     raise LeonardoGenerationError("Generation complete but no images returned")
 
             elif status == "FAILED":
-                raise LeonardoGenerationError(f"Generation failed: {generation}")
+                raise LeonardoGenerationError(f"Generation failed: {data}")
 
             log_debug(f"Generation status: {status}, waiting...")
             time.sleep(self.poll_interval)
