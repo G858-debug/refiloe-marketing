@@ -23,7 +23,7 @@ class ThumbnailGenerator:
 
     # Semi-transparent bar behind text
     BAR_COLOR = (0, 0, 0)  # Black
-    BAR_OPACITY = 200  # 0-255, where 200 ≈ 78% opacity for better contrast
+    BAR_OPACITY = 230  # 0-255, where 230 ≈ 90% opacity for strong contrast
     BAR_PADDING_VERTICAL = 70  # Pixels above/below text
     BAR_PADDING_HORIZONTAL = 80  # Pixels left/right of text
 
@@ -43,24 +43,20 @@ class ThumbnailGenerator:
         log_info("ThumbnailGenerator initialized")
 
     def _find_bold_font(self) -> Optional[str]:
-        """Find a suitable bold sans-serif font on the system."""
+        """Find a suitable extra-bold/black sans-serif font on the system."""
+        # Prioritize Black/ExtraBold weights for maximum thickness
         font_candidates = [
-            # DejaVu fonts (commonly available on Linux/Railway)
+            # Black/Heavy weights (thickest)
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            # Liberation fonts
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            # FreeFonts
             "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-            # Ubuntu fonts
             "/usr/share/fonts/truetype/ubuntu/Ubuntu-Bold.ttf",
-            "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
-            # Noto fonts (very common)
+            "/usr/share/fonts/truetype/noto/NotoSans-Black.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-ExtraBold.ttf",
             "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            # Alternative paths
+            # Regular bold as fallback
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
             "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/TTF/DejaVuSans.ttf",
         ]
@@ -222,6 +218,9 @@ class ThumbnailGenerator:
         try:
             log_info(f"Generating thumbnail with text: '{title_text[:50]}...'")
 
+            # Convert to all caps for thumbnail impact
+            title_text = title_text.upper()
+
             # Download source image
             image = self._download_image(image_url)
             width, height = image.size
@@ -306,13 +305,25 @@ class ThumbnailGenerator:
                 # Ensure minimum edge padding
                 line_x = max(self.EDGE_PADDING, line_x)
 
-                # Shadow
+                # Draw text outline/stroke for extra thickness (draw text multiple times offset)
+                outline_color = self.SHADOW_COLOR
+                stroke_width = 4  # Pixels of outline thickness
+
+                for dx in range(-stroke_width, stroke_width + 1):
+                    for dy in range(-stroke_width, stroke_width + 1):
+                        if dx != 0 or dy != 0:
+                            draw.text(
+                                (line_x + dx, current_y + dy),
+                                line, font=font, fill=outline_color
+                            )
+
+                # Shadow (offset further)
                 draw.text(
-                    (line_x + self.SHADOW_OFFSET, current_y + self.SHADOW_OFFSET),
+                    (line_x + self.SHADOW_OFFSET + 2, current_y + self.SHADOW_OFFSET + 2),
                     line, font=font, fill=self.SHADOW_COLOR
                 )
 
-                # Main text
+                # Main text on top
                 draw.text((line_x, current_y), line, font=font, fill=self.TEXT_COLOR)
 
                 current_y += line_height
