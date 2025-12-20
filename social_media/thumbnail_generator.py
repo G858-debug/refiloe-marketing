@@ -204,18 +204,43 @@ class ThumbnailGenerator:
 
             if position == "top":
                 bar_y = 0
-                text_y = self.BAR_PADDING_VERTICAL
+                text_y = self.BAR_PADDING_VERTICAL + 20  # Slight offset from top edge
             else:  # bottom
                 bar_y = height - bar_height
-                text_y = bar_y + self.BAR_PADDING_VERTICAL
+                text_y = bar_y + self.BAR_PADDING_VERTICAL - 30  # Move text up slightly from bottom
 
-            # Draw semi-transparent bar
+            # Draw gradient fade instead of solid bar (more elegant)
             bar_overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-            bar_draw = ImageDraw.Draw(bar_overlay)
-            bar_draw.rectangle(
-                [0, bar_y, width, bar_y + bar_height],
-                fill=(*self.BAR_COLOR, self.BAR_OPACITY)
-            )
+
+            # Calculate gradient zone (taller than text bar for smooth fade)
+            gradient_height = bar_height + 150  # Extra height for smooth fade
+
+            if position == "bottom":
+                gradient_start_y = height - gradient_height
+                gradient_end_y = height
+                # Draw gradient from transparent (top) to dark (bottom)
+                for y in range(gradient_height):
+                    # Calculate opacity: starts at 0, increases to BAR_OPACITY
+                    progress = y / gradient_height
+                    # Use ease-in curve for smoother transition
+                    opacity = int(self.BAR_OPACITY * (progress ** 1.5))
+                    bar_overlay.paste(
+                        (*self.BAR_COLOR, opacity),
+                        (0, gradient_start_y + y, width, gradient_start_y + y + 1)
+                    )
+            else:  # top
+                gradient_start_y = 0
+                gradient_end_y = gradient_height
+                # Draw gradient from dark (top) to transparent (bottom)
+                for y in range(gradient_height):
+                    progress = y / gradient_height
+                    # Reverse: starts opaque, fades to transparent
+                    opacity = int(self.BAR_OPACITY * ((1 - progress) ** 1.5))
+                    bar_overlay.paste(
+                        (*self.BAR_COLOR, opacity),
+                        (0, y, width, y + 1)
+                    )
+
             image = Image.alpha_composite(image, bar_overlay)
 
             # Draw text with shadow
