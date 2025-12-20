@@ -20,7 +20,7 @@ from pathlib import Path
 
 
 LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v1"
-UPLOADS_DIR = "/mnt/user-data/uploads"
+UPLOADS_DIR = "/Users/Howard/Downloads/"
 
 # Define the 6 reference images with descriptive names
 REFERENCE_IMAGES = [
