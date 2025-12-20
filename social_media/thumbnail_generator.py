@@ -28,11 +28,12 @@ class ThumbnailGenerator:
     BAR_PADDING_HORIZONTAL = 80  # Pixels left/right of text
 
     # Font settings - sized for 1080x1920 vertical video thumbnails
-    DEFAULT_FONT_SIZE = 180
-    MIN_FONT_SIZE = 100
+    DEFAULT_FONT_SIZE = 160
+    MIN_FONT_SIZE = 80
     MAX_TEXT_WIDTH_RATIO = 0.85  # Text should fit within 85% of image width (leaves padding on sides)
-    EDGE_PADDING = 40  # Minimum pixels from edge
-    MAX_TEXT_LINES = 3  # Maximum number of text lines
+    EDGE_PADDING = 50  # Minimum pixels from edge
+    BOTTOM_PADDING = 60  # Gap between text and bottom edge
+    MAX_TEXT_LINES = 2  # Maximum number of text lines
 
     def __init__(self):
         """Initialize the thumbnail generator."""
@@ -251,14 +252,14 @@ class ThumbnailGenerator:
                 bar_y = 0
                 text_y = self.BAR_PADDING_VERTICAL + 20  # Slight offset from top edge
             else:  # bottom
-                bar_y = height - bar_height
-                text_y = bar_y + self.BAR_PADDING_VERTICAL - 30  # Move text up slightly from bottom
+                bar_y = height - bar_height - self.BOTTOM_PADDING  # Move bar up to create bottom gap
+                text_y = bar_y + self.BAR_PADDING_VERTICAL  # Text within the bar
 
             # Draw gradient fade instead of solid bar (more elegant)
             bar_overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
 
             # Calculate gradient zone (taller than text bar for smooth fade)
-            gradient_height = bar_height + 150  # Extra height for smooth fade
+            gradient_height = bar_height + 200 + self.BOTTOM_PADDING  # Extra height for smooth fade including bottom padding
 
             if position == "bottom":
                 gradient_start_y = height - gradient_height
@@ -307,7 +308,7 @@ class ThumbnailGenerator:
 
                 # Draw text outline/stroke for extra thickness (draw text multiple times offset)
                 outline_color = self.SHADOW_COLOR
-                stroke_width = 4  # Pixels of outline thickness
+                stroke_width = 8  # Pixels of outline thickness for very bold look
 
                 for dx in range(-stroke_width, stroke_width + 1):
                     for dy in range(-stroke_width, stroke_width + 1):
