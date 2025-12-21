@@ -6642,9 +6642,9 @@ def api_generate_text_card():
             log_error("Storage client not available")
             return jsonify({'success': False, 'error': 'Storage client not available'}), 500
 
-        storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+        storage_path = f"text-cards/{uuid.uuid4().hex[:8]}.png"
         upload_success, image_url, upload_error = storage_client.upload_file(
-            bucket='social-media-assets',
+            bucket='media',
             file_path=image_path,
             destination_path=storage_path,
             content_type='image/png'
@@ -6821,9 +6821,9 @@ def api_generate_weekly_text_cards():
                     skipped_count += 1
                     continue
 
-                storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+                storage_path = f"text-cards/{uuid.uuid4().hex[:8]}.png"
                 upload_success, image_url, upload_error = storage_client.upload_file(
-                    bucket='social-media-assets',
+                    bucket='media',
                     file_path=image_path,
                     destination_path=storage_path,
                     content_type='image/png'
@@ -6995,17 +6995,17 @@ def api_edit_text_card(post_id):
 
         # Use existing media_url path if available, otherwise create new one
         existing_media_url = post.get('media_url', '')
-        if existing_media_url and 'text_cards/' in existing_media_url:
+        if existing_media_url and 'text-cards/' in existing_media_url:
             # Extract the storage path from the URL
-            # URL format: https://...supabase.co/storage/v1/object/public/social-media-assets/text_cards/...
-            storage_path = existing_media_url.split('/social-media-assets/')[-1]
+            # URL format: https://...supabase.co/storage/v1/object/public/media/text-cards/...
+            storage_path = existing_media_url.split('/media/')[-1]
         else:
             # Create new storage path
-            storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+            storage_path = f"text-cards/{uuid.uuid4().hex[:8]}.png"
 
         log_info(f"📤 Uploading to: {storage_path}")
         upload_success, image_url, upload_error = storage_client.upload_file(
-            bucket='social-media-assets',
+            bucket='media',
             file_path=image_path,
             destination_path=storage_path,
             content_type='image/png'
