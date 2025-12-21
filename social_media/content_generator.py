@@ -656,6 +656,406 @@ Generate the carousel content now:"""
         return validated
 
     # ------------------------------------------------------------------
+    # Text card content generation
+    # ------------------------------------------------------------------
+    def generate_text_card_content(self, content_type: str = None) -> Dict[str, Any]:
+        """Generate content for a single-slide text card post.
+
+        Args:
+            content_type: One of 'quote', 'tip', 'educational', 'motivation'
+                         If None, randomly selects one.
+
+        Returns:
+            Dict with structure based on content_type:
+            - quote: {
+                'type': 'quote',
+                'quote': str (the quote, max 150 chars),
+                'attribution': str (who said it or 'Refiloe'),
+                'caption': str (Facebook caption),
+                'hashtags': List[str]
+              }
+            - tip: {
+                'type': 'tip',
+                'header': str (e.g., "TRAINER TIP", "TIME SAVER", max 20 chars),
+                'tip': str (the main tip, max 200 chars),
+                'subtitle': str (optional additional context, max 80 chars),
+                'caption': str,
+                'hashtags': List[str]
+              }
+            - educational: {
+                'type': 'educational',
+                'title': str (max 50 chars),
+                'points': List[str] (3-5 points, each max 60 chars),
+                'caption': str,
+                'hashtags': List[str]
+              }
+            - motivation: {
+                'type': 'motivation',
+                'statement': str (bold motivational statement, max 100 chars),
+                'caption': str,
+                'hashtags': List[str]
+              }
+        """
+        import json
+        import random
+        import re
+
+        # Define valid content types
+        valid_types = ['quote', 'tip', 'educational', 'motivation']
+
+        # Randomly select content type if not provided
+        if content_type is None:
+            content_type = random.choice(valid_types)
+
+        # Validate content type
+        if content_type not in valid_types:
+            log_warning(
+                "Invalid content_type '%s', using random selection",
+                content_type,
+            )
+            content_type = random.choice(valid_types)
+
+        log_info(
+            "Generating text card content | content_type=%s",
+            content_type,
+        )
+
+        # Build the text card prompt
+        prompt = self._build_text_card_prompt(content_type)
+
+        # Call Claude API
+        response = self._call_claude_with_retry(prompt)
+
+        if not response:
+            log_warning("Failed to get text card content from Claude API")
+            return {}
+
+        # Parse and validate the response
+        try:
+            # Extract JSON from response
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if not json_match:
+                log_warning("No JSON found in text card response")
+                return {}
+
+            json_str = json_match.group()
+            data = json.loads(json_str)
+
+            # Validate required fields based on content type
+            validated = self._validate_text_card_content(data, content_type)
+
+            if not validated:
+                log_warning("Failed to validate text card content | content_type=%s", content_type)
+                return {}
+
+            # Add metadata
+            validated["metadata"] = {
+                "content_type": content_type,
+                "generated_at": datetime.now(self.sa_tz).isoformat(),
+                "ai_generated": True,
+                "model_used": self.model,
+            }
+
+            log_info(
+                "Successfully generated text card content | content_type=%s",
+                content_type,
+            )
+
+            return validated
+
+        except json.JSONDecodeError as e:
+            log_warning("JSON decode error in text card response: %s", str(e))
+            return {}
+        except Exception as e:
+            log_warning("Error parsing text card response: %s", str(e))
+            return {}
+
+    def _build_text_card_prompt(self, content_type: str) -> str:
+        """Build Claude prompt for text card content generation.
+
+        The prompt should:
+        1. Specify exact JSON structure required
+        2. Focus on personal trainer audience
+        3. Cover topics: admin automation, client management, business growth,
+           fitness insights, work-life balance
+        4. Include SA context where relevant
+        5. Ensure content fits character limits for each field
+        6. Caption should be engaging 1-2 sentences for Facebook
+        7. Include 5-8 relevant hashtags
+        """
+        # Get AI influencer settings
+        ai_settings = self.config.get("ai_influencer_settings", {})
+        personality = ai_settings.get("personality_traits", [])
+
+        # Get SA context
+        sa_context = self._enrich_with_sa_context("")
+
+        # Define content type specific prompts
+        type_prompts = {
+            'quote': f"""
+CONTENT TYPE: Quote
+
+Generate an inspiring or educational quote relevant to personal trainers.
+
+REQUIREMENTS:
+- Quote text: Maximum 150 characters
+- Attribution: Who said it (can be 'Refiloe' for original quotes, or famous trainers/athletes)
+- Topics: admin automation, client management, business growth, fitness insights, work-life balance
+- Must resonate with personal trainers in South Africa
+- Should be motivational, educational, or thought-provoking
+
+OUTPUT FORMAT (JSON):
+{{
+    "type": "quote",
+    "quote": "The quote text here (max 150 chars)",
+    "attribution": "Person who said it or 'Refiloe'",
+    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}}
+
+EXAMPLE:
+{{
+    "type": "quote",
+    "quote": "Your clients don't buy training sessions. They buy the transformation you help them achieve.",
+    "attribution": "Refiloe",
+    "caption": "This mindset shift changed how I approach every client conversation. What transformation are you selling? 💪",
+    "hashtags": ["#personaltrainer", "#fitnessbusiness", "#clientsuccess", "#trainerlife", "#southafricanfitness"]
+}}
+""",
+            'tip': f"""
+CONTENT TYPE: Tip
+
+Generate a practical, actionable tip for personal trainers.
+
+REQUIREMENTS:
+- Header: Short category (e.g., "TRAINER TIP", "TIME SAVER", "PRO MOVE"), max 20 characters
+- Tip: The main tip text, maximum 200 characters
+- Subtitle: Optional additional context or benefit, max 80 characters (can be empty string)
+- Topics: admin automation, client management, business growth, fitness insights, work-life balance
+- Must be immediately actionable
+- Should save time or improve business/training
+
+OUTPUT FORMAT (JSON):
+{{
+    "type": "tip",
+    "header": "CATEGORY (max 20 chars)",
+    "tip": "The main tip here (max 200 chars)",
+    "subtitle": "Additional context or benefit (max 80 chars, or empty)",
+    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}}
+
+EXAMPLE:
+{{
+    "type": "tip",
+    "header": "TIME SAVER",
+    "tip": "Send automated session reminders 24 hours before each client appointment. This cuts no-shows by 70% and saves you hours of rescheduling admin.",
+    "subtitle": "Works with WhatsApp Business or any scheduling tool",
+    "caption": "This one automation gave me back 5+ hours every week. What's your biggest time drain? Comment below! 👇",
+    "hashtags": ["#trainertools", "#adminautomation", "#personaltrainertips", "#fitnessadmin", "#southafricanfitness", "#trainerhacks"]
+}}
+""",
+            'educational': f"""
+CONTENT TYPE: Educational
+
+Generate educational content with multiple key points for personal trainers.
+
+REQUIREMENTS:
+- Title: Clear, engaging title, max 50 characters
+- Points: 3-5 bullet points, each max 60 characters
+- Topics: admin automation, client management, business growth, fitness insights, work-life balance
+- Must be informative and actionable
+- Should teach something valuable
+
+OUTPUT FORMAT (JSON):
+{{
+    "type": "educational",
+    "title": "Title here (max 50 chars)",
+    "points": [
+        "Point 1 (max 60 chars)",
+        "Point 2 (max 60 chars)",
+        "Point 3 (max 60 chars)",
+        "Point 4 (max 60 chars)",
+        "Point 5 (max 60 chars)"
+    ],
+    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}}
+
+EXAMPLE:
+{{
+    "type": "educational",
+    "title": "5 Signs a Client Will Ghost You",
+    "points": [
+        "They reschedule more than once in the first week",
+        "They ask about refund policies before starting",
+        "They don't respond to form check videos",
+        "They're vague about their actual goals",
+        "They compare your rates to big gym chains"
+    ],
+    "caption": "Learned this the hard way after 3 years of training. Now I spot these red flags early and adjust my approach. Which one have you experienced? 🎯",
+    "hashtags": ["#personaltrainer", "#clientmanagement", "#trainerlife", "#fitnesstips", "#businessgrowth", "#southafricanfitness"]
+}}
+""",
+            'motivation': f"""
+CONTENT TYPE: Motivation
+
+Generate a bold, motivational statement for personal trainers.
+
+REQUIREMENTS:
+- Statement: Powerful, concise motivational text, max 100 characters
+- Topics: mindset, perseverance, business growth, work-life balance, trainer life
+- Must energize and inspire
+- Should feel empowering and bold
+- Can be about business, training, or personal development
+
+OUTPUT FORMAT (JSON):
+{{
+    "type": "motivation",
+    "statement": "Bold motivational statement here (max 100 chars)",
+    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}}
+
+EXAMPLE:
+{{
+    "type": "motivation",
+    "statement": "You're not just training bodies. You're building empires, one rep at a time.",
+    "caption": "Every session you run is building your business and changing lives. Keep going. 💪🔥",
+    "hashtags": ["#trainermotivation", "#fitnessmindset", "#personaltrainer", "#businessgrowth", "#trainerlife"]
+}}
+"""
+        }
+
+        base_prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating text card content for personal trainers.
+
+TARGET AUDIENCE: Personal trainers in South Africa who want to grow their business, automate admin, and improve client management.
+
+PERSONALITY & VOICE:
+- {', '.join(personality)}
+- Authentic, relatable, practical
+- South African context (use Rand for pricing when relevant)
+
+{sa_context}
+
+{type_prompts[content_type]}
+
+CAPTION REQUIREMENTS:
+- 1-2 engaging sentences (50-100 words)
+- Hook the reader immediately
+- Include a question or call-to-action when appropriate
+- Make it shareable and relatable
+
+HASHTAG REQUIREMENTS:
+- Include 5-8 relevant hashtags
+- Mix of broad (#personaltrainer) and specific (#adminautomation)
+- Include at least one SA-relevant tag (#southafricanfitness, #safitness)
+- Relevant to fitness business, personal training, and the specific content
+
+CHARACTER LIMITS (CRITICAL - MUST NOT EXCEED):
+All text MUST fit within the specified character limits for each field.
+Exceeding limits will cause the content to be rejected.
+
+IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
+
+Generate the text card content now:"""
+
+        return base_prompt
+
+    def _validate_text_card_content(
+        self,
+        data: Dict[str, Any],
+        content_type: str,
+    ) -> Dict[str, Any]:
+        """Validate and truncate text card content to fit character limits.
+
+        Args:
+            data: Raw parsed text card data.
+            content_type: The content type being validated.
+
+        Returns:
+            Dict[str, Any]: Validated text card data with enforced limits, or empty dict on failure.
+        """
+        validated: Dict[str, Any] = {"type": content_type}
+
+        try:
+            # Validate common fields
+            caption = str(data.get("caption", ""))
+            if not caption:
+                log_warning("Missing caption in text card content")
+                return {}
+            validated["caption"] = filter_banned_words(caption)
+
+            hashtags = data.get("hashtags", [])
+            if not hashtags or not isinstance(hashtags, list):
+                hashtags = ["#personaltrainer", "#fitnessadmin", "#trainertools"]
+            validated["hashtags"] = [str(h) for h in hashtags[:10]]
+
+            # Type-specific validation
+            if content_type == "quote":
+                quote = str(data.get("quote", ""))
+                if not quote:
+                    log_warning("Missing quote in text card content")
+                    return {}
+                validated["quote"] = filter_banned_words(quote[:150])
+
+                attribution = str(data.get("attribution", "Refiloe"))
+                validated["attribution"] = filter_banned_words(attribution[:50])
+
+            elif content_type == "tip":
+                header = str(data.get("header", "TRAINER TIP"))
+                validated["header"] = filter_banned_words(header[:20])
+
+                tip = str(data.get("tip", ""))
+                if not tip:
+                    log_warning("Missing tip in text card content")
+                    return {}
+                validated["tip"] = filter_banned_words(tip[:200])
+
+                subtitle = str(data.get("subtitle", ""))
+                validated["subtitle"] = filter_banned_words(subtitle[:80])
+
+            elif content_type == "educational":
+                title = str(data.get("title", ""))
+                if not title:
+                    log_warning("Missing title in text card content")
+                    return {}
+                validated["title"] = filter_banned_words(title[:50])
+
+                points = data.get("points", [])
+                if not points or not isinstance(points, list) or len(points) < 3:
+                    log_warning("Missing or insufficient points in educational content")
+                    return {}
+
+                validated_points = []
+                for point in points[:5]:
+                    truncated = filter_banned_words(str(point)[:60])
+                    validated_points.append(truncated)
+
+                # Ensure minimum 3 points
+                while len(validated_points) < 3:
+                    validated_points.append("Additional insight coming soon")
+
+                validated["points"] = validated_points
+
+            elif content_type == "motivation":
+                statement = str(data.get("statement", ""))
+                if not statement:
+                    log_warning("Missing statement in motivation content")
+                    return {}
+                validated["statement"] = filter_banned_words(statement[:100])
+
+            else:
+                log_warning("Unknown content type: %s", content_type)
+                return {}
+
+            return validated
+
+        except Exception as e:
+            log_warning("Error validating text card content: %s", str(e))
+            return {}
+
+    # ------------------------------------------------------------------
     # Preview utilities
     # ------------------------------------------------------------------
     def preview_avatar_selection(
