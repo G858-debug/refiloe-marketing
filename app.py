@@ -3808,7 +3808,11 @@ def api_error_response(error_msg, status_code=500, details=None):
 
 @app.route('/api/dashboard/posts', methods=['GET'])
 def api_dashboard_posts():
-    """API: Get all posts for dashboard - show all active posts"""
+    """API: Get posts for dashboard with optional media type filter.
+
+    Query params:
+        media_type: Optional filter - 'video', 'image', 'carousel', 'text_card', or 'all'
+    """
     log_info("📥 Request: /api/dashboard/posts")
 
     # Check Supabase connection
@@ -3825,6 +3829,9 @@ def api_dashboard_posts():
         return api_error_response('Database client not available', 503)
 
     try:
+        # Get media_type filter from query params
+        media_type = request.args.get('media_type', 'all')
+
         # Active statuses to show
         active_statuses = ['pending_approval', 'approved', 'generating', 'pending_media_approval', 'scheduled']
 
@@ -3837,6 +3844,14 @@ def api_dashboard_posts():
                 post for post in result.data
                 if post.get('status') in active_statuses
             ]
+
+            # Apply media type filter if not 'all'
+            if media_type != 'all':
+                active_posts = [
+                    post for post in active_posts
+                    if post.get('post_type') == media_type
+                ]
+                log_info(f"📊 Filtered by media_type: {media_type}")
 
             # Sort by scheduled_time
             active_posts.sort(key=lambda x: x.get('scheduled_time', ''))
@@ -6533,6 +6548,482 @@ def api_generate_weekly_content():
 
     except Exception as e:
         log_error(f"❌ Generate weekly content failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/generate-text-card', methods=['POST'])
+def api_generate_text_card():
+    """Generate a single text card post.
+
+    Optional JSON body:
+    {
+        "content_type": "quote" | "tip" | "educational" | "motivation",  // optional
+        "scheduled_date": "2024-12-22",  // optional, defaults to tomorrow
+        "scheduled_time": "16:00"  // optional, defaults to 16:00
+    }
+
+    Returns:
+        JSON with success, post_id, scheduled_time, content_type
+    """
+    log_info("📥 Request: /api/dashboard/generate-text-card")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.content_generator import ContentGenerator
+        from social_media.text_card_generator import TextCardGenerator
+        from database import SocialMediaDatabase
+        from utils.supabase_storage import upload_file_to_supabase
+        import os
+        import json
+        from datetime import datetime, timedelta
+        import pytz
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Parse request data
+        data = request.get_json() or {}
+        content_type = data.get('content_type')  # Can be None for random selection
+        scheduled_date = data.get('scheduled_date')
+        scheduled_time_str = data.get('scheduled_time', '16:00')
+
+        # Determine scheduled time
+        if scheduled_date:
+            # Parse provided date
+            date_obj = datetime.strptime(scheduled_date, '%Y-%m-%d')
+            scheduled_time = SA_TZ.localize(datetime.combine(date_obj.date(), datetime.strptime(scheduled_time_str, '%H:%M').time()))
+        else:
+            # Default to tomorrow at 16:00 SAST
+            tomorrow = datetime.now(SA_TZ) + timedelta(days=1)
+            scheduled_time = tomorrow.replace(hour=16, minute=0, second=0, microsecond=0)
+
+        log_info(f"📅 Generating text card for {scheduled_time.strftime('%Y-%m-%d %H:%M')} SAST")
+
+        # Initialize generators
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        content_gen = ContentGenerator(config_path, supabase_client)
+        text_card_gen = TextCardGenerator(config_path)
+        db = SocialMediaDatabase(supabase_client)
+
+        # Generate text card content
+        content = content_gen.generate_text_card_content(content_type)
+
+        if not content or 'type' not in content:
+            log_error("Failed to generate text card content")
+            return jsonify({'success': False, 'error': 'Failed to generate content'}), 500
+
+        actual_content_type = content['type']
+        log_info(f"📝 Generated {actual_content_type} text card")
+
+        # Generate text card image
+        image_content = {k: v for k, v in content.items() if k not in ['type', 'caption', 'hashtags']}
+        image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
+
+        # Upload image to Supabase storage
+        storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+        image_url = upload_file_to_supabase(
+            supabase_client,
+            image_path,
+            storage_path,
+            'social-media-assets'
+        )
+
+        if not image_url:
+            log_error("Failed to upload text card image")
+            return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+
+        # Prepare metadata
+        metadata = {
+            'text_card_type': actual_content_type,
+            'text_card_content': image_content,
+            'generated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Save to database
+        post_data = {
+            'platform': 'facebook',
+            'content_text': content.get('caption', ''),
+            'post_type': 'text_card',
+            'scheduled_time': scheduled_time.isoformat(),
+            'media_url': image_url,
+            'hashtags': content.get('hashtags', []),
+            'generation_prompt': json.dumps(metadata),
+            'status': 'pending_approval',
+            'is_pinned': False
+        }
+
+        post_id = db.save_post(post_data)
+
+        if post_id:
+            log_info(f"✅ Created text card post: {post_id}")
+            return jsonify({
+                'success': True,
+                'post_id': post_id,
+                'scheduled_time': scheduled_time.isoformat(),
+                'content_type': actual_content_type,
+                'image_url': image_url
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save post'}), 500
+
+    except Exception as e:
+        log_error(f"❌ Generate text card failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/generate-weekly-text-cards', methods=['POST'])
+def api_generate_weekly_text_cards():
+    """Generate 7 text card posts for the upcoming week (1 per day at 4pm SAST).
+
+    This is ADDITIVE - finds the latest scheduled text_card and adds 7 more days after it.
+    Skips days that already have a text_card scheduled at 4pm.
+
+    Returns:
+        JSON with success, posts_created (count), posts_skipped (count),
+        first_date, last_date, post_ids (list)
+    """
+    log_info("📥 Request: /api/dashboard/generate-weekly-text-cards")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.content_generator import ContentGenerator
+        from social_media.text_card_generator import TextCardGenerator
+        from database import SocialMediaDatabase
+        from utils.supabase_storage import upload_file_to_supabase
+        import os
+        import json
+        from datetime import datetime, timedelta
+        import pytz
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Step 1: Find the latest scheduled text_card post
+        log_info("📅 Finding latest scheduled text_card...")
+
+        result = supabase_client.table('social_posts').select('scheduled_time').eq(
+            'post_type', 'text_card'
+        ).in_(
+            'status', ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
+        ).not_.is_('scheduled_time', 'null').order('scheduled_time', desc=True).limit(1).execute()
+
+        if result.data and result.data[0].get('scheduled_time'):
+            # Parse the latest scheduled time
+            latest_scheduled = result.data[0]['scheduled_time']
+            try:
+                if isinstance(latest_scheduled, str):
+                    latest_date = datetime.fromisoformat(latest_scheduled.replace('Z', '+00:00'))
+                    latest_date = latest_date.astimezone(SA_TZ)
+                else:
+                    latest_date = latest_scheduled
+                # Start from the day after the latest scheduled text_card
+                start_date = latest_date.replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                log_info(f"📅 Latest text_card: {latest_date.date()}. Starting from: {start_date.date()}")
+            except Exception as e:
+                log_warning(f"⚠️ Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
+                start_date = datetime.now(SA_TZ).replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        else:
+            # No existing text_card posts, start from tomorrow
+            start_date = datetime.now(SA_TZ).replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            log_info(f"📅 No existing text_card posts. Starting from: {start_date.date()}")
+
+        # Step 2: Initialize generators
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        content_gen = ContentGenerator(config_path, supabase_client)
+        text_card_gen = TextCardGenerator(config_path)
+        db = SocialMediaDatabase(supabase_client)
+
+        # Step 3: Generate 7 text cards
+        created_ids = []
+        skipped_count = 0
+        content_types = ['quote', 'tip', 'educational', 'motivation']
+
+        for day_offset in range(7):
+            scheduled_time = start_date + timedelta(days=day_offset)
+
+            try:
+                # Check if text_card already exists for this day at 4pm
+                check_result = supabase_client.table('social_posts').select('id').eq(
+                    'post_type', 'text_card'
+                ).eq(
+                    'scheduled_time', scheduled_time.isoformat()
+                ).in_(
+                    'status', ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
+                ).execute()
+
+                if check_result.data:
+                    log_info(f"⏭️  Skipping {scheduled_time.date()} - text_card already exists")
+                    skipped_count += 1
+                    continue
+
+                log_info(f"📝 Generating text card {day_offset + 1}/7 for {scheduled_time.date()}")
+
+                # Rotate through content types
+                content_type = content_types[day_offset % len(content_types)]
+
+                # Generate content
+                content = content_gen.generate_text_card_content(content_type)
+
+                if not content or 'type' not in content:
+                    log_error(f"Failed to generate content for day {day_offset + 1}")
+                    skipped_count += 1
+                    continue
+
+                actual_content_type = content['type']
+
+                # Generate image
+                image_content = {k: v for k, v in content.items() if k not in ['type', 'caption', 'hashtags']}
+                image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
+
+                # Upload to storage
+                storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+                image_url = upload_file_to_supabase(
+                    supabase_client,
+                    image_path,
+                    storage_path,
+                    'social-media-assets'
+                )
+
+                if not image_url:
+                    log_error(f"Failed to upload image for day {day_offset + 1}")
+                    skipped_count += 1
+                    continue
+
+                # Prepare metadata
+                metadata = {
+                    'text_card_type': actual_content_type,
+                    'text_card_content': image_content,
+                    'generated_at': datetime.now(SA_TZ).isoformat(),
+                    'weekly_batch': True,
+                    'day': day_offset + 1
+                }
+
+                # Save to database
+                post_data = {
+                    'platform': 'facebook',
+                    'content_text': content.get('caption', ''),
+                    'post_type': 'text_card',
+                    'scheduled_time': scheduled_time.isoformat(),
+                    'media_url': image_url,
+                    'hashtags': content.get('hashtags', []),
+                    'generation_prompt': json.dumps(metadata),
+                    'status': 'pending_approval',
+                    'is_pinned': False
+                }
+
+                post_id = db.save_post(post_data)
+
+                if post_id:
+                    created_ids.append(post_id)
+                    log_info(f"✅ Created text card {day_offset + 1}/7: {post_id}")
+                else:
+                    skipped_count += 1
+
+            except Exception as e:
+                log_error(f"❌ Failed to generate text card for day {day_offset + 1}: {e}")
+                skipped_count += 1
+                continue
+
+        # Calculate date range
+        end_date = start_date + timedelta(days=6)
+
+        return jsonify({
+            'success': True,
+            'posts_created': len(created_ids),
+            'posts_skipped': skipped_count,
+            'first_date': start_date.strftime('%Y-%m-%d'),
+            'last_date': end_date.strftime('%Y-%m-%d'),
+            'post_ids': created_ids,
+            'message': f'✅ Created {len(created_ids)} text cards for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (16:00 SAST daily). Skipped {skipped_count}.'
+        })
+
+    except Exception as e:
+        log_error(f"❌ Generate weekly text cards failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/text-card/<post_id>/edit', methods=['POST'])
+def api_edit_text_card(post_id):
+    """Edit text card content and regenerate image.
+
+    JSON body (depends on text_card_type in metadata):
+    For quote: {"quote": "...", "attribution": "..."}
+    For tip: {"header": "...", "tip": "...", "subtitle": "..."}
+    For educational: {"title": "...", "points": ["...", "..."]}
+    For motivation: {"statement": "..."}
+
+    Optionally include: {"caption": "...", "hashtags": [...]}
+
+    Returns:
+        JSON with success, new_image_url, updated post data
+    """
+    log_info(f"📥 Request: /api/dashboard/text-card/{post_id}/edit")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        from social_media.text_card_generator import TextCardGenerator
+        from utils.supabase_storage import upload_file_to_supabase
+        import os
+        import json
+        from datetime import datetime
+        import pytz
+
+        SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        # Fetch the post
+        log_info(f"🔍 Fetching post {post_id}")
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Verify it's a text_card
+        if post.get('post_type') != 'text_card':
+            return jsonify({'success': False, 'error': 'Post is not a text_card'}), 400
+
+        # Verify it's not published
+        if post.get('status') == 'published':
+            return jsonify({'success': False, 'error': 'Cannot edit a published post'}), 400
+
+        # Parse existing metadata
+        existing_metadata = {}
+        if post.get('generation_prompt'):
+            try:
+                if isinstance(post['generation_prompt'], str):
+                    existing_metadata = json.loads(post['generation_prompt'])
+                else:
+                    existing_metadata = post['generation_prompt']
+            except:
+                existing_metadata = {}
+
+        # Get text_card_type from metadata
+        text_card_type = existing_metadata.get('text_card_type')
+        if not text_card_type:
+            return jsonify({'success': False, 'error': 'Text card type not found in metadata'}), 400
+
+        log_info(f"📝 Editing {text_card_type} text card")
+
+        # Get existing text_card_content and merge with new data
+        existing_content = existing_metadata.get('text_card_content', {})
+
+        # Build new content based on text_card_type
+        new_content = {}
+
+        if text_card_type == 'quote':
+            new_content['quote'] = data.get('quote', existing_content.get('quote', ''))
+            new_content['attribution'] = data.get('attribution', existing_content.get('attribution', ''))
+        elif text_card_type == 'tip':
+            new_content['header'] = data.get('header', existing_content.get('header', ''))
+            new_content['tip'] = data.get('tip', existing_content.get('tip', ''))
+            new_content['subtitle'] = data.get('subtitle', existing_content.get('subtitle'))
+        elif text_card_type == 'educational':
+            new_content['title'] = data.get('title', existing_content.get('title', ''))
+            new_content['points'] = data.get('points', existing_content.get('points', []))
+        elif text_card_type == 'motivation':
+            new_content['statement'] = data.get('statement', existing_content.get('statement', ''))
+        else:
+            return jsonify({'success': False, 'error': f'Unknown text_card_type: {text_card_type}'}), 400
+
+        # Regenerate image
+        log_info(f"🎨 Regenerating {text_card_type} image")
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        text_card_gen = TextCardGenerator(config_path)
+
+        image_path = text_card_gen.generate_text_card(text_card_type, new_content)
+
+        # Upload new image to Supabase storage
+        # Use existing media_url path if available, otherwise create new one
+        existing_media_url = post.get('media_url', '')
+        if existing_media_url and 'text_cards/' in existing_media_url:
+            # Extract the storage path from the URL
+            # URL format: https://...supabase.co/storage/v1/object/public/social-media-assets/text_cards/...
+            storage_path = existing_media_url.split('/social-media-assets/')[-1]
+        else:
+            # Create new storage path
+            storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
+
+        log_info(f"📤 Uploading to: {storage_path}")
+        image_url = upload_file_to_supabase(
+            supabase_client,
+            image_path,
+            storage_path,
+            'social-media-assets'
+        )
+
+        if not image_url:
+            log_error("Failed to upload updated text card image")
+            return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+
+        # Update metadata
+        updated_metadata = {
+            **existing_metadata,
+            'text_card_content': new_content,
+            'last_edited': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Build update data
+        update_data = {
+            'media_url': image_url,
+            'generation_prompt': json.dumps(updated_metadata),
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }
+
+        # Update caption if provided
+        if 'caption' in data:
+            update_data['content_text'] = data['caption']
+
+        # Update hashtags if provided
+        if 'hashtags' in data:
+            hashtags_value = data['hashtags']
+            if isinstance(hashtags_value, str):
+                # Parse string to list
+                try:
+                    hashtags_list = json.loads(hashtags_value)
+                    update_data['hashtags'] = json.dumps(hashtags_list)
+                except:
+                    # Split by comma or space
+                    tags = [t.strip() for t in hashtags_value.replace(',', ' ').split() if t.strip()]
+                    tags = ['#' + t.lstrip('#') for t in tags if t]
+                    update_data['hashtags'] = json.dumps(tags)
+            elif isinstance(hashtags_value, list):
+                update_data['hashtags'] = json.dumps(hashtags_value)
+
+        # Save to database
+        log_info(f"💾 Updating post {post_id}")
+        update_result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        if update_result.data:
+            updated_post = update_result.data[0]
+            log_info(f"✅ Text card {post_id} updated successfully")
+            return jsonify({
+                'success': True,
+                'post_id': post_id,
+                'new_image_url': image_url,
+                'post': updated_post,
+                'message': 'Text card updated successfully'
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update post'}), 500
+
+    except Exception as e:
+        log_error(f"❌ Edit text card failed: {e}")
         import traceback
         log_error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
