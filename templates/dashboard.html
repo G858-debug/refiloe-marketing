@@ -3589,6 +3589,29 @@
                 const formHtml = buildEditForm(editingTextCardType, content, caption);
                 document.getElementById('edit-form-container').innerHTML = formHtml;
 
+                // Debug logging for educational type
+                if (editingTextCardType === 'educational') {
+                    console.log('Opening educational edit modal');
+                    console.log('Content to pre-populate:', textCardContent);
+
+                    const titleField = document.getElementById('edit-edu-title');
+                    const pointsField = document.getElementById('edit-edu-points');
+                    console.log('Title field found:', !!titleField);
+                    console.log('Points field found:', !!pointsField);
+
+                    if (titleField) {
+                        console.log('Title field value:', titleField.value);
+                    } else {
+                        console.error('Cannot find edit-edu-title element!');
+                    }
+
+                    if (pointsField) {
+                        console.log('Points field value:', pointsField.value);
+                    } else {
+                        console.error('Cannot find edit-edu-points element!');
+                    }
+                }
+
                 // Set preview image
                 document.getElementById('edit-preview-image').src = post.media_url || '';
 
@@ -3707,16 +3730,27 @@
                         const titleElement = document.getElementById('edit-edu-title');
                         const pointsElement = document.getElementById('edit-edu-points');
 
+                        // Debug: log if elements exist
+                        console.log('Educational title element exists:', !!titleElement);
+                        console.log('Educational title element value:', titleElement?.value);
+                        console.log('Educational points element exists:', !!pointsElement);
                         console.log('Title element:', titleElement);
                         console.log('Title value:', titleElement ? titleElement.value : 'NOT FOUND');
+
+                        if (!titleElement) {
+                            console.error('ERROR: edit-edu-title element not found in DOM!');
+                            alert('Error: Title field not found. Please check the form.');
+                            return;
+                        }
 
                         const pointsText = pointsElement ? pointsElement.value : '';
 
                         content = {
-                            title: titleElement ? titleElement.value : '',
+                            title: titleElement.value || '',  // Get the value
                             points: pointsText.split('\n').filter(p => p.trim() !== '')
                         };
 
+                        console.log('Final educational content:', JSON.stringify(content));
                         console.log('Educational content being sent:', content);
                         break;
                     case 'motivation':
