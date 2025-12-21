@@ -891,7 +891,7 @@
             <button class="btn" onclick="generateLaunchContent()" style="background-color: #D4A574; border-color: #D4A574; color: white;">
                 🚀 Generate Launch Content
             </button>
-            <button class="btn btn-success" onclick="generateWeeklyContent()">
+            <button id="generate-weekly-btn" class="btn btn-success" onclick="generateWeeklyContent()">
                 📅 Generate Weekly Content (7 days)
             </button>
             <button class="btn" onclick="openPinnedPostModal()" style="background-color: #9333ea; border-color: #9333ea; color: white;">
@@ -909,9 +909,6 @@
             </button>
             <button class="btn btn-secondary" onclick="backfillImagePrompts()">
                 🖼️ Backfill Image Prompts
-            </button>
-            <button class="btn btn-secondary" onclick="generateWeeklyTextCards()">
-                💬 Generate Weekly Text Cards
             </button>
             <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
                 📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
@@ -2160,32 +2157,88 @@
 
         // Generate weekly content (7 posts for next 7 days at 14:00 SAST)
         async function generateWeeklyContent() {
+            // Determine which type of content to generate based on current filter
+            const filter = currentMediaFilter || 'all';
+
+            let endpoint = `${API_BASE}/api/dashboard/generate-weekly-content`;
+            let title = 'Generate Weekly Content';
+            let message = 'This will ADD 7 new posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+
+            // Customize based on filter
+            if (filter === 'text_card') {
+                endpoint = `${API_BASE}/api/dashboard/generate-weekly-text-cards`;
+                title = 'Generate Weekly Text Cards';
+                message = 'This will ADD 7 new text card posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?';
+            } else if (filter === 'video') {
+                title = 'Generate Weekly Videos';
+                message = 'This will ADD 7 new video posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+            } else if (filter === 'image') {
+                title = 'Generate Weekly Images';
+                message = 'This will ADD 7 new image posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+            } else if (filter === 'carousel') {
+                title = 'Generate Weekly Carousels';
+                message = 'This will ADD 7 new carousel posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+            }
+
+            // Show the modal with appropriate title and message
             showModal(
-                'Generate Weekly Content',
-                'This will ADD 7 new posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?',
+                title,
+                message,
                 async () => {
                     try {
+                        const btn = document.getElementById('generate-weekly-btn');
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.innerHTML = '⏳ Generating...';
+                        }
+
                         showToast('Generating weekly content... Please wait ~2 minutes.', 'info');
 
-                        const response = await fetch(`${API_BASE}/api/dashboard/generate-weekly-content`, {
+                        const response = await fetch(endpoint, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ media_type: filter })
                         });
 
                         const data = await response.json();
 
                         if (data.success) {
-                            showToast(data.message || `Created ${data.created_count} posts!`, 'success');
-                            refreshPosts();
+                            const created = data.posts_created || data.created_count || data.posts?.length || 7;
+                            const skipped = data.posts_skipped || 0;
+                            showToast(`✅ Created ${created} posts` + (skipped > 0 ? ` (${skipped} skipped)` : ''), 'success');
+                            await loadPosts();
                         } else {
-                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                            showToast('❌ ' + (data.error || 'Generation failed'), 'error');
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        showToast('Failed to generate weekly content', 'error');
+                        showToast('❌ Error: ' + error.message, 'error');
+                    } finally {
+                        const btn = document.getElementById('generate-weekly-btn');
+                        if (btn) {
+                            btn.disabled = false;
+                            updateGenerateButtonLabel();
+                        }
                     }
                 }
             );
+        }
+
+        // Update the Generate Weekly Content button label based on current filter
+        function updateGenerateButtonLabel() {
+            const btn = document.getElementById('generate-weekly-btn');
+            if (!btn) return;
+
+            const filter = currentMediaFilter || 'all';
+            const labels = {
+                'all': '📅 Generate Weekly Content (7 days)',
+                'video': '🎥 Generate Weekly Videos',
+                'image': '🖼️ Generate Weekly Images',
+                'carousel': '📊 Generate Weekly Carousels',
+                'text_card': '💬 Generate Weekly Text Cards'
+            };
+
+            btn.innerHTML = labels[filter] || labels['all'];
         }
 
         // Approve a single post
@@ -3486,6 +3539,7 @@
             currentMediaFilter = mediaType;
             localStorage.setItem('dashboardMediaFilter', mediaType);
             setActiveFilterTab(mediaType);
+            updateGenerateButtonLabel();
             loadPosts();
         }
 
@@ -3657,41 +3711,6 @@
                 btn.textContent = '💾 Save & Regenerate';
             }
         }
-
-        // Generate weekly text cards
-        async function generateWeeklyTextCards() {
-            showModal(
-                'Generate Weekly Text Cards',
-                'This will ADD 7 new text card posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?',
-                async () => {
-                    try {
-                        const btn = event.target;
-                        btn.disabled = true;
-                        btn.textContent = '⏳ Generating...';
-                        showToast('Generating weekly text cards... Please wait ~2 minutes.', 'info');
-
-                        const response = await fetch('/api/dashboard/generate-weekly-text-cards', {
-                            method: 'POST'
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            showToast(`✅ Created ${data.posts_created} text cards (${data.posts_skipped} skipped)`, 'success');
-                            await loadPosts();
-                        } else {
-                            showToast('❌ ' + (data.error || 'Generation failed'), 'error');
-                        }
-                    } catch (error) {
-                        showToast('❌ Error: ' + error.message, 'error');
-                    } finally {
-                        const btn = event.target;
-                        btn.disabled = false;
-                        btn.textContent = '💬 Generate Weekly Text Cards';
-                    }
-                }
-            );
-        }
         // ========== END FILTER FUNCTIONALITY ==========
 
         // Load posts and check connection on page load
@@ -3699,6 +3718,7 @@
             console.log('🚀 Dashboard initialized');
             // Set active tab from localStorage
             setActiveFilterTab(currentMediaFilter);
+            updateGenerateButtonLabel();
             checkConnection();
             loadPosts();
             loadMotionPrompts();
