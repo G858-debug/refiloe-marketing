@@ -3660,32 +3660,37 @@
 
         // Generate weekly text cards
         async function generateWeeklyTextCards() {
-            if (!confirm('This will ADD 7 new posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?')) return;
+            showModal(
+                'Generate Weekly Text Cards',
+                'This will ADD 7 new text card posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?',
+                async () => {
+                    try {
+                        const btn = event.target;
+                        btn.disabled = true;
+                        btn.textContent = '⏳ Generating...';
+                        showToast('Generating weekly text cards... Please wait ~2 minutes.', 'info');
 
-            try {
-                const btn = event.target;
-                btn.disabled = true;
-                btn.textContent = '⏳ Generating...';
+                        const response = await fetch('/api/dashboard/generate-weekly-text-cards', {
+                            method: 'POST'
+                        });
 
-                const response = await fetch('/api/dashboard/generate-weekly-text-cards', {
-                    method: 'POST'
-                });
+                        const data = await response.json();
 
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast(`✅ Created ${data.posts_created} text cards (${data.posts_skipped} skipped)`, 'success');
-                    await loadPosts();
-                } else {
-                    showToast('❌ ' + (data.error || 'Generation failed'), 'error');
+                        if (data.success) {
+                            showToast(`✅ Created ${data.posts_created} text cards (${data.posts_skipped} skipped)`, 'success');
+                            await loadPosts();
+                        } else {
+                            showToast('❌ ' + (data.error || 'Generation failed'), 'error');
+                        }
+                    } catch (error) {
+                        showToast('❌ Error: ' + error.message, 'error');
+                    } finally {
+                        const btn = event.target;
+                        btn.disabled = false;
+                        btn.textContent = '💬 Generate Weekly Text Cards';
+                    }
                 }
-            } catch (error) {
-                showToast('❌ Error: ' + error.message, 'error');
-            } finally {
-                const btn = event.target;
-                btn.disabled = false;
-                btn.textContent = '💬 Generate Weekly Text Cards';
-            }
+            );
         }
         // ========== END FILTER FUNCTIONALITY ==========
 
