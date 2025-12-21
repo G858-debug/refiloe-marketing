@@ -163,11 +163,15 @@ class TextCardGenerator:
         main_font = self._load_font(bold=True, size=self.CONTENT_FONT_SIZE)
         subtitle_font = self._load_font(bold=False, size=self.ATTRIBUTION_FONT_SIZE)
 
-        # Calculate content area width
+        # Calculate content area width and centering
         content_width = content_area['right'] - content_area['left']
+        center_x = content_area['center_x']
+
+        # Max width for text wrapping (with margins for better centering)
+        max_text_width = 780  # Content area width with padding
 
         # Wrap main text
-        wrapped_main = self._wrap_text(main_text, main_font, content_width)
+        wrapped_main = self._wrap_text(main_text, main_font, max_text_width)
 
         # Calculate line heights
         main_line_height = int(self.CONTENT_FONT_SIZE * 1.3)  # 30% extra for line spacing
@@ -189,7 +193,7 @@ class TextCardGenerator:
             # Add space for bullets (estimate 2 lines per bullet max, plus spacing)
             total_height += 60  # Gap before bullets
             for point in points[:4]:  # Limit to 4 points
-                wrapped_point = self._wrap_text(point, bullet_font, content_width - 80)
+                wrapped_point = self._wrap_text(point, bullet_font, max_text_width)
                 num_lines = min(len(wrapped_point), 2)  # Max 2 lines per bullet
                 total_height += num_lines * bullet_line_height + 20  # 20px between bullets
 
@@ -201,7 +205,7 @@ class TextCardGenerator:
         for line in wrapped_main:
             bbox = draw.textbbox((0, 0), line, font=main_font)
             line_width = bbox[2] - bbox[0]
-            text_x = content_area['left'] + (content_width - line_width) // 2
+            text_x = center_x - (line_width // 2)
             draw.text((text_x, current_y), line, font=main_font, fill=(255, 255, 255))
             current_y += main_line_height
 
@@ -210,7 +214,7 @@ class TextCardGenerator:
             current_y += 40  # Gap between main text and subtitle
             bbox = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
             subtitle_width = bbox[2] - bbox[0]
-            subtitle_x = content_area['left'] + (content_width - subtitle_width) // 2
+            subtitle_x = center_x - (subtitle_width // 2)
             draw.text((subtitle_x, current_y), subtitle_text, font=subtitle_font, fill=(255, 255, 255))
             current_y += subtitle_line_height
 
@@ -223,19 +227,30 @@ class TextCardGenerator:
             current_y += 60  # Gap before bullets
 
             for point in points[:4]:  # Limit to 4 points
-                # Draw bullet circle
-                bullet_radius = 6
-                bullet_x = content_area['left'] + 40
-                draw.ellipse(
-                    [(bullet_x - bullet_radius, current_y + 20 - bullet_radius),
-                     (bullet_x + bullet_radius, current_y + 20 + bullet_radius)],
-                    fill=(255, 255, 255)
-                )
+                # Wrap the bullet point text
+                max_bullet_width = 780  # Content width with margin
+                wrapped_point = self._wrap_text(point, bullet_font, max_bullet_width)
 
-                # Draw bullet text
-                text_x = bullet_x + bullet_radius + 15
-                wrapped_point = self._wrap_text(point, bullet_font, content_width - 100)
-                for point_line in wrapped_point[:2]:  # Max 2 lines per bullet
+                # For each line in the bullet point, center it horizontally
+                for i, point_line in enumerate(wrapped_point[:2]):  # Max 2 lines per bullet
+                    # Calculate text width
+                    bbox = draw.textbbox((0, 0), point_line, font=bullet_font)
+                    line_width = bbox[2] - bbox[0]
+
+                    # Draw bullet circle on first line only
+                    if i == 0:
+                        bullet_radius = 6
+                        bullet_spacing = 15  # Space between bullet and text
+                        # Position bullet to the left of centered text
+                        bullet_x = center_x - (line_width // 2) - bullet_spacing - bullet_radius
+                        draw.ellipse(
+                            [(bullet_x - bullet_radius, current_y + 20 - bullet_radius),
+                             (bullet_x + bullet_radius, current_y + 20 + bullet_radius)],
+                            fill=(255, 255, 255)
+                        )
+
+                    # Center the text horizontally
+                    text_x = center_x - (line_width // 2)
                     draw.text((text_x, current_y), point_line,
                              font=bullet_font, fill=(255, 255, 255))
                     current_y += bullet_line_height
@@ -276,8 +291,9 @@ class TextCardGenerator:
         content_area = {
             'left': 100,
             'right': 980,
-            'top': 380,    # Below avatar and name in template
-            'bottom': 1200  # Above bottom frame edge
+            'top': 350,     # Below avatar and name in template
+            'bottom': 1150,  # Above bottom frame edge
+            'center_x': 540  # Horizontal center ((100 + 980) // 2)
         }
 
         # Get text to display based on content type
