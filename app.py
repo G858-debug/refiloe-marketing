@@ -6687,7 +6687,7 @@ def api_generate_text_card():
             'content_text': content.get('caption', ''),
             'post_type': 'text_card',
             'scheduled_time': scheduled_time.isoformat(),
-            'media_url': image_url,
+            'image_url': image_url,
             'hashtags': content.get('hashtags', []),
             'generation_prompt': json.dumps(metadata),
             'status': 'pending_approval',
