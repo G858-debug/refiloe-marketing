@@ -30,6 +30,8 @@ from utils.whatsapp_notifier import WhatsAppNotifier
 from utils.supabase_storage import get_storage_client
 from social_media.weekly_report import WeeklyReportGenerator
 from social_media.thumbnail_generator import ThumbnailGenerator
+from social_media.text_card_generator import TextCardGenerator
+from social_media.content_generator import ContentGenerator
 
 try:
     from social_media.utils.avatar_iv_tracker import get_avatar_iv_credit_status
@@ -52,6 +54,9 @@ class SocialMediaScheduler:
         self.sa_tz = SA_TIMEZONE
         self.whatsapp = WhatsAppNotifier()
         self.report_generator = WeeklyReportGenerator(supabase_client)
+        self.text_card_generator = TextCardGenerator('social_media/config.yaml')
+        self.content_generator = ContentGenerator('social_media/config.yaml', supabase_client)
+        self.default_trainer_id = "refiloe_ai"
 
     # --------------------------------------------------------------------- #
     # Lifecycle management
@@ -462,6 +467,12 @@ class SocialMediaScheduler:
                 "name": "Weekly Manual Video Reminder",
                 "trigger": CronTrigger(day_of_week="sun", hour=9, minute=0, timezone=SA_TIMEZONE),
                 "callable": self._wrap_job("weekly_manual_video_reminder", self.run_weekly_manual_video_reminder),
+            },
+            {
+                "id": "text_card_generation_daily",
+                "name": "Daily Text Card Generation",
+                "trigger": CronTrigger(hour=5, minute=30, timezone=SA_TIMEZONE),
+                "callable": self._wrap_job("text_card_generation_daily", self.run_text_card_generation),
             },
         ]
 
@@ -1533,6 +1544,277 @@ Your video has been uploaded to Facebook as a DRAFT.
 
         except Exception as exc:
             log_error(f"Error in weekly manual video reminder job: {exc}\n{traceback.format_exc()}")
+
+    def run_text_card_generation(self) -> Dict[str, Any]:
+        """Generate daily text card post for 4pm SAST posting.
+
+        Only generates if no text_card is already scheduled for today's 4pm slot.
+        Creates a single-slide text image (quote/tip/educational/motivation)
+        and saves to database with pending_approval status.
+
+        Returns:
+            Dict with 'success', 'post_id', 'message', and 'skipped' keys
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping text card generation.")
+            return {"success": False, "error": "Supabase client unavailable"}
+
+        try:
+            # Check if text_card post already exists for today at 4pm SAST
+            now_sa = datetime.now(SA_TIMEZONE)
+            today_4pm = now_sa.replace(hour=16, minute=0, second=0, microsecond=0)
+
+            # Query for text_card posts scheduled between 3:30pm and 4:30pm today
+            start_time = today_4pm.replace(hour=15, minute=30)
+            end_time = today_4pm.replace(hour=16, minute=30)
+
+            response = (
+                self.supabase_client.table("social_posts")
+                .select("id")
+                .eq("post_type", "text_card")
+                .gte("scheduled_time", start_time.isoformat())
+                .lte("scheduled_time", end_time.isoformat())
+                .execute()
+            )
+
+            existing_posts = response.data if response.data else []
+
+            if existing_posts:
+                log_info(f"Text card already scheduled for today at 4pm, skipping generation")
+                return {
+                    "success": True,
+                    "skipped": True,
+                    "message": "Text card already scheduled for today"
+                }
+
+            # Generate content (random type)
+            log_info("Generating text card content...")
+            content = self.content_generator.generate_text_card_content()
+
+            if not content or not content.get('type'):
+                log_error("Failed to generate text card content")
+                return {
+                    "success": False,
+                    "error": "Failed to generate text card content"
+                }
+
+            # Create image
+            log_info(f"Creating text card image of type: {content['type']}")
+            image_path = self.text_card_generator.generate_text_card(
+                content['type'],
+                content
+            )
+
+            if not image_path or not os.path.exists(image_path):
+                log_error("Failed to generate text card image")
+                return {
+                    "success": False,
+                    "error": "Failed to generate text card image"
+                }
+
+            # Generate post ID
+            post_id = str(uuid.uuid4())
+
+            # Upload to Supabase storage
+            log_info(f"Uploading text card image to Supabase storage...")
+            storage_client = get_storage_client()
+
+            if not storage_client:
+                log_error("Storage client not available")
+                return {
+                    "success": False,
+                    "error": "Storage client not available"
+                }
+
+            storage_path = f"text-cards/{post_id}.png"
+            upload_success, public_url, upload_error = storage_client.upload_file(
+                bucket='social-images',
+                file_path=image_path,
+                destination_path=storage_path,
+                content_type='image/png'
+            )
+
+            if not upload_success or not public_url:
+                log_error(f"Failed to upload text card image: {upload_error}")
+                return {
+                    "success": False,
+                    "error": f"Failed to upload image: {upload_error}"
+                }
+
+            log_info(f"Image uploaded successfully: {public_url}")
+
+            # Clean up local file
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass
+
+            # Save to social_posts table
+            post_record = {
+                "id": post_id,
+                "trainer_id": self.default_trainer_id,
+                "status": "pending_approval",
+                "post_type": "text_card",
+                "platform": "facebook",
+                "content_text": content.get('caption', ''),
+                "scheduled_time": today_4pm.isoformat(),
+                "media_url": public_url,
+                "metadata": {
+                    "content_type": "text_card",
+                    "text_card_type": content['type'],
+                    "text_card_content": content,
+                    "hashtags": content.get('hashtags', [])
+                },
+                "created_at": now_sa.isoformat(),
+                "updated_at": now_sa.isoformat()
+            }
+
+            result = self.supabase_client.table("social_posts").insert(post_record).execute()
+
+            if result.data:
+                log_info(f"✅ Text card post created successfully: {post_id}")
+                return {
+                    "success": True,
+                    "post_id": post_id,
+                    "message": "Text card generated and saved successfully"
+                }
+            else:
+                log_error("Failed to save text card post to database")
+                return {
+                    "success": False,
+                    "error": "Failed to save post to database"
+                }
+
+        except Exception as exc:
+            log_error(f"Error in text card generation: {exc}\n{traceback.format_exc()}")
+            return {
+                "success": False,
+                "error": str(exc)
+            }
+
+    def trigger_text_card_generation(self, content_type: str = None) -> Dict[str, Any]:
+        """Manually trigger text card generation.
+
+        Args:
+            content_type: Optional specific type ('quote', 'tip', 'educational', 'motivation')
+                         If None, randomly selects.
+
+        Returns:
+            Dict with generation result
+        """
+        if self.supabase_client is None:
+            log_warning("Supabase client unavailable; skipping text card generation.")
+            return {"success": False, "error": "Supabase client unavailable"}
+
+        try:
+            # Generate content with optional type
+            log_info(f"Manually generating text card content (type: {content_type or 'random'})...")
+            content = self.content_generator.generate_text_card_content(content_type)
+
+            if not content or not content.get('type'):
+                log_error("Failed to generate text card content")
+                return {
+                    "success": False,
+                    "error": "Failed to generate text card content"
+                }
+
+            # Create image
+            log_info(f"Creating text card image of type: {content['type']}")
+            image_path = self.text_card_generator.generate_text_card(
+                content['type'],
+                content
+            )
+
+            if not image_path or not os.path.exists(image_path):
+                log_error("Failed to generate text card image")
+                return {
+                    "success": False,
+                    "error": "Failed to generate text card image"
+                }
+
+            # Generate post ID
+            post_id = str(uuid.uuid4())
+
+            # Upload to Supabase storage
+            log_info(f"Uploading text card image to Supabase storage...")
+            storage_client = get_storage_client()
+
+            if not storage_client:
+                log_error("Storage client not available")
+                return {
+                    "success": False,
+                    "error": "Storage client not available"
+                }
+
+            storage_path = f"text-cards/{post_id}.png"
+            upload_success, public_url, upload_error = storage_client.upload_file(
+                bucket='social-images',
+                file_path=image_path,
+                destination_path=storage_path,
+                content_type='image/png'
+            )
+
+            if not upload_success or not public_url:
+                log_error(f"Failed to upload text card image: {upload_error}")
+                return {
+                    "success": False,
+                    "error": f"Failed to upload image: {upload_error}"
+                }
+
+            log_info(f"Image uploaded successfully: {public_url}")
+
+            # Clean up local file
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass
+
+            # Save to social_posts table with scheduled time of 4pm today
+            now_sa = datetime.now(SA_TIMEZONE)
+            today_4pm = now_sa.replace(hour=16, minute=0, second=0, microsecond=0)
+
+            post_record = {
+                "id": post_id,
+                "trainer_id": self.default_trainer_id,
+                "status": "pending_approval",
+                "post_type": "text_card",
+                "platform": "facebook",
+                "content_text": content.get('caption', ''),
+                "scheduled_time": today_4pm.isoformat(),
+                "media_url": public_url,
+                "metadata": {
+                    "content_type": "text_card",
+                    "text_card_type": content['type'],
+                    "text_card_content": content,
+                    "hashtags": content.get('hashtags', []),
+                    "manually_triggered": True
+                },
+                "created_at": now_sa.isoformat(),
+                "updated_at": now_sa.isoformat()
+            }
+
+            result = self.supabase_client.table("social_posts").insert(post_record).execute()
+
+            if result.data:
+                log_info(f"✅ Text card post created successfully (manual trigger): {post_id}")
+                return {
+                    "success": True,
+                    "post_id": post_id,
+                    "message": "Text card generated and saved successfully"
+                }
+            else:
+                log_error("Failed to save text card post to database")
+                return {
+                    "success": False,
+                    "error": "Failed to save post to database"
+                }
+
+        except Exception as exc:
+            log_error(f"Error in manual text card generation: {exc}\n{traceback.format_exc()}")
+            return {
+                "success": False,
+                "error": str(exc)
+            }
 
     def _save_report_to_database(self, report: Dict[str, Any]) -> None:
         """
