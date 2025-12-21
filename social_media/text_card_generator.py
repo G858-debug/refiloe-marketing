@@ -15,9 +15,8 @@ from utils.logger import log_info, log_error, log_warning
 class TextCardGenerator:
     """Generates single-slide text images for social media using PIL"""
 
-    # Template URLs
+    # Template URL
     TEMPLATE_URL = "https://mqemiteirxwscxtamdtj.supabase.co/storage/v1/object/public/media/brand-assets/text-card-template.png"
-    AVATAR_URL = "https://mqemiteirxwscxtamdtj.supabase.co/storage/v1/object/public/media/brand-assets/refiloe-avatar.png"
 
     # Official Refiloe Brand Colors
     BACKGROUND_WHITE = "#FFFFFF"  # White - primary background
@@ -26,9 +25,6 @@ class TextCardGenerator:
     ACCENT_COLOR = "#AAB396"  # Sage Green - primary accent
     TEXT_COLOR = "#674636"  # Dark Brown - primary text
     TEXT_WHITE = "#FFFFFF"  # White - for dark backgrounds
-
-    # Avatar size
-    AVATAR_SIZE = 100
 
     # Image dimensions (4:5 portrait ratio for mobile optimization)
     IMAGE_WIDTH = 1080
@@ -39,14 +35,9 @@ class TextCardGenerator:
     ACCENT_BAR_HEIGHT = 20
 
     # Font sizes
-    NAME_FONT_SIZE = 40
-    TAGLINE_FONT_SIZE = 28
-    CONTENT_FONT_SIZE = 64
-    ATTRIBUTION_FONT_SIZE = 44
-    HEADER_FONT_SIZE = 52
-    SUBTITLE_FONT_SIZE = 40
-    BULLET_FONT_SIZE = 48
-    WATERMARK_SIZE = 32
+    CONTENT_FONT_SIZE = 54  # Main quote/tip/content text
+    ATTRIBUTION_FONT_SIZE = 34  # Attribution and subtitle text
+    BULLET_FONT_SIZE = 48  # For educational bullet points
 
     def __init__(self, config_path: str = 'social_media/config.yaml'):
         """Initialize with config and setup output directory.
@@ -58,20 +49,14 @@ class TextCardGenerator:
         self.output_dir = Path("/tmp/text_cards")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Fetch and cache template and avatar
-        log_info("Fetching base template and avatar from Supabase...")
+        # Fetch and cache template
+        log_info("Fetching base template from Supabase...")
         self.base_template = self._fetch_image(self.TEMPLATE_URL)
-        self.avatar = self._fetch_image(self.AVATAR_URL)
 
         if self.base_template:
             log_info(f"Base template loaded successfully ({self.base_template.size})")
         else:
             log_warning("Base template failed to load - will use fallback background")
-
-        if self.avatar:
-            log_info(f"Avatar loaded successfully ({self.avatar.size})")
-        else:
-            log_warning("Avatar failed to load - will skip avatar overlay")
 
         log_info(f"TextCardGenerator initialized. Output directory: {self.output_dir}")
 
@@ -132,8 +117,142 @@ class TextCardGenerator:
             log_error(f"Failed to generate text card: {str(e)}")
             raise
 
+    def _get_display_text(self, content: Dict[str, Any], content_type: str) -> Tuple[str, Optional[str]]:
+        """Extract display text from content based on content type.
+
+        Args:
+            content: Content dictionary
+            content_type: Type of content (quote, tip, educational, motivation)
+
+        Returns:
+            Tuple[str, Optional[str]]: (main_text, subtitle_text)
+        """
+        if content_type == 'quote':
+            main_text = content.get('quote', '')
+            subtitle = content.get('attribution', '')
+            # Format attribution with em dash for quotes
+            subtitle_text = f"— {subtitle}" if subtitle else None
+        elif content_type == 'tip':
+            main_text = content.get('tip', '')
+            subtitle_text = content.get('subtitle', '')
+        elif content_type == 'educational':
+            main_text = content.get('title', '')
+            # Educational content will handle points separately
+            subtitle_text = None
+        elif content_type == 'motivation':
+            main_text = content.get('statement', '')
+            subtitle_text = None
+        else:
+            main_text = ''
+            subtitle_text = None
+
+        return main_text, subtitle_text
+
+    def _draw_centered_text(self, draw: ImageDraw.Draw, main_text: str, subtitle_text: Optional[str], content_area: Dict[str, int], content_type: str, content: Dict[str, Any]) -> None:
+        """Draw centered text with word wrapping in content area.
+
+        Args:
+            draw: ImageDraw object
+            main_text: Main content text
+            subtitle_text: Optional subtitle/attribution text
+            content_area: Dict with 'left', 'right', 'top', 'bottom' boundaries
+            content_type: Type of content (for special handling like educational)
+            content: Full content dict (for educational points)
+        """
+        # Load fonts
+        main_font = self._load_font(bold=True, size=self.CONTENT_FONT_SIZE)
+        subtitle_font = self._load_font(bold=False, size=self.ATTRIBUTION_FONT_SIZE)
+
+        # Calculate content area width
+        content_width = content_area['right'] - content_area['left']
+
+        # Wrap main text
+        wrapped_main = self._wrap_text(main_text, main_font, content_width)
+
+        # Calculate line heights
+        main_line_height = int(self.CONTENT_FONT_SIZE * 1.3)  # 30% extra for line spacing
+        subtitle_line_height = int(self.ATTRIBUTION_FONT_SIZE * 1.3)
+
+        # Calculate total height needed
+        total_height = len(wrapped_main) * main_line_height
+
+        # Add subtitle height if present
+        if subtitle_text:
+            total_height += 40 + subtitle_line_height  # 40px gap between main and subtitle
+
+        # For educational content, add bullet points
+        if content_type == 'educational':
+            points = content.get('points', [])
+            bullet_font = self._load_font(bold=False, size=self.BULLET_FONT_SIZE)
+            bullet_line_height = int(self.BULLET_FONT_SIZE * 1.2)
+
+            # Add space for bullets (estimate 2 lines per bullet max, plus spacing)
+            total_height += 60  # Gap before bullets
+            for point in points[:4]:  # Limit to 4 points
+                wrapped_point = self._wrap_text(point, bullet_font, content_width - 80)
+                num_lines = min(len(wrapped_point), 2)  # Max 2 lines per bullet
+                total_height += num_lines * bullet_line_height + 20  # 20px between bullets
+
+        # Calculate starting Y position to center vertically
+        content_height = content_area['bottom'] - content_area['top']
+        current_y = content_area['top'] + (content_height - total_height) // 2
+
+        # Draw main text (centered horizontally)
+        for line in wrapped_main:
+            bbox = draw.textbbox((0, 0), line, font=main_font)
+            line_width = bbox[2] - bbox[0]
+            text_x = content_area['left'] + (content_width - line_width) // 2
+            draw.text((text_x, current_y), line, font=main_font, fill=(255, 255, 255))
+            current_y += main_line_height
+
+        # Draw subtitle if present
+        if subtitle_text:
+            current_y += 40  # Gap between main text and subtitle
+            bbox = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
+            subtitle_width = bbox[2] - bbox[0]
+            subtitle_x = content_area['left'] + (content_width - subtitle_width) // 2
+            draw.text((subtitle_x, current_y), subtitle_text, font=subtitle_font, fill=(255, 255, 255))
+            current_y += subtitle_line_height
+
+        # Draw educational bullet points if applicable
+        if content_type == 'educational':
+            points = content.get('points', [])
+            bullet_font = self._load_font(bold=False, size=self.BULLET_FONT_SIZE)
+            bullet_line_height = int(self.BULLET_FONT_SIZE * 1.2)
+
+            current_y += 60  # Gap before bullets
+
+            for point in points[:4]:  # Limit to 4 points
+                # Draw bullet circle
+                bullet_radius = 6
+                bullet_x = content_area['left'] + 40
+                draw.ellipse(
+                    [(bullet_x - bullet_radius, current_y + 20 - bullet_radius),
+                     (bullet_x + bullet_radius, current_y + 20 + bullet_radius)],
+                    fill=(255, 255, 255)
+                )
+
+                # Draw bullet text
+                text_x = bullet_x + bullet_radius + 15
+                wrapped_point = self._wrap_text(point, bullet_font, content_width - 100)
+                for point_line in wrapped_point[:2]:  # Max 2 lines per bullet
+                    draw.text((text_x, current_y), point_line,
+                             font=bullet_font, fill=(255, 255, 255))
+                    current_y += bullet_line_height
+
+                current_y += 20  # Space between bullets
+
     def _create_unified_layout(self, content_type: str, content: Dict[str, Any]) -> Image.Image:
         """Create text card using pre-designed template.
+
+        The template already contains:
+        - Avatar image (circular, centered)
+        - "Refiloe" name
+        - "Personal assistant | trainer" tagline
+        - Decorative frame and styling
+        - "REFILOE" watermark at bottom
+
+        This method only needs to overlay the content text.
 
         Args:
             content_type: Type of content (quote, tip, educational, motivation)
@@ -152,133 +271,20 @@ class TextCardGenerator:
 
         draw = ImageDraw.Draw(img)
 
-        # Frame boundaries (matching template design)
-        frame_inset = 70
-        content_start_y = frame_inset + 120  # Start position for content
+        # Define content area (inside frame, below template header)
+        # The template has avatar/name/tagline at top, so content starts lower
+        content_area = {
+            'left': 100,
+            'right': 980,
+            'top': 380,    # Below avatar and name in template
+            'bottom': 1200  # Above bottom frame edge
+        }
 
-        # Add avatar (centered, near top inside frame)
-        if self.avatar:
-            avatar_size = self.AVATAR_SIZE
-            avatar_resized = self.avatar.resize((avatar_size, avatar_size), Image.Resampling.LANCZOS)
+        # Get text to display based on content type
+        main_text, subtitle_text = self._get_display_text(content, content_type)
 
-            # Create circular mask
-            mask = Image.new('L', (avatar_size, avatar_size), 0)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.ellipse((0, 0, avatar_size, avatar_size), fill=255)
-
-            # Center horizontally, position near top
-            avatar_x = (self.IMAGE_WIDTH - avatar_size) // 2
-            avatar_y = content_start_y
-            img.paste(avatar_resized, (avatar_x, avatar_y), mask)
-
-            current_y = avatar_y + avatar_size + 20
-        else:
-            current_y = content_start_y
-
-        # Draw name "Refiloe"
-        name_font = self._load_font(bold=True, size=self.NAME_FONT_SIZE)
-        name_text = "Refiloe"
-        bbox = draw.textbbox((0, 0), name_text, font=name_font)
-        name_width = bbox[2] - bbox[0]
-        name_x = (self.IMAGE_WIDTH - name_width) // 2
-        draw.text((name_x, current_y), name_text, font=name_font, fill=(255, 255, 255))
-        current_y += 50
-
-        # Draw tagline "Personal assistant | trainer"
-        tagline_font = self._load_font(bold=False, size=self.TAGLINE_FONT_SIZE)
-        tagline_text = "Personal assistant | trainer"
-        bbox = draw.textbbox((0, 0), tagline_text, font=tagline_font)
-        tagline_width = bbox[2] - bbox[0]
-        tagline_x = (self.IMAGE_WIDTH - tagline_width) // 2
-        draw.text((tagline_x, current_y), tagline_text, font=tagline_font, fill=(255, 255, 255))
-        current_y += 80
-
-        # Decorative line
-        line_width = 200
-        line_x = (self.IMAGE_WIDTH - line_width) // 2
-        draw.line([(line_x, current_y), (line_x + line_width, current_y)],
-                 fill=(255, 255, 255), width=3)
-        current_y += 60
-
-        # Draw main content (centered vertically in remaining space)
-        max_width = self.IMAGE_WIDTH - (2 * frame_inset) - 140
-
-        # Extract main text based on content type
-        if content_type == 'quote':
-            main_text = content.get('quote', '')
-            attribution = content.get('attribution', '')
-        elif content_type == 'tip':
-            main_text = content.get('tip', '')
-            attribution = content.get('subtitle', '')
-        elif content_type == 'educational':
-            main_text = content.get('title', '')
-            attribution = None
-        elif content_type == 'motivation':
-            main_text = content.get('statement', '')
-            attribution = None
-        else:
-            main_text = ''
-            attribution = None
-
-        # Draw main content text
-        content_font = self._load_font(bold=True, size=self.CONTENT_FONT_SIZE)
-        wrapped_lines = self._wrap_text(main_text, content_font, max_width)
-
-        line_height = 75
-        for line in wrapped_lines:
-            bbox = draw.textbbox((0, 0), line, font=content_font)
-            text_width = bbox[2] - bbox[0]
-            text_x = (self.IMAGE_WIDTH - text_width) // 2
-            draw.text((text_x, current_y), line, font=content_font, fill=(255, 255, 255))
-            current_y += line_height
-
-        current_y += 40
-
-        # Draw attribution/subtitle if present
-        if attribution:
-            attr_font = self._load_font(bold=False, size=self.ATTRIBUTION_FONT_SIZE)
-            attr_text = f"— {attribution}" if content_type == 'quote' else attribution
-            bbox = draw.textbbox((0, 0), attr_text, font=attr_font)
-            attr_width = bbox[2] - bbox[0]
-            attr_x = (self.IMAGE_WIDTH - attr_width) // 2
-            draw.text((attr_x, current_y), attr_text, font=attr_font, fill=(255, 255, 255))
-            current_y += 60
-
-        # Handle educational bullet points
-        if content_type == 'educational':
-            points = content.get('points', [])
-            bullet_font = self._load_font(bold=False, size=self.BULLET_FONT_SIZE)
-            bullet_padding = frame_inset + 100
-
-            for point in points[:4]:  # Limit to 4 points
-                # Draw bullet circle
-                bullet_radius = 6
-                bullet_x = bullet_padding
-                draw.ellipse(
-                    [(bullet_x - bullet_radius, current_y + 20 - bullet_radius),
-                     (bullet_x + bullet_radius, current_y + 20 + bullet_radius)],
-                    fill=(255, 255, 255)
-                )
-
-                # Draw bullet text
-                text_x = bullet_x + bullet_radius + 15
-                wrapped_point = self._wrap_text(point, bullet_font, max_width - 80)
-                for point_line in wrapped_point[:2]:  # Max 2 lines per bullet
-                    draw.text((text_x, current_y), point_line,
-                             font=bullet_font, fill=(255, 255, 255))
-                    current_y += 55
-
-                current_y += 15  # Space between bullets
-
-        # Bottom watermark "REFILOE"
-        watermark_font = self._load_font(bold=True, size=self.WATERMARK_SIZE)
-        watermark_text = "REFILOE"
-        bbox = draw.textbbox((0, 0), watermark_text, font=watermark_font)
-        watermark_width = bbox[2] - bbox[0]
-        watermark_x = (self.IMAGE_WIDTH - watermark_width) // 2
-        watermark_y = self.IMAGE_HEIGHT - frame_inset - 50
-        draw.text((watermark_x, watermark_y), watermark_text,
-                 font=watermark_font, fill=(255, 255, 255))
+        # Draw centered text
+        self._draw_centered_text(draw, main_text, subtitle_text, content_area, content_type, content)
 
         return img.convert('RGB')
 
