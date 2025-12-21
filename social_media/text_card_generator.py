@@ -25,7 +25,7 @@ class TextCardGenerator:
 
     # Avatar URL
     AVATAR_URL = "https://mqemiteirxwscxtamdtj.supabase.co/storage/v1/object/public/media/brand-assets/refiloe-avatar.png"
-    AVATAR_SIZE = 80
+    AVATAR_SIZE = 100
 
     # Image dimensions (4:5 portrait ratio for mobile optimization)
     IMAGE_WIDTH = 1080
@@ -252,7 +252,7 @@ class TextCardGenerator:
 
         tagline_y = name_y + self.NAME_FONT_SIZE + 5
         tagline_color = tuple(min(255, c + 40) for c in text_color)  # Lighter shade
-        draw.text((name_x, tagline_y), "AI Fitness Coach", font=tagline_font, fill=tagline_color)
+        draw.text((name_x, tagline_y), "Personal assistant | trainer", font=tagline_font, fill=tagline_color)
 
         # Content area starts below header
         content_start_y = avatar_y + self.AVATAR_SIZE + 80
