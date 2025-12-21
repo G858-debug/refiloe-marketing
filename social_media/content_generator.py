@@ -1252,6 +1252,168 @@ Generate the carousel content now:"""
             'content_type': content_type
         }
 
+    def _generate_viral_cta(self, theme: str, content_type: str = None,
+                            cta_type: str = None) -> Dict[str, str]:
+        """Generate viral-optimized call-to-action based on content
+
+        Args:
+            theme: Content theme
+            content_type: Viral content type
+            cta_type: Override CTA type (comment, save, share, participate)
+
+        Returns:
+            Dict with 'spoken_cta', 'text_overlay_cta', 'cta_type', 'keyword'
+        """
+        import random
+
+        viral_ctas = self.config.get('viral_ctas', {})
+
+        # Theme-specific CTA mappings
+        theme_cta_config = {
+            'admin_hacks': {
+                'preferred_type': 'comment',
+                'keywords': ['TEMPLATE', 'SYSTEM', 'HACK', 'AUTOMATE'],
+                'spoken_templates': [
+                    "Comment '{keyword}' and I'll send you the exact template I use",
+                    "Drop a '{keyword}' below if you want the full system",
+                    "Type '{keyword}' in the comments for the free guide"
+                ],
+                'text_templates': [
+                    "Comment '{keyword}' 👇",
+                    "Want this? Drop '{keyword}'",
+                    "Free template → '{keyword}'"
+                ]
+            },
+            'relatable_trainer_life': {
+                'preferred_type': 'engage',
+                'keywords': ['ME', 'SAME', 'THIS'],
+                'spoken_templates': [
+                    "Drop a {emoji} if this is literally you",
+                    "Comment '{keyword}' if you've been here",
+                    "Tag a trainer who does this exact thing"
+                ],
+                'text_templates': [
+                    "Drop a {emoji} if this is you",
+                    "Tag a trainer 👇",
+                    "'{keyword}' if same"
+                ]
+            },
+            'gym_culture_humor': {
+                'preferred_type': 'engage',
+                'keywords': ['GUILTY', 'FACTS', 'SAME'],
+                'spoken_templates': [
+                    "Comment '{keyword}' if you're guilty of this",
+                    "Tag someone who needs to see this",
+                    "Which one are you? Comment below"
+                ],
+                'text_templates': [
+                    "'{keyword}' if guilty 😂",
+                    "Tag someone 👇",
+                    "Which one are you?"
+                ]
+            },
+            'client_management_tips': {
+                'preferred_type': 'save',
+                'keywords': ['SAVED', 'NEED', 'TIP'],
+                'spoken_templates': [
+                    "Save this for your next difficult client conversation",
+                    "Bookmark this before you need it",
+                    "You'll want this saved for later"
+                ],
+                'text_templates': [
+                    "Save this 📌",
+                    "Bookmark for later",
+                    "You'll need this"
+                ]
+            },
+            'myth_busting': {
+                'preferred_type': 'share',
+                'keywords': ['TRUTH', 'SHARE', 'WRONG'],
+                'spoken_templates': [
+                    "Share this with someone who still believes this",
+                    "Send this to a trainer who needs the truth",
+                    "Tag someone who needs to hear this"
+                ],
+                'text_templates': [
+                    "Share the truth 🔄",
+                    "Send to a friend",
+                    "Tag someone who believes this"
+                ]
+            }
+        }
+
+        # Get theme config or default
+        config = theme_cta_config.get(theme, {
+            'preferred_type': 'comment',
+            'keywords': ['YES', 'MORE', 'INFO'],
+            'spoken_templates': ["Comment below if you found this helpful"],
+            'text_templates': ["Comment below 👇"]
+        })
+
+        # Override CTA type if specified
+        actual_cta_type = cta_type or config['preferred_type']
+
+        # Select random keyword and emoji
+        keyword = random.choice(config['keywords'])
+        emojis = ['🔥', '💪', '✋', '👇', '🙋', '💯', '🎯']
+        emoji = random.choice(emojis)
+
+        # Generate spoken and text CTAs
+        spoken_template = random.choice(config['spoken_templates'])
+        text_template = random.choice(config['text_templates'])
+
+        spoken_cta = spoken_template.format(keyword=keyword, emoji=emoji)
+        text_cta = text_template.format(keyword=keyword, emoji=emoji)
+
+        return {
+            'spoken_cta': spoken_cta,
+            'text_overlay_cta': text_cta,
+            'cta_type': actual_cta_type,
+            'keyword': keyword,
+            'emoji': emoji
+        }
+
+    def _get_retention_hooks(self, duration: int) -> List[Dict]:
+        """Generate mid-video retention hooks to prevent drop-off
+
+        Args:
+            duration: Video duration in seconds
+
+        Returns:
+            List of retention hook placements
+        """
+        import random
+
+        hooks = []
+
+        retention_phrases = [
+            "But here's where it gets interesting...",
+            "Wait, it gets better...",
+            "Now this is the part most people miss...",
+            "But here's the thing nobody talks about...",
+            "And this is where everything changed...",
+            "But wait, there's more...",
+            "Here's the real secret though..."
+        ]
+
+        # For videos 20+ seconds, add retention hook at ~40% mark
+        if duration >= 20:
+            hooks.append({
+                'time': int(duration * 0.4),
+                'phrase': random.choice(retention_phrases),
+                'text_overlay': "👇 Keep watching"
+            })
+
+        # For videos 40+ seconds, add second hook at ~70% mark
+        if duration >= 40:
+            hooks.append({
+                'time': int(duration * 0.7),
+                'phrase': random.choice(retention_phrases),
+                'text_overlay': "Almost there..."
+            })
+
+        return hooks
+
     def _select_video_format(self, theme: str, content_type: str = None) -> Dict[str, Any]:
         """Select optimal video format based on content type and theme
 
@@ -1475,6 +1637,8 @@ Generate the carousel content now:"""
         target_word_count_min: int = 75,
         target_word_count_max: int = 100,
         triple_hook: Dict[str, Any] = None,
+        cta: Dict[str, str] = None,
+        retention_hooks: List[Dict] = None,
     ) -> str:
         """Create prompt for video script generation with Triple Hook System
 
@@ -1547,6 +1711,39 @@ VIDEO STRUCTURE:
 3. CTA ({main_content_end}-{duration}s): Strong call-to-action
 """
 
+        # Build CTA and retention hooks section
+        cta_section = ""
+        if cta:
+            cta_section = f"""
+CTA REQUIREMENTS (CRITICAL - Implement exactly as specified):
+
+Spoken CTA: "{cta['spoken_cta']}"
+Text Overlay CTA: "{cta['text_overlay_cta']}"
+CTA Type: {cta['cta_type']}
+Keyword: {cta['keyword']}
+
+This CTA is optimized for {theme} content. Use it exactly as written in the final segment.
+The spoken CTA should be delivered with energy and conviction.
+The text overlay should appear prominently on screen during the CTA.
+"""
+
+        retention_hooks_section = ""
+        if retention_hooks:
+            hooks_formatted = "\n".join([
+                f"  - At {hook['time']}s: \"{hook['phrase']}\" (Text overlay: \"{hook['text_overlay']}\")"
+                for hook in retention_hooks
+            ])
+            retention_hooks_section = f"""
+RETENTION HOOKS (to prevent viewer drop-off):
+Include these phrases at natural breaking points in your script:
+{hooks_formatted}
+
+These phrases create "open loops" that make viewers want to keep watching.
+Place them BEFORE revealing key information, not after.
+They should feel natural and conversational, not forced.
+Use them to bridge between segments and maintain curiosity.
+"""
+
         prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating a {target_duration_seconds}-second video script for personal trainers.
 
 VIDEO SPECIFICATIONS:
@@ -1588,6 +1785,8 @@ RETENTION OPTIMIZATION:
 - Make it impossible to scroll past
 
 {triple_hook_section}
+{cta_section}
+{retention_hooks_section}
 
 VISUAL CUES TO INCLUDE:
 - Text overlays for key points
@@ -1759,11 +1958,17 @@ Generate a script that will keep trainers watching until the end!"""
             # Generate triple hook for this theme
             triple_hook = self._generate_triple_hook(theme, content_type)
 
+            # Generate viral CTA for this theme
+            cta = self._generate_viral_cta(theme, content_type)
+
+            # Generate retention hooks based on target duration
+            retention_hooks = self._get_retention_hooks(target_duration_seconds)
+
             # Get video-specific hooks (for legacy compatibility)
             video_hooks = self._get_video_hooks()
             selected_hook = video_hooks.get('verbal', 'Stop scrolling if you\'re a trainer who...')
 
-            # Create video script prompt with triple hook
+            # Create video script prompt with triple hook, CTA, and retention hooks
             prompt = self._create_video_script_prompt(
                 theme,
                 duration,
@@ -1773,6 +1978,8 @@ Generate a script that will keep trainers watching until the end!"""
                 target_word_count_min,
                 target_word_count_max,
                 triple_hook,
+                cta,
+                retention_hooks,
             )
 
             # Call Claude API
@@ -1788,6 +1995,10 @@ Generate a script that will keep trainers watching until the end!"""
             if script_data:
                 # Add triple hook metadata
                 script_data['triple_hook'] = triple_hook
+
+                # Add CTA metadata
+                script_data['cta_config'] = cta
+                script_data['retention_hooks'] = retention_hooks
 
                 # Add video format metadata
                 script_data['video_format'] = format_name
