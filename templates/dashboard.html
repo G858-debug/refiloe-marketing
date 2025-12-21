@@ -3660,7 +3660,7 @@
 
         // Generate weekly text cards
         async function generateWeeklyTextCards() {
-            if (!confirm('Generate 7 text card posts for the next week at 4pm daily?')) return;
+            if (!confirm('This will ADD 7 new posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?')) return;
 
             try {
                 const btn = event.target;
