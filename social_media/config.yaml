@@ -297,3 +297,178 @@ content_templates:
       - topic: "From Chaos to Calm: Organizing Your Training Business with Free Tools"
         description: "Using Google Suite, Calendly, and free CRM tools to streamline client management and communication"
         target_slides: 7
+
+# Viral Hooks Configuration
+viral_hooks:
+  visual_hooks:
+    description: "First-frame visual elements that stop scrolling"
+    examples:
+      - "Transformation result shown first"
+      - "Unexpected prop or setup"
+      - "Mid-action freeze frame"
+      - "Before/after split screen"
+      - "Text overlay with bold claim"
+
+  text_hooks:
+    description: "On-screen text overlays for sound-off viewing (1-7 words max)"
+    templates:
+      - "POV: [situation]"
+      - "The [thing] nobody talks about"
+      - "Stop if you [identifier]"
+      - "This changed everything"
+      - "Wait for it..."
+      - "[Number] seconds to [benefit]"
+      - "Why [common belief] is wrong"
+
+  verbal_hooks:
+    description: "Opening lines for first 3 seconds"
+    templates:
+      - "The message came at [time]..."
+      - "Nobody told me [revelation]..."
+      - "I lost [thing] because [reason]..."
+      - "Stop doing [common mistake]..."
+      - "What if I told you [contrarian claim]..."
+      - "This one change [result]..."
+
+# Video Formats Configuration
+video_formats:
+  quick_hit:
+    duration_range: [15, 25]
+    target_words: [25, 40]
+    structure:
+      - hook: 2
+      - content: 12
+      - cta: 3
+    best_for:
+      - "myth_busting"
+      - "quick_tips"
+      - "relatable_moments"
+      - "challenges"
+
+  standard:
+    duration_range: [30, 45]
+    target_words: [50, 75]
+    structure:
+      - hook: 3
+      - setup: 8
+      - content: 25
+      - cta: 5
+    best_for:
+      - "tutorials"
+      - "educational"
+      - "behind_scenes"
+
+  story:
+    duration_range: [45, 60]
+    target_words: [75, 100]
+    structure:
+      - hook: 3
+      - story_setup: 10
+      - tension: 20
+      - resolution: 15
+      - cta: 7
+    best_for:
+      - "transformations"
+      - "client_stories"
+      - "personal_journey"
+
+# Viral Content Types Configuration
+viral_content_types:
+  relatable_struggle:
+    percentage: 25
+    description: "Universal trainer experiences that trigger 'that's me!' response"
+    examples:
+      - "The 5am alarm reality"
+      - "Client excuse bingo"
+      - "Equipment awkwardness"
+      - "The meal prep struggle"
+      - "When clients ghost you"
+    visual_style: "POV format, internal monologue text"
+
+  myth_buster:
+    percentage: 20
+    description: "Challenge common beliefs with proof"
+    examples:
+      - "Why [common advice] doesn't work"
+      - "The truth about [topic]"
+      - "What trainers get wrong about [subject]"
+    visual_style: "Split screen, before/after, reaction"
+
+  transformation_reveal:
+    percentage: 15
+    description: "Show result first, then explain"
+    examples:
+      - "Client result showcase"
+      - "Business transformation"
+      - "System upgrade reveal"
+    visual_style: "Result first, then journey"
+
+  challenge_content:
+    percentage: 15
+    description: "Interactive content that prompts participation"
+    examples:
+      - "Can you do this?"
+      - "Trainer challenge"
+      - "Rate your [skill]"
+    visual_style: "Direct to camera, challenge format"
+
+  behind_scenes:
+    percentage: 15
+    description: "Authentic glimpse into trainer life"
+    examples:
+      - "Day in the life"
+      - "What actually happens"
+      - "The reality of..."
+    visual_style: "Raw, unpolished, real"
+
+  quick_tip:
+    percentage: 10
+    description: "Single actionable insight"
+    examples:
+      - "One thing that changed everything"
+      - "The shortcut for..."
+      - "Do this instead of..."
+    visual_style: "Direct, punchy, clear text overlay"
+
+# Viral CTAs Configuration
+viral_ctas:
+  comment_triggers:
+    - "Comment '[KEYWORD]' and I'll send you the template"
+    - "Drop a [EMOJI] if this is you"
+    - "Which one are you? Comment 1, 2, or 3"
+    - "Tag a trainer who needs this"
+    - "What's your number? Comment below"
+
+  save_triggers:
+    - "Save this before your next [SITUATION]"
+    - "Bookmark this for [DAY/TIME]"
+    - "You'll need this on [OCCASION]"
+
+  share_triggers:
+    - "Share this with a trainer who [SITUATION]"
+    - "Send this to your [RELATIONSHIP]"
+    - "Your gym buddy needs to see this"
+
+  participation_triggers:
+    - "Try this and show me your results"
+    - "Duet this with your version"
+    - "POV: Show me your [THING]"
+
+# Content Themes Configuration
+content_themes:
+  gym_culture_humor:
+    percentage: 15
+    description: "Relatable gym moments and trainer humor"
+    examples:
+      - "That one client who..."
+      - "Gym equipment struggles"
+      - "Trainer vs client expectations"
+      - "The internal monologue moments"
+
+  myth_busting:
+    percentage: 10
+    description: "Challenge common fitness industry beliefs"
+    examples:
+      - "Why this popular advice is wrong"
+      - "The truth about common practices"
+      - "What the fitness industry gets wrong"
