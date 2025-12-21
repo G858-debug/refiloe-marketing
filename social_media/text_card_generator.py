@@ -72,7 +72,10 @@ class TextCardGenerator:
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            return Image.open(BytesIO(response.content)).convert('RGBA')
+            img = Image.open(BytesIO(response.content)).convert('RGBA')
+            # Resize template to standard output dimensions
+            img = img.resize((1080, 1350), Image.LANCZOS)
+            return img
         except Exception as e:
             log_error(f"Failed to fetch image from {url}: {e}")
             return None
@@ -291,9 +294,9 @@ class TextCardGenerator:
         content_area = {
             'left': 100,
             'right': 980,
-            'top': 350,     # Below avatar and name in template
-            'bottom': 1150,  # Above bottom frame edge
-            'center_x': 540  # Horizontal center ((100 + 980) // 2)
+            'top': 380,      # Below avatar/name section
+            'bottom': 1150,  # Above bottom frame
+            'center_x': 540  # Horizontal center (1080/2)
         }
 
         # Get text to display based on content type
