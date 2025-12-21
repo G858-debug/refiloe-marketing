@@ -3105,9 +3105,12 @@ def compare_generate_videos():
         if not script:
             return jsonify({'error': 'Script is required'}), 400
 
-        # Get look details
-        result = supabase_client.table('avatar_looks').select('*').in_('id', look_ids).execute()
-        looks = result.data if result and hasattr(result, 'data') else []
+        # Get look details (SupabaseRestClient doesn't support .in_() filtering)
+        result = supabase_client.table('avatar_looks').select('*').execute()
+        all_looks = result.data if result and hasattr(result, 'data') else []
+
+        # Filter in Python for the requested look IDs
+        looks = [look for look in all_looks if look.get('id') in look_ids]
 
         if len(looks) != len(look_ids):
             return jsonify({'error': 'One or more looks not found'}), 404
@@ -6423,13 +6426,24 @@ def api_generate_weekly_content():
         # Step 1: Find the latest scheduled post date (don't delete anything!)
         log_info("📅 Finding latest scheduled post date...")
 
-        result = supabase_client.table('social_posts').select('scheduled_time').in_(
-            'status', ['pending_approval', 'scheduled', 'approved']
-        ).not_.is_('scheduled_time', 'null').order('scheduled_time', desc=True).limit(1).execute()
+        # Fetch all posts (SupabaseRestClient doesn't support .in_() filtering)
+        result = supabase_client.table('social_posts').select('scheduled_time, status').order(
+            'scheduled_time', desc=True
+        ).execute()
 
-        if result.data and result.data[0].get('scheduled_time'):
+        # Filter in Python for active statuses
+        latest_scheduled = None
+        if result.data:
+            active_statuses = ['pending_approval', 'scheduled', 'approved']
+            filtered_posts = [
+                post for post in result.data
+                if post.get('status') in active_statuses and post.get('scheduled_time')
+            ]
+            if filtered_posts:
+                latest_scheduled = filtered_posts[0]['scheduled_time']
+
+        if latest_scheduled:
             # Parse the latest scheduled time
-            latest_scheduled = result.data[0]['scheduled_time']
             try:
                 if isinstance(latest_scheduled, str):
                     # Handle various ISO format variations
@@ -6712,15 +6726,24 @@ def api_generate_weekly_text_cards():
         # Step 1: Find the latest scheduled text_card post
         log_info("📅 Finding latest scheduled text_card...")
 
+        # Fetch text_card posts (SupabaseRestClient doesn't support .in_() filtering)
         result = supabase_client.table('social_posts').select('scheduled_time').eq(
             'post_type', 'text_card'
-        ).in_(
-            'status', ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
-        ).not_.is_('scheduled_time', 'null').order('scheduled_time', desc=True).limit(1).execute()
+        ).order('scheduled_time', desc=True).execute()
 
-        if result.data and result.data[0].get('scheduled_time'):
+        # Filter in Python for active statuses
+        latest_scheduled = None
+        if result.data:
+            active_statuses = ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
+            filtered_posts = [
+                post for post in result.data
+                if post.get('status') in active_statuses and post.get('scheduled_time')
+            ]
+            if filtered_posts:
+                latest_scheduled = filtered_posts[0]['scheduled_time']
+
+        if latest_scheduled:
             # Parse the latest scheduled time
-            latest_scheduled = result.data[0]['scheduled_time']
             try:
                 if isinstance(latest_scheduled, str):
                     latest_date = datetime.fromisoformat(latest_scheduled.replace('Z', '+00:00'))
@@ -6754,15 +6777,20 @@ def api_generate_weekly_text_cards():
 
             try:
                 # Check if text_card already exists for this day at 4pm
-                check_result = supabase_client.table('social_posts').select('id').eq(
+                check_result = supabase_client.table('social_posts').select('id, status').eq(
                     'post_type', 'text_card'
                 ).eq(
                     'scheduled_time', scheduled_time.isoformat()
-                ).in_(
-                    'status', ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
                 ).execute()
 
-                if check_result.data:
+                # Filter in Python for active statuses
+                active_statuses = ['pending_approval', 'scheduled', 'approved', 'pending_media_approval']
+                existing_posts = [
+                    post for post in (check_result.data or [])
+                    if post.get('status') in active_statuses
+                ]
+
+                if existing_posts:
                     log_info(f"⏭️  Skipping {scheduled_time.date()} - text_card already exists")
                     skipped_count += 1
                     continue
