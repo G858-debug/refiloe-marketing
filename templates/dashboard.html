@@ -350,6 +350,49 @@
             margin-top: 4px;
         }
 
+        /* Edit Text Card Modal Styles */
+        .edit-form-group {
+            margin-bottom: 15px;
+        }
+        .edit-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #674636;
+        }
+        .edit-form-group input,
+        .edit-form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .edit-form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .edit-form-group .char-count {
+            font-size: 12px;
+            color: #888;
+            text-align: right;
+        }
+        .edit-preview {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .points-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .points-list input {
+            margin-bottom: 0;
+        }
+
         /* Toast Notifications */
         .toast-container {
             position: fixed;
@@ -1249,12 +1292,34 @@
         </div>
     </div>
 
+    <!-- Edit Text Card Modal -->
+    <div class="modal-overlay" id="edit-text-card-modal" style="display: none;">
+        <div class="modal edit-modal">
+            <h3>✏️ Edit Text Card</h3>
+            <div id="edit-form-container">
+                <!-- Form fields will be dynamically inserted based on text_card_type -->
+            </div>
+            <div class="edit-preview">
+                <p><strong>Current Preview:</strong></p>
+                <img id="edit-preview-image" src="" alt="Current text card" style="max-width: 150px; border-radius: 8px;">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeEditTextCardModal()">Cancel</button>
+                <button class="btn btn-primary" id="save-edit-btn" onclick="saveTextCardEdit()">
+                    💾 Save & Regenerate
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         var API_BASE = window.location.origin;
         let debugMode = false;
         let allPosts = [];  // Store all posts globally for editing
         let currentEditPostId = null;
         let currentReschedulePostId = null;
+        let editingPostId = null;
+        let editingTextCardType = null;
 
         // Toast notifications
         function showToast(message, type = 'info') {
@@ -3424,10 +3489,173 @@
             loadPosts();
         }
 
-        // Placeholder function for editing text cards
-        function openEditTextCard(postId) {
-            showToast('Text card editing feature coming soon!', 'info');
-            console.log('Edit text card:', postId);
+        // Edit text card functionality
+        async function openEditTextCard(postId) {
+            editingPostId = postId;
+
+            try {
+                // Fetch post data
+                const response = await fetch('/api/dashboard/posts');
+                const data = await response.json();
+                const post = data.posts.find(p => p.id === postId);
+
+                if (!post) {
+                    showToast('❌ Post not found', 'error');
+                    return;
+                }
+
+                // Parse metadata
+                let metadata = {};
+                try {
+                    metadata = typeof post.metadata === 'string' ? JSON.parse(post.metadata) : (post.metadata || {});
+                } catch (e) {
+                    metadata = {};
+                }
+
+                editingTextCardType = metadata.text_card_type || 'quote';
+                const content = metadata.text_card_content || {};
+
+                // Build form based on type
+                const formHtml = buildEditForm(editingTextCardType, content);
+                document.getElementById('edit-form-container').innerHTML = formHtml;
+
+                // Set preview image
+                document.getElementById('edit-preview-image').src = post.media_url || '';
+
+                // Show modal
+                document.getElementById('edit-text-card-modal').style.display = 'flex';
+
+            } catch (error) {
+                showToast('❌ Error loading post: ' + error.message, 'error');
+            }
+        }
+
+        function buildEditForm(type, content) {
+            switch(type) {
+                case 'quote':
+                    return `
+                        <div class="edit-form-group">
+                            <label>Quote</label>
+                            <textarea id="edit-quote" maxlength="150">${content.quote || ''}</textarea>
+                            <div class="char-count"><span id="quote-count">${(content.quote || '').length}</span>/150</div>
+                        </div>
+                        <div class="edit-form-group">
+                            <label>Attribution</label>
+                            <input type="text" id="edit-attribution" maxlength="50" value="${content.attribution || ''}">
+                        </div>
+                    `;
+                case 'tip':
+                    return `
+                        <div class="edit-form-group">
+                            <label>Header Badge</label>
+                            <input type="text" id="edit-header" maxlength="20" value="${content.header || ''}">
+                        </div>
+                        <div class="edit-form-group">
+                            <label>Tip</label>
+                            <textarea id="edit-tip" maxlength="200">${content.tip || ''}</textarea>
+                            <div class="char-count"><span id="tip-count">${(content.tip || '').length}</span>/200</div>
+                        </div>
+                        <div class="edit-form-group">
+                            <label>Subtitle (optional)</label>
+                            <input type="text" id="edit-subtitle" maxlength="80" value="${content.subtitle || ''}">
+                        </div>
+                    `;
+                case 'educational':
+                    const points = content.points || ['', '', '', '', ''];
+                    return `
+                        <div class="edit-form-group">
+                            <label>Title</label>
+                            <input type="text" id="edit-title" maxlength="50" value="${content.title || ''}">
+                        </div>
+                        <div class="edit-form-group">
+                            <label>Points (3-5)</label>
+                            <div class="points-list">
+                                ${points.slice(0, 5).map((p, i) => `
+                                    <input type="text" id="edit-point-${i}" maxlength="60" value="${p}" placeholder="Point ${i+1}">
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                case 'motivation':
+                    return `
+                        <div class="edit-form-group">
+                            <label>Statement</label>
+                            <textarea id="edit-statement" maxlength="100">${content.statement || ''}</textarea>
+                            <div class="char-count"><span id="statement-count">${(content.statement || '').length}</span>/100</div>
+                        </div>
+                    `;
+                default:
+                    return '<p>Unknown text card type</p>';
+            }
+        }
+
+        function closeEditTextCardModal() {
+            document.getElementById('edit-text-card-modal').style.display = 'none';
+            editingPostId = null;
+            editingTextCardType = null;
+        }
+
+        async function saveTextCardEdit() {
+            if (!editingPostId || !editingTextCardType) return;
+
+            const btn = document.getElementById('save-edit-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Saving...';
+
+            try {
+                // Build content object based on type
+                let content = {};
+
+                switch(editingTextCardType) {
+                    case 'quote':
+                        content = {
+                            quote: document.getElementById('edit-quote').value,
+                            attribution: document.getElementById('edit-attribution').value
+                        };
+                        break;
+                    case 'tip':
+                        content = {
+                            header: document.getElementById('edit-header').value,
+                            tip: document.getElementById('edit-tip').value,
+                            subtitle: document.getElementById('edit-subtitle').value
+                        };
+                        break;
+                    case 'educational':
+                        content = {
+                            title: document.getElementById('edit-title').value,
+                            points: [0,1,2,3,4].map(i =>
+                                document.getElementById(`edit-point-${i}`)?.value || ''
+                            ).filter(p => p.trim())
+                        };
+                        break;
+                    case 'motivation':
+                        content = {
+                            statement: document.getElementById('edit-statement').value
+                        };
+                        break;
+                }
+
+                const response = await fetch(`/api/dashboard/text-card/${editingPostId}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(content)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Text card updated!', 'success');
+                    closeEditTextCardModal();
+                    await loadPosts();
+                } else {
+                    showToast('❌ ' + (data.error || 'Update failed'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💾 Save & Regenerate';
+            }
         }
 
         // Generate weekly text cards
@@ -3475,6 +3703,24 @@
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('media-preview-image')) {
                 window.open(e.target.src, '_blank');
+            }
+        });
+
+        // Add character counter listeners for text card edit modal
+        document.addEventListener('input', function(e) {
+            if (e.target.id === 'edit-quote') {
+                document.getElementById('quote-count').textContent = e.target.value.length;
+            } else if (e.target.id === 'edit-tip') {
+                document.getElementById('tip-count').textContent = e.target.value.length;
+            } else if (e.target.id === 'edit-statement') {
+                document.getElementById('statement-count').textContent = e.target.value.length;
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('edit-text-card-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditTextCardModal();
             }
         });
     </script>
