@@ -6654,7 +6654,7 @@ def api_generate_text_card():
 
         # Generate text card image
         image_content = {k: v for k, v in content.items() if k not in ['type', 'caption', 'hashtags']}
-        image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
+        image_path = text_card_gen.generate_text_card(image_content, actual_content_type)
 
         # Upload image to Supabase storage
         storage_client = get_storage_client()
@@ -6832,7 +6832,7 @@ def api_generate_weekly_text_cards():
 
                 # Generate image
                 image_content = {k: v for k, v in content.items() if k not in ['type', 'caption', 'hashtags']}
-                image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
+                image_path = text_card_gen.generate_text_card(image_content, actual_content_type)
 
                 # Upload to storage
                 storage_client = get_storage_client()
@@ -6944,6 +6944,19 @@ def api_edit_text_card(post_id):
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
+        # Get text_card_type and text_card_content from request
+        text_card_type = data.get('text_card_type')
+        text_card_content = data.get('text_card_content')
+        caption = data.get('caption')
+
+        if not text_card_type:
+            return jsonify({'success': False, 'error': 'text_card_type is required'}), 400
+
+        if not text_card_content:
+            return jsonify({'success': False, 'error': 'text_card_content is required'}), 400
+
+        log_info(f"📝 Editing {text_card_type} text card with content: {text_card_content}")
+
         # Fetch the post
         log_info(f"🔍 Fetching post {post_id}")
         result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
@@ -6961,51 +6974,12 @@ def api_edit_text_card(post_id):
         if post.get('status') == 'published':
             return jsonify({'success': False, 'error': 'Cannot edit a published post'}), 400
 
-        # Parse existing metadata
-        existing_metadata = {}
-        if post.get('generation_prompt'):
-            try:
-                if isinstance(post['generation_prompt'], str):
-                    existing_metadata = json.loads(post['generation_prompt'])
-                else:
-                    existing_metadata = post['generation_prompt']
-            except:
-                existing_metadata = {}
-
-        # Get text_card_type from metadata
-        text_card_type = existing_metadata.get('text_card_type')
-        if not text_card_type:
-            return jsonify({'success': False, 'error': 'Text card type not found in metadata'}), 400
-
-        log_info(f"📝 Editing {text_card_type} text card")
-
-        # Get existing text_card_content and merge with new data
-        existing_content = existing_metadata.get('text_card_content', {})
-
-        # Build new content based on text_card_type
-        new_content = {}
-
-        if text_card_type == 'quote':
-            new_content['quote'] = data.get('quote', existing_content.get('quote', ''))
-            new_content['attribution'] = data.get('attribution', existing_content.get('attribution', ''))
-        elif text_card_type == 'tip':
-            new_content['header'] = data.get('header', existing_content.get('header', ''))
-            new_content['tip'] = data.get('tip', existing_content.get('tip', ''))
-            new_content['subtitle'] = data.get('subtitle', existing_content.get('subtitle'))
-        elif text_card_type == 'educational':
-            new_content['title'] = data.get('title', existing_content.get('title', ''))
-            new_content['points'] = data.get('points', existing_content.get('points', []))
-        elif text_card_type == 'motivation':
-            new_content['statement'] = data.get('statement', existing_content.get('statement', ''))
-        else:
-            return jsonify({'success': False, 'error': f'Unknown text_card_type: {text_card_type}'}), 400
-
-        # Regenerate image
-        log_info(f"🎨 Regenerating {text_card_type} image")
+        # Regenerate image with the EDITED content
+        log_info(f"🎨 Regenerating {text_card_type} image with edited content")
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
         text_card_gen = TextCardGenerator(config_path)
 
-        image_path = text_card_gen.generate_text_card(text_card_type, new_content)
+        image_path = text_card_gen.generate_text_card(text_card_content, text_card_type)
 
         # Upload new image to Supabase storage
         storage_client = get_storage_client()
@@ -7035,10 +7009,10 @@ def api_edit_text_card(post_id):
             log_error(f"Failed to upload updated text card image: {upload_error}")
             return jsonify({'success': False, 'error': f'Failed to upload image: {upload_error}'}), 500
 
-        # Update metadata
+        # Update metadata with new content
         updated_metadata = {
-            **existing_metadata,
-            'text_card_content': new_content,
+            'text_card_type': text_card_type,
+            'text_card_content': text_card_content,
             'last_edited': datetime.now(SA_TZ).isoformat()
         }
 

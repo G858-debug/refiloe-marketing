@@ -1601,8 +1601,8 @@ Your video has been uploaded to Facebook as a DRAFT.
             # Create image
             log_info(f"Creating text card image of type: {content['type']}")
             image_path = self.text_card_generator.generate_text_card(
-                content['type'],
-                content
+                content,
+                content['type']
             )
 
             if not image_path or not os.path.exists(image_path):
@@ -1721,8 +1721,8 @@ Your video has been uploaded to Facebook as a DRAFT.
             # Create image
             log_info(f"Creating text card image of type: {content['type']}")
             image_path = self.text_card_generator.generate_text_card(
-                content['type'],
-                content
+                content,
+                content['type']
             )
 
             if not image_path or not os.path.exists(image_path):
