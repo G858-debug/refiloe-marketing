@@ -3942,31 +3942,42 @@ def api_approve_post(post_id):
     try:
         # Check if post exists first
         log_info(f"🔍 Checking if post {post_id} exists")
-        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text').eq('id', post_id).execute()
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text, post_type').eq('id', post_id).execute()
 
         if not check_result.data:
             log_error(f"❌ Post {post_id} not found")
             return api_error_response('Post not found', 404, {'post_id': post_id})
 
         post_info = check_result.data[0]
-        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
+        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}, Type: {post_info.get('post_type')}")
 
-        # Update status to 'approved' (content approved, ready for media generation)
+        # For text cards, skip media generation - image already exists
+        if post_info.get('post_type') == 'text_card':
+            # Update directly to scheduled (image was created during generation)
+            new_status = 'scheduled'
+            message = 'Text card approved and scheduled! (Image already generated)'
+        else:
+            # Normal flow for videos/carousels - go to approved first
+            new_status = 'approved'
+            message = 'Content approved. Generate media next.'
+
+        # Update status
         start_time = datetime.now()
         result = supabase_client.table('social_posts').update({
-            'status': 'approved',
+            'status': new_status,
             'updated_at': datetime.now(SA_TZ).isoformat()
         }).eq('id', post_id).execute()
 
         update_time = (datetime.now() - start_time).total_seconds()
 
         if result.data:
-            log_info(f"✅ Post {post_id} content approved (Stage 1) in {update_time:.2f}s")
+            log_info(f"✅ Post {post_id} content approved (Stage 1) in {update_time:.2f}s - Status: {new_status}")
             return jsonify({
                 'success': True,
-                'message': 'Content approved. Generate media next.',
+                'message': message,
                 'post_id': post_id,
-                'update_time': update_time
+                'update_time': update_time,
+                'new_status': new_status
             })
         else:
             log_error(f"❌ Failed to update post {post_id}")
@@ -4028,6 +4039,8 @@ def api_approve_media(post_id):
         if post.get('post_type') == 'video' and post.get('video_url'):
             has_media = True
         elif post.get('post_type') == 'image' and (post.get('media_url') or post.get('image_url')):
+            has_media = True
+        elif post.get('post_type') == 'text_card' and post.get('image_url'):
             has_media = True
         elif post.get('post_type') == 'carousel':
             carousel_urls = post.get('carousel_image_urls')

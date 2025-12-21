@@ -1628,7 +1628,7 @@ Your video has been uploaded to Facebook as a DRAFT.
 
             storage_path = f"text-cards/{post_id}.png"
             upload_success, public_url, upload_error = storage_client.upload_file(
-                bucket='social-images',
+                bucket='media',
                 file_path=image_path,
                 destination_path=storage_path,
                 content_type='image/png'
@@ -1658,7 +1658,7 @@ Your video has been uploaded to Facebook as a DRAFT.
                 "platform": "facebook",
                 "content_text": content.get('caption', ''),
                 "scheduled_time": today_4pm.isoformat(),
-                "media_url": public_url,
+                "image_url": public_url,
                 "metadata": {
                     "content_type": "text_card",
                     "text_card_type": content['type'],
@@ -1748,7 +1748,7 @@ Your video has been uploaded to Facebook as a DRAFT.
 
             storage_path = f"text-cards/{post_id}.png"
             upload_success, public_url, upload_error = storage_client.upload_file(
-                bucket='social-images',
+                bucket='media',
                 file_path=image_path,
                 destination_path=storage_path,
                 content_type='image/png'

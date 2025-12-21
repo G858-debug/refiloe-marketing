@@ -1761,15 +1761,15 @@
             }
 
             // Text card preview with edit button
-            if (post.post_type === 'text_card' && post.media_url) {
+            if (post.post_type === 'text_card' && post.image_url) {
                 preview = `
                     <div class="media-preview-section">
                         <div class="media-label">
                             💬 Text Card Preview
-                            <button onclick="window.open('${post.media_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
+                            <button onclick="window.open('${post.image_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
                         </div>
                         <div class="text-card-preview">
-                            <img src="${post.media_url}" alt="Text Card Preview" class="text-card-image">
+                            <img src="${post.image_url}" alt="Text Card Preview" class="text-card-image">
                             <button class="btn btn-small btn-edit" onclick="openEditTextCard('${post.id}')">
                                 ✏️ Edit Text
                             </button>
@@ -1876,15 +1876,24 @@
             let buttons = '';
 
             if (status === 'pending_approval') {
+                // For text cards, show "Approve & Schedule" since image is already generated
+                const approveButtonText = post.post_type === 'text_card'
+                    ? '✅ Approve & Schedule'
+                    : '✅ Approve Content (Stage 1)';
+
                 buttons = `
                     <div class="post-actions">
-                        <button onclick="approvePost('${post.id}')" class="btn btn-success">✅ Approve Content (Stage 1)</button>
+                        <button onclick="approvePost('${post.id}')" class="btn btn-success">${approveButtonText}</button>
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
                             </button>
                         ` : ''}
-                        <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
+                        ${post.post_type === 'text_card' ? `
+                            <button class="btn btn-secondary btn-sm" onclick="openEditTextCard('${post.id}')">✏️ Edit Text</button>
+                        ` : `
+                            <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
+                        `}
                         ${!post.is_pinned ? `<button class="btn btn-secondary btn-sm" onclick="openRescheduleModal('${post.id}', '${post.title || 'Untitled Post'}', '${post.scheduled_time}')">📅 Reschedule</button>` : ''}
                         <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
                     </div>
