@@ -6576,7 +6576,7 @@ def api_generate_text_card():
         from social_media.content_generator import ContentGenerator
         from social_media.text_card_generator import TextCardGenerator
         from database import SocialMediaDatabase
-        from utils.supabase_storage import upload_file_to_supabase
+        from utils.supabase_storage import get_storage_client
         import os
         import json
         from datetime import datetime, timedelta
@@ -6623,17 +6623,22 @@ def api_generate_text_card():
         image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
 
         # Upload image to Supabase storage
+        storage_client = get_storage_client()
+        if not storage_client:
+            log_error("Storage client not available")
+            return jsonify({'success': False, 'error': 'Storage client not available'}), 500
+
         storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
-        image_url = upload_file_to_supabase(
-            supabase_client,
-            image_path,
-            storage_path,
-            'social-media-assets'
+        upload_success, image_url, upload_error = storage_client.upload_file(
+            bucket='social-media-assets',
+            file_path=image_path,
+            destination_path=storage_path,
+            content_type='image/png'
         )
 
-        if not image_url:
-            log_error("Failed to upload text card image")
-            return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+        if not upload_success or not image_url:
+            log_error(f"Failed to upload text card image: {upload_error}")
+            return jsonify({'success': False, 'error': f'Failed to upload image: {upload_error}'}), 500
 
         # Prepare metadata
         metadata = {
@@ -6696,7 +6701,7 @@ def api_generate_weekly_text_cards():
         from social_media.content_generator import ContentGenerator
         from social_media.text_card_generator import TextCardGenerator
         from database import SocialMediaDatabase
-        from utils.supabase_storage import upload_file_to_supabase
+        from utils.supabase_storage import get_storage_client
         import os
         import json
         from datetime import datetime, timedelta
@@ -6782,16 +6787,22 @@ def api_generate_weekly_text_cards():
                 image_path = text_card_gen.generate_text_card(actual_content_type, image_content)
 
                 # Upload to storage
+                storage_client = get_storage_client()
+                if not storage_client:
+                    log_error("Storage client not available")
+                    skipped_count += 1
+                    continue
+
                 storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
-                image_url = upload_file_to_supabase(
-                    supabase_client,
-                    image_path,
-                    storage_path,
-                    'social-media-assets'
+                upload_success, image_url, upload_error = storage_client.upload_file(
+                    bucket='social-media-assets',
+                    file_path=image_path,
+                    destination_path=storage_path,
+                    content_type='image/png'
                 )
 
-                if not image_url:
-                    log_error(f"Failed to upload image for day {day_offset + 1}")
+                if not upload_success or not image_url:
+                    log_error(f"Failed to upload image for day {day_offset + 1}: {upload_error}")
                     skipped_count += 1
                     continue
 
@@ -6872,7 +6883,7 @@ def api_edit_text_card(post_id):
 
     try:
         from social_media.text_card_generator import TextCardGenerator
-        from utils.supabase_storage import upload_file_to_supabase
+        from utils.supabase_storage import get_storage_client
         import os
         import json
         from datetime import datetime
@@ -6949,6 +6960,11 @@ def api_edit_text_card(post_id):
         image_path = text_card_gen.generate_text_card(text_card_type, new_content)
 
         # Upload new image to Supabase storage
+        storage_client = get_storage_client()
+        if not storage_client:
+            log_error("Storage client not available")
+            return jsonify({'success': False, 'error': 'Storage client not available'}), 500
+
         # Use existing media_url path if available, otherwise create new one
         existing_media_url = post.get('media_url', '')
         if existing_media_url and 'text_cards/' in existing_media_url:
@@ -6960,16 +6976,16 @@ def api_edit_text_card(post_id):
             storage_path = f"text_cards/{uuid.uuid4().hex[:8]}_{os.path.basename(image_path)}"
 
         log_info(f"📤 Uploading to: {storage_path}")
-        image_url = upload_file_to_supabase(
-            supabase_client,
-            image_path,
-            storage_path,
-            'social-media-assets'
+        upload_success, image_url, upload_error = storage_client.upload_file(
+            bucket='social-media-assets',
+            file_path=image_path,
+            destination_path=storage_path,
+            content_type='image/png'
         )
 
-        if not image_url:
-            log_error("Failed to upload updated text card image")
-            return jsonify({'success': False, 'error': 'Failed to upload image'}), 500
+        if not upload_success or not image_url:
+            log_error(f"Failed to upload updated text card image: {upload_error}")
+            return jsonify({'success': False, 'error': f'Failed to upload image: {upload_error}'}), 500
 
         # Update metadata
         updated_metadata = {
