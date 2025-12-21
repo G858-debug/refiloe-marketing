@@ -728,6 +728,67 @@
             color: #6b7280;
             text-transform: uppercase;
         }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 10px 20px;
+            border: 2px solid #AAB396;
+            background: white;
+            color: #674636;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab:hover {
+            background: #F7EED3;
+        }
+
+        .filter-tab.active {
+            background: #AAB396;
+            color: white;
+        }
+
+        /* Text Card Preview */
+        .text-card-preview {
+            margin: 10px 0;
+            position: relative;
+        }
+
+        .text-card-image {
+            width: 100%;
+            max-width: 200px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-edit {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.9);
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Text Card Badge */
+        .badge-text-card {
+            background-color: #AAB396;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -806,6 +867,9 @@
             <button class="btn btn-secondary" onclick="backfillImagePrompts()">
                 🖼️ Backfill Image Prompts
             </button>
+            <button class="btn btn-secondary" onclick="generateWeeklyTextCards()">
+                💬 Generate Weekly Text Cards
+            </button>
             <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
                 📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
             </a>
@@ -814,6 +878,25 @@
             </a>
             <button class="btn btn-info" onclick="fetchVideosNow()">
                 🎥 Fetch Videos Now
+            </button>
+        </div>
+
+        <!-- Media Type Filter Tabs -->
+        <div class="filter-tabs" id="filter-tabs">
+            <button class="filter-tab active" data-filter="all" onclick="filterByMediaType('all')">
+                📋 All
+            </button>
+            <button class="filter-tab" data-filter="video" onclick="filterByMediaType('video')">
+                🎥 Videos
+            </button>
+            <button class="filter-tab" data-filter="image" onclick="filterByMediaType('image')">
+                🖼️ Images
+            </button>
+            <button class="filter-tab" data-filter="carousel" onclick="filterByMediaType('carousel')">
+                📊 Carousels
+            </button>
+            <button class="filter-tab" data-filter="text_card" onclick="filterByMediaType('text_card')">
+                💬 Text Cards
             </button>
         </div>
 
@@ -1299,7 +1382,8 @@
             const badges = {
                 'video': 'badge-video',
                 'carousel': 'badge-carousel',
-                'image': 'badge-image'
+                'image': 'badge-image',
+                'text_card': 'badge-text-card'
             };
             return badges[type] || 'badge-video';
         }
@@ -1321,10 +1405,14 @@
 
         // Load and render posts
         async function loadPosts() {
-            console.log('🔍 Loading posts...');
+            console.log('🔍 Loading posts with filter:', currentMediaFilter);
 
             try {
-                const response = await fetch('/api/dashboard/posts');
+                const url = currentMediaFilter === 'all'
+                    ? '/api/dashboard/posts'
+                    : `/api/dashboard/posts?media_type=${currentMediaFilter}`;
+
+                const response = await fetch(url);
                 console.log('📡 Response status:', response.status);
 
                 if (!response.ok) {
@@ -1610,8 +1698,26 @@
                 `;
             }
 
-            // No media yet - check ALL media types including carousel_image_urls
-            if (!post.video_url && !post.image_url &&
+            // Text card preview with edit button
+            if (post.post_type === 'text_card' && post.media_url) {
+                preview = `
+                    <div class="media-preview-section">
+                        <div class="media-label">
+                            💬 Text Card Preview
+                            <button onclick="window.open('${post.media_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
+                        </div>
+                        <div class="text-card-preview">
+                            <img src="${post.media_url}" alt="Text Card Preview" class="text-card-image">
+                            <button class="btn btn-small btn-edit" onclick="openEditTextCard('${post.id}')">
+                                ✏️ Edit Text
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // No media yet - check ALL media types including carousel_image_urls and text_card
+            if (!post.video_url && !post.image_url && !post.media_url &&
                 (!post.carousel_image_urls || post.carousel_image_urls.length === 0) &&
                 (!post.carousel_slides || post.carousel_slides.length === 0)) {
                 preview = `
@@ -3301,9 +3407,65 @@
             }
         }
 
+        // ========== FILTER FUNCTIONALITY ==========
+        // Current filter state (persisted in localStorage)
+        let currentMediaFilter = localStorage.getItem('dashboardMediaFilter') || 'all';
+
+        function setActiveFilterTab(filter) {
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.filter === filter);
+            });
+        }
+
+        function filterByMediaType(mediaType) {
+            currentMediaFilter = mediaType;
+            localStorage.setItem('dashboardMediaFilter', mediaType);
+            setActiveFilterTab(mediaType);
+            loadPosts();
+        }
+
+        // Placeholder function for editing text cards
+        function openEditTextCard(postId) {
+            showToast('Text card editing feature coming soon!', 'info');
+            console.log('Edit text card:', postId);
+        }
+
+        // Generate weekly text cards
+        async function generateWeeklyTextCards() {
+            if (!confirm('Generate 7 text card posts for the next week at 4pm daily?')) return;
+
+            try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = '⏳ Generating...';
+
+                const response = await fetch('/api/dashboard/generate-weekly-text-cards', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`✅ Created ${data.posts_created} text cards (${data.posts_skipped} skipped)`, 'success');
+                    await loadPosts();
+                } else {
+                    showToast('❌ ' + (data.error || 'Generation failed'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ Error: ' + error.message, 'error');
+            } finally {
+                const btn = event.target;
+                btn.disabled = false;
+                btn.textContent = '💬 Generate Weekly Text Cards';
+            }
+        }
+        // ========== END FILTER FUNCTIONALITY ==========
+
         // Load posts and check connection on page load
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 Dashboard initialized');
+            // Set active tab from localStorage
+            setActiveFilterTab(currentMediaFilter);
             checkConnection();
             loadPosts();
             loadMotionPrompts();
