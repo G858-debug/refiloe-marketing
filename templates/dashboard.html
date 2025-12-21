@@ -1318,6 +1318,17 @@
         let editingPostId = null;
         let editingTextCardType = null;
 
+        // HTML escape helper function to prevent XSS and broken HTML
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // Toast notifications
         function showToast(message, type = 'info') {
             const container = document.getElementById('toasts');
@@ -3626,17 +3637,22 @@
         function buildEditForm(type, content, caption = '') {
             let formHtml = '';
 
+            // Debug: log incoming content for educational type
+            if (type === 'educational') {
+                console.log('buildEditForm received for educational:', JSON.stringify(content));
+            }
+
             switch(type) {
                 case 'quote':
                     formHtml = `
                         <div class="edit-form-group">
                             <label>Quote</label>
-                            <textarea id="edit-quote" maxlength="150">${content.quote || ''}</textarea>
+                            <textarea id="edit-quote" maxlength="150">${escapeHtml(content.quote || '')}</textarea>
                             <div class="char-count"><span id="quote-count">${(content.quote || '').length}</span>/150</div>
                         </div>
                         <div class="edit-form-group">
                             <label>Attribution</label>
-                            <input type="text" id="edit-attribution" maxlength="50" value="${content.attribution || ''}">
+                            <input type="text" id="edit-attribution" maxlength="50" value="${escapeHtml(content.attribution || '')}">
                         </div>
                     `;
                     break;
@@ -3644,29 +3660,32 @@
                     formHtml = `
                         <div class="edit-form-group">
                             <label>Header Badge</label>
-                            <input type="text" id="edit-header" maxlength="20" value="${content.header || ''}">
+                            <input type="text" id="edit-header" maxlength="20" value="${escapeHtml(content.header || '')}">
                         </div>
                         <div class="edit-form-group">
                             <label>Tip</label>
-                            <textarea id="edit-tip" maxlength="200">${content.tip || ''}</textarea>
+                            <textarea id="edit-tip" maxlength="200">${escapeHtml(content.tip || '')}</textarea>
                             <div class="char-count"><span id="tip-count">${(content.tip || '').length}</span>/200</div>
                         </div>
                         <div class="edit-form-group">
                             <label>Subtitle (optional)</label>
-                            <input type="text" id="edit-subtitle" maxlength="80" value="${content.subtitle || ''}">
+                            <input type="text" id="edit-subtitle" maxlength="80" value="${escapeHtml(content.subtitle || '')}">
                         </div>
                     `;
                     break;
                 case 'educational':
                     const points = content.points || [];
+                    const eduTitle = content.title || '';
+                    const eduPointsText = Array.isArray(points) ? points.join('\n') : '';
+                    console.log('Building educational form with title:', eduTitle, 'points:', points);
                     formHtml = `
                         <div class="edit-form-group">
                             <label>Title</label>
-                            <input type="text" id="edit-edu-title" maxlength="50" value="${content.title || ''}">
+                            <input type="text" id="edit-edu-title" name="edu-title" maxlength="50" value="${escapeHtml(eduTitle)}">
                         </div>
                         <div class="edit-form-group">
                             <label>Bullet Points (one per line)</label>
-                            <textarea id="edit-edu-points" rows="5">${points.join('\n')}</textarea>
+                            <textarea id="edit-edu-points" name="edu-points" rows="5">${escapeHtml(eduPointsText)}</textarea>
                         </div>
                     `;
                     break;
@@ -3674,7 +3693,7 @@
                     formHtml = `
                         <div class="edit-form-group">
                             <label>Statement</label>
-                            <textarea id="edit-statement" maxlength="100">${content.statement || ''}</textarea>
+                            <textarea id="edit-statement" maxlength="100">${escapeHtml(content.statement || '')}</textarea>
                             <div class="char-count"><span id="statement-count">${(content.statement || '').length}</span>/100</div>
                         </div>
                     `;
@@ -3727,31 +3746,56 @@
                         };
                         break;
                     case 'educational':
-                        const titleElement = document.getElementById('edit-edu-title');
-                        const pointsElement = document.getElementById('edit-edu-points');
+                        // Try multiple selectors for title field
+                        let titleElement = document.getElementById('edit-edu-title');
+                        if (!titleElement) {
+                            titleElement = document.querySelector('[name="edu-title"]');
+                            console.log('Falling back to name selector for title');
+                        }
+                        if (!titleElement) {
+                            titleElement = document.querySelector('#edit-form-container input[type="text"]');
+                            console.log('Falling back to generic input selector for title');
+                        }
 
-                        // Debug: log if elements exist
-                        console.log('Educational title element exists:', !!titleElement);
-                        console.log('Educational title element value:', titleElement?.value);
-                        console.log('Educational points element exists:', !!pointsElement);
+                        // Try multiple selectors for points field
+                        let pointsElement = document.getElementById('edit-edu-points');
+                        if (!pointsElement) {
+                            pointsElement = document.querySelector('[name="edu-points"]');
+                            console.log('Falling back to name selector for points');
+                        }
+                        if (!pointsElement) {
+                            pointsElement = document.querySelector('#edit-form-container textarea:not(#edit-caption)');
+                            console.log('Falling back to generic textarea selector for points');
+                        }
+
+                        // Debug: log DOM state
+                        console.log('=== EDUCATIONAL EDIT DEBUG ===');
+                        console.log('Title element found:', !!titleElement);
                         console.log('Title element:', titleElement);
                         console.log('Title value:', titleElement ? titleElement.value : 'NOT FOUND');
+                        console.log('Points element found:', !!pointsElement);
+                        console.log('Points element:', pointsElement);
+                        console.log('Points value:', pointsElement ? pointsElement.value : 'NOT FOUND');
+                        console.log('Form container HTML:', document.getElementById('edit-form-container')?.innerHTML);
+                        console.log('=== END DEBUG ===');
 
                         if (!titleElement) {
-                            console.error('ERROR: edit-edu-title element not found in DOM!');
+                            console.error('ERROR: Cannot find title element in DOM!');
                             alert('Error: Title field not found. Please check the form.');
+                            btn.disabled = false;
+                            btn.textContent = 'Save Changes';
                             return;
                         }
 
+                        const titleValue = titleElement.value.trim();
                         const pointsText = pointsElement ? pointsElement.value : '';
 
                         content = {
-                            title: titleElement.value || '',  // Get the value
+                            title: titleValue,
                             points: pointsText.split('\n').filter(p => p.trim() !== '')
                         };
 
                         console.log('Final educational content:', JSON.stringify(content));
-                        console.log('Educational content being sent:', content);
                         break;
                     case 'motivation':
                         content = {
@@ -3762,6 +3806,17 @@
 
                 // Get the caption
                 const caption = document.getElementById('edit-caption')?.value || '';
+
+                // Debug alert to show what's being sent (temporary)
+                if (editingTextCardType === 'educational') {
+                    const debugPayload = {
+                        text_card_type: editingTextCardType,
+                        text_card_content: content,
+                        caption: caption
+                    };
+                    console.log('DEBUG: About to send payload:', JSON.stringify(debugPayload, null, 2));
+                    alert('SENDING EDUCATIONAL CONTENT:\n\nTitle: "' + content.title + '"\nPoints: ' + JSON.stringify(content.points) + '\n\n(Check console for full payload)');
+                }
 
                 const response = await fetch(`/api/dashboard/text-card/${editingPostId}/edit`, {
                     method: 'POST',
