@@ -3635,19 +3635,15 @@
                     `;
                     break;
                 case 'educational':
-                    const points = content.points || ['', '', '', '', ''];
+                    const points = content.points || [];
                     formHtml = `
                         <div class="edit-form-group">
                             <label>Title</label>
-                            <input type="text" id="edit-title" maxlength="50" value="${content.title || ''}">
+                            <input type="text" id="edit-edu-title" maxlength="50" value="${content.title || ''}">
                         </div>
                         <div class="edit-form-group">
-                            <label>Points (3-5)</label>
-                            <div class="points-list">
-                                ${points.slice(0, 5).map((p, i) => `
-                                    <input type="text" id="edit-point-${i}" maxlength="60" value="${p}" placeholder="Point ${i+1}">
-                                `).join('')}
-                            </div>
+                            <label>Bullet Points (one per line)</label>
+                            <textarea id="edit-edu-points" rows="5">${points.join('\n')}</textarea>
                         </div>
                     `;
                     break;
@@ -3708,12 +3704,20 @@
                         };
                         break;
                     case 'educational':
+                        const titleElement = document.getElementById('edit-edu-title');
+                        const pointsElement = document.getElementById('edit-edu-points');
+
+                        console.log('Title element:', titleElement);
+                        console.log('Title value:', titleElement ? titleElement.value : 'NOT FOUND');
+
+                        const pointsText = pointsElement ? pointsElement.value : '';
+
                         content = {
-                            title: document.getElementById('edit-title').value,
-                            points: [0,1,2,3,4].map(i =>
-                                document.getElementById(`edit-point-${i}`)?.value || ''
-                            ).filter(p => p.trim())
+                            title: titleElement ? titleElement.value : '',
+                            points: pointsText.split('\n').filter(p => p.trim() !== '')
                         };
+
+                        console.log('Educational content being sent:', content);
                         break;
                     case 'motivation':
                         content = {
