@@ -1329,6 +1329,142 @@ Generate the carousel content now:"""
 
         return selected_format
 
+    def _generate_text_overlay_script(self, duration: int, hook_text: str,
+                                       key_points: List[str], cta_text: str) -> List[Dict]:
+        """Generate timed text overlay script for sound-off viewing
+
+        Args:
+            duration: Total video duration in seconds
+            hook_text: Opening hook text (1-7 words)
+            key_points: Main content points to highlight
+            cta_text: Call-to-action text
+
+        Returns:
+            List of text overlay specifications with timing
+        """
+        overlays = []
+
+        # Hook overlay (always first)
+        overlays.append({
+            "time_start": 0,
+            "time_end": 2,
+            "text": hook_text,
+            "style": "bold",
+            "position": "center",
+            "animation": "pop_in",
+            "font_size": "large"
+        })
+
+        # Retention hook at ~40% mark
+        retention_time = int(duration * 0.4)
+        overlays.append({
+            "time_start": retention_time,
+            "time_end": retention_time + 2,
+            "text": "👇 Keep watching",
+            "style": "subtle",
+            "position": "bottom",
+            "animation": "fade_in",
+            "font_size": "small"
+        })
+
+        # Key points distributed through middle section
+        if key_points:
+            content_start = 3
+            content_end = duration - 5
+            content_duration = content_end - content_start
+
+            for i, point in enumerate(key_points[:3]):  # Max 3 key points
+                point_time = content_start + (i * content_duration // len(key_points[:3]))
+
+                # Truncate point to 5-7 words for overlay
+                words = point.split()[:7]
+                overlay_text = ' '.join(words)
+                if len(point.split()) > 7:
+                    overlay_text += '...'
+
+                overlays.append({
+                    "time_start": point_time,
+                    "time_end": point_time + 3,
+                    "text": overlay_text,
+                    "style": "highlight",
+                    "position": "bottom_third",
+                    "animation": "slide_up",
+                    "font_size": "medium"
+                })
+
+        # CTA overlay
+        cta_start = duration - 4
+        overlays.append({
+            "time_start": cta_start,
+            "time_end": duration,
+            "text": cta_text,
+            "style": "cta",
+            "position": "center",
+            "animation": "pulse",
+            "font_size": "large"
+        })
+
+        return overlays
+
+    def _generate_visual_direction(self, segment_type: str, content: str) -> Dict:
+        """Generate visual direction for video segments
+
+        Args:
+            segment_type: Type of segment (hook, content, cta, transition)
+            content: Text content of the segment
+
+        Returns:
+            Dict with visual directions for avatar and B-roll
+        """
+        import random
+
+        visual_directions = {
+            'hook': {
+                'avatar_action': 'Direct eye contact, slight lean forward, energetic expression',
+                'camera': 'Close-up, centered',
+                'b_roll_suggestion': None,  # No B-roll during hook - keep attention on speaker
+                'motion_prompt': 'confident approach to camera',
+                'transition_in': 'quick_zoom' if random.random() > 0.5 else 'none'
+            },
+            'content': {
+                'avatar_action': 'Natural gestures, counting on fingers for lists, nodding',
+                'camera': 'Medium shot',
+                'b_roll_suggestion': 'Contextual footage matching topic',
+                'motion_prompt': 'explaining with hand gestures',
+                'transition_in': 'smooth_cut'
+            },
+            'story': {
+                'avatar_action': 'Expressive, emotional range, storytelling gestures',
+                'camera': 'Medium shot, occasional zoom on emotional moments',
+                'b_roll_suggestion': 'Flashback style footage if available',
+                'motion_prompt': 'reflective, then building energy',
+                'transition_in': 'fade'
+            },
+            'statistic': {
+                'avatar_action': 'Pause for emphasis, point to imaginary text',
+                'camera': 'Close-up for impact',
+                'b_roll_suggestion': 'Number/graph overlay',
+                'motion_prompt': 'emphasis gesture, brief pause',
+                'transition_in': 'zoom_in'
+            },
+            'cta': {
+                'avatar_action': 'Direct, friendly, inviting gesture',
+                'camera': 'Medium-close, engaging',
+                'b_roll_suggestion': None,  # Direct connection for CTA
+                'motion_prompt': 'open hand gesture, warm smile',
+                'transition_in': 'none'
+            },
+            'transition': {
+                'avatar_action': 'Brief pause, topic shift indication',
+                'camera': 'Quick adjustment',
+                'b_roll_suggestion': 'Quick transition footage',
+                'motion_prompt': 'brief pause, slight head tilt',
+                'transition_in': 'quick_cut'
+            }
+        }
+
+        return visual_directions.get(segment_type, visual_directions['content'])
+
     def _create_video_script_prompt(
         self,
         theme: str,
@@ -1491,45 +1627,75 @@ REEL TITLE REQUIREMENTS (CRITICAL FOR FACEBOOK REELS):
 
 IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
 
+VISUAL DIRECTION FOR EACH SEGMENT:
+For EACH script segment, include:
+1. "visual_direction": What the avatar should be doing (gestures, expression, camera angle)
+2. "text_overlay": On-screen text for this moment (if applicable)
+3. "b_roll_cue": Description of supplementary footage (or null if avatar-only)
+4. "motion_prompt": Brief HeyGen motion instruction
+
+TEXT OVERLAY RULES:
+- Max 7 words per overlay
+- Use bold text for hooks and stats
+- Use subtle text for retention hooks ("keep watching", "wait for it")
+- Every video needs: opening hook text, at least 1 mid-video text, CTA text
+- Design for SOUND-OFF viewing - text should tell the story alone
+
 OUTPUT FORMAT:
 Please provide your response in the following JSON format:
 {{
     "title": "Compelling video title",
     "reel_title": "Engaging Facebook Reel title (max 255 chars, curiosity-inducing, e.g., 'When clients cancel at 6:47 AM... 😤')",
     "hook": "The exact opening hook text",
-    "visual_hook": "Description of first frame visual",
-    "text_overlays": [
-        {{"time": "0-2s", "text": "Opening hook text", "style": "bold, centered"}},
-        {{"time": "5-7s", "text": "Key point", "style": "medium, bottom"}}
-    ],
-    "triple_hook_summary": "How visual, text, and verbal hooks work together",
+    "triple_hook": {{
+        "visual": "description of first frame",
+        "text": "on-screen text hook (1-7 words)",
+        "verbal": "first spoken line"
+    }},
     "script": [
         {{
             "time_start": 0,
             "time_end": 3,
-            "text": "Hook text with exact wording",
-            "visual_cue": "Visual instruction (e.g., 'Point to camera, serious expression')",
-            "tone": "Urgent, attention-grabbing"
+            "segment_type": "hook",
+            "text": "Spoken words...",
+            "visual_direction": "Direct eye contact, energetic, lean forward",
+            "text_overlay": {{"text": "Hook text here", "style": "bold", "position": "center"}},
+            "b_roll_cue": null,
+            "motion_prompt": "confident approach",
+            "tone": "Urgent"
         }},
         {{
             "time_start": 3,
             "time_end": {main_content_end},
+            "segment_type": "content",
             "text": "Main content with exact wording",
-            "visual_cue": "Visual instruction (e.g., 'Show demonstration, text overlay')",
+            "visual_direction": "Natural gestures, counting on fingers for lists",
+            "text_overlay": {{"text": "Key point overlay", "style": "highlight", "position": "bottom_third"}},
+            "b_roll_cue": "Contextual footage matching topic",
+            "motion_prompt": "explaining with hand gestures",
             "tone": "Educational, engaging"
         }},
         {{
             "time_start": {main_content_end},
             "time_end": {duration},
+            "segment_type": "cta",
             "text": "Call-to-action with exact wording",
-            "visual_cue": "Visual instruction (e.g., 'Point to comment section, encouraging smile')",
+            "visual_direction": "Direct, friendly, inviting gesture",
+            "text_overlay": {{"text": "Comment 'KEYWORD' below!", "style": "cta", "position": "center"}},
+            "b_roll_cue": null,
+            "motion_prompt": "open hand gesture, warm smile",
             "tone": "Encouraging, action-oriented"
         }}
     ],
+    "text_overlays": [
+        {{"time": "0-2s", "text": "...", "style": "bold"}},
+        {{"time": "Xs-Ys", "text": "...", "style": "highlight"}}
+    ],
+    "retention_hooks": ["Midpoint hook", "Pattern interrupt"],
+    "cta_type": "comment",
+    "cta_text": "Comment 'KEYWORD' below!",
     "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"],
     "visual_notes": "Overall visual direction and style",
-    "retention_hooks": ["List of retention elements used"],
-    "cta_type": "The type of call-to-action used",
     "estimated_retention": "High/Medium/Low based on hook strength"
 }}
 
