@@ -3761,44 +3761,65 @@
 
         // ========== TEXT CARD EDIT FUNCTIONS ==========
 
-        function openTextCardEditModal(postId) {
-            const post = allPosts.find(p => p.id === postId);
-            if (!post) {
-                showToast('Post not found', 'error');
-                return;
-            }
-
-            // Parse generation_prompt to get text card content
-            let textCardType = '';
-            let textCardContent = {};
+        async function openTextCardEditModal(postId) {
+            console.log('Opening text card edit modal for post:', postId);
 
             try {
-                const genPrompt = JSON.parse(post.generation_prompt || '{}');
-                textCardType = genPrompt.text_card_type || '';
-                textCardContent = genPrompt.text_card_content || {};
-                console.log('Parsed text card data:', { textCardType, textCardContent });
-            } catch (e) {
-                console.error('Failed to parse generation_prompt:', e);
-                showToast('Failed to load text card content', 'error');
-                return;
+                // Fetch the post from the API
+                const response = await fetch(`${API_BASE}/api/dashboard/post/${postId}`);
+                const data = await response.json();
+
+                if (!data.success || !data.post) {
+                    showToast('Failed to load post: ' + (data.error || 'Post not found'), 'error');
+                    return;
+                }
+
+                const post = data.post;
+                console.log('Loaded post:', post);
+
+                // Parse generation_prompt to get text card content
+                let textCardType = '';
+                let textCardContent = {};
+
+                try {
+                    const genPrompt = typeof post.generation_prompt === 'string'
+                        ? JSON.parse(post.generation_prompt || '{}')
+                        : (post.generation_prompt || {});
+                    textCardType = genPrompt.text_card_type || '';
+                    textCardContent = genPrompt.text_card_content || {};
+                    console.log('Parsed text card data:', { textCardType, textCardContent });
+                } catch (e) {
+                    console.error('Failed to parse generation_prompt:', e);
+                    showToast('Failed to load text card content', 'error');
+                    return;
+                }
+
+                if (!textCardType) {
+                    showToast('This post does not have text card type information', 'error');
+                    return;
+                }
+
+                // Store post ID and type
+                document.getElementById('text-card-edit-post-id').value = postId;
+                document.getElementById('text-card-edit-type').value = textCardType;
+
+                // Set caption
+                document.getElementById('text-card-edit-caption').value = post.content_text || '';
+
+                // Build form based on type
+                buildTextCardEditForm(textCardType, textCardContent);
+
+                // Update status
+                document.getElementById('text-card-edit-status').textContent =
+                    `Editing ${textCardType} text card`;
+
+                // Show modal
+                document.getElementById('text-card-edit-modal').classList.add('active');
+
+            } catch (error) {
+                console.error('Error opening text card edit modal:', error);
+                showToast('Failed to load post', 'error');
             }
-
-            // Store post ID and type
-            document.getElementById('text-card-edit-post-id').value = postId;
-            document.getElementById('text-card-edit-type').value = textCardType;
-
-            // Set caption
-            document.getElementById('text-card-edit-caption').value = post.content_text || '';
-
-            // Build form based on type
-            buildTextCardEditForm(textCardType, textCardContent);
-
-            // Update status
-            document.getElementById('text-card-edit-status').textContent =
-                `Editing ${textCardType} text card`;
-
-            // Show modal
-            document.getElementById('text-card-edit-modal').classList.add('active');
         }
 
         function buildTextCardEditForm(textCardType, content) {
