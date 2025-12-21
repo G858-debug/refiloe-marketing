@@ -204,9 +204,7 @@ class ContentGenerator(_LegacyContentGenerator):
 
         if not post:
             log_warning(
-                "generate_post returned empty payload | theme=%s format=%s",
-                theme,
-                format_type,
+                f"generate_post returned empty payload | theme={theme} format={format_type}"
             )
             return {}
 
@@ -227,20 +225,14 @@ class ContentGenerator(_LegacyContentGenerator):
         )
 
         log_info(
-            "Content classification | theme=%s format=%s label=%s confidence=%.2f matches=%s fallback=%s",
-            theme,
-            format_type,
-            classification.label,
-            classification.confidence,
-            classification.matched_keywords,
-            classification.fallback_reason,
+            f"Content classification | theme={theme} format={format_type} label={classification.label} "
+            f"confidence={classification.confidence:.2f} matches={classification.matched_keywords} "
+            f"fallback={classification.fallback_reason}"
         )
 
         if avatar_hint:
             log_info(
-                "Avatar hint resolved | label=%s hint=%s",
-                classification.label,
-                avatar_hint,
+                f"Avatar hint resolved | label={classification.label} hint={avatar_hint}"
             )
 
         post_metadata: Dict[str, Any] = post.setdefault("metadata", {})
@@ -291,10 +283,8 @@ class ContentGenerator(_LegacyContentGenerator):
         }
 
         log_info(
-            "SA context added | season=%s holidays=%d posting_time=%s",
-            sa_season["name"],
-            len(sa_holidays),
-            sa_posting_time["slot"],
+            f"SA context added | season={sa_season['name']} holidays={len(sa_holidays)} "
+            f"posting_time={sa_posting_time['slot']}"
         )
 
         return post
@@ -394,9 +384,7 @@ class ContentGenerator(_LegacyContentGenerator):
         import re
 
         log_info(
-            "Generating carousel content | topic=%s num_slides=%d",
-            topic,
-            num_slides,
+            f"Generating carousel content | topic={topic} num_slides={num_slides}"
         )
 
         # Ensure minimum slides
@@ -418,9 +406,7 @@ class ContentGenerator(_LegacyContentGenerator):
 
         if carousel_data:
             log_info(
-                "Successfully generated carousel content | topic=%s slides=%d",
-                topic,
-                num_slides,
+                f"Successfully generated carousel content | topic={topic} slides={num_slides}"
             )
         else:
             log_warning(f"Failed to parse carousel response | topic={topic}")
@@ -710,14 +696,12 @@ Generate the carousel content now:"""
         # Validate content type
         if content_type not in valid_types:
             log_warning(
-                "Invalid content_type '%s', using random selection",
-                content_type,
+                f"Invalid content_type '{content_type}', using random selection"
             )
             content_type = random.choice(valid_types)
 
         log_info(
-            "Generating text card content | content_type=%s",
-            content_type,
+            f"Generating text card content | content_type={content_type}"
         )
 
         # Build the text card prompt
@@ -757,8 +741,7 @@ Generate the carousel content now:"""
             }
 
             log_info(
-                "Successfully generated text card content | content_type=%s",
-                content_type,
+                f"Successfully generated text card content | content_type={content_type}"
             )
 
             return validated
@@ -1074,11 +1057,8 @@ Generate the text card content now:"""
         avatar_hint = self._resolve_avatar_hint(classification.label, content_text)
 
         log_info(
-            "Avatar preview | theme=%s label=%s confidence=%.2f hint=%s",
-            theme,
-            classification.label,
-            classification.confidence,
-            avatar_hint,
+            f"Avatar preview | theme={theme} label={classification.label} "
+            f"confidence={classification.confidence:.2f} hint={avatar_hint}"
         )
 
         return {
@@ -1121,8 +1101,7 @@ Generate the text card content now:"""
             media_type_override = metadata.get("media_type")
             if media_type_override in ("video", "static_image", "carousel"):
                 log_info(
-                    "Media type override from metadata | type=%s",
-                    media_type_override,
+                    f"Media type override from metadata | type={media_type_override}"
                 )
                 return media_type_override
 
@@ -1189,14 +1168,12 @@ Generate the text card content now:"""
                 theme_lower = theme.lower()
                 if "carousel" in theme_lower or "list" in theme_lower:
                     log_info(
-                        "Media type from theme fallback | theme=%s type=carousel",
-                        theme,
+                        f"Media type from theme fallback | theme={theme} type=carousel"
                     )
                     return "carousel"
                 elif "quote" in theme_lower or "testimonial" in theme_lower or "success" in theme_lower:
                     log_info(
-                        "Media type from theme fallback | theme=%s type=static_image",
-                        theme,
+                        f"Media type from theme fallback | theme={theme} type=static_image"
                     )
                     return "static_image"
 
@@ -1207,20 +1184,17 @@ Generate the text card content now:"""
         # Return the type with most matches (with preference order if tied)
         if carousel_matches >= video_matches and carousel_matches >= static_matches:
             log_info(
-                "Media type determined | type=carousel matches=%d",
-                carousel_matches,
+                f"Media type determined | type=carousel matches={carousel_matches}"
             )
             return "carousel"
         elif video_matches >= static_matches:
             log_info(
-                "Media type determined | type=video matches=%d",
-                video_matches,
+                f"Media type determined | type=video matches={video_matches}"
             )
             return "video"
         else:
             log_info(
-                "Media type determined | type=static_image matches=%d",
-                static_matches,
+                f"Media type determined | type=static_image matches={static_matches}"
             )
             return "static_image"
 
