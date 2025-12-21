@@ -711,6 +711,14 @@
             display: flex;
         }
 
+        /* Text Card Edit Modal */
+        #text-card-edit-modal {
+            display: none;
+        }
+        #text-card-edit-modal.active {
+            display: flex;
+        }
+
         /* Pinned Post Modal */
         #pinned-post-modal {
             display: none;
@@ -1072,6 +1080,37 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="savePostEdits()">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Card Edit Modal -->
+    <div class="modal-overlay" id="text-card-edit-modal">
+        <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+            <h3>✏️ Edit Text Card</h3>
+            <p id="text-card-edit-status" style="color: #6b7280; margin-bottom: 15px;"></p>
+
+            <input type="hidden" id="text-card-edit-post-id">
+            <input type="hidden" id="text-card-edit-type">
+
+            <!-- Dynamic form container - fields will be inserted here based on card type -->
+            <div id="text-card-form-container"></div>
+
+            <!-- Caption field (common to all types) -->
+            <div style="margin-bottom: 15px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">
+                    📱 Post Caption:
+                </label>
+                <textarea
+                    id="text-card-edit-caption"
+                    rows="3"
+                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"
+                ></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeTextCardEditModal()">Cancel</button>
+                <button class="btn btn-primary" id="text-card-save-btn" onclick="saveTextCardEdit()">💾 Save & Regenerate Image</button>
             </div>
         </div>
     </div>
@@ -1781,7 +1820,7 @@
                         </div>
                         <div class="text-card-preview mb-3">
                             <img src="${post.image_url}" alt="Text Card Preview" class="img-fluid rounded" style="max-height: 300px; width: auto;">
-                            <button class="btn btn-small btn-edit" onclick="openEditTextCard('${post.id}')" style="margin-top: 10px;">
+                            <button class="btn btn-small btn-edit" onclick="openTextCardEditModal('${post.id}')" style="margin-top: 10px;">
                                 ✏️ Edit Text
                             </button>
                         </div>
@@ -1901,7 +1940,7 @@
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
-                            <button class="btn btn-secondary btn-sm" onclick="openEditTextCard('${post.id}')">✏️ Edit Text</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
                             <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
                         `}
@@ -3720,110 +3759,159 @@
             editingTextCardType = null;
         }
 
-        async function saveTextCardEdit() {
-            if (!editingPostId || !editingTextCardType) return;
+        // ========== TEXT CARD EDIT FUNCTIONS ==========
 
-            const btn = document.getElementById('save-edit-btn');
-            btn.disabled = true;
-            btn.textContent = '⏳ Saving...';
+        function openTextCardEditModal(postId) {
+            const post = allPosts.find(p => p.id === postId);
+            if (!post) {
+                showToast('Post not found', 'error');
+                return;
+            }
+
+            // Parse generation_prompt to get text card content
+            let textCardType = '';
+            let textCardContent = {};
 
             try {
-                // Build content object based on type
-                let content = {};
+                const genPrompt = JSON.parse(post.generation_prompt || '{}');
+                textCardType = genPrompt.text_card_type || '';
+                textCardContent = genPrompt.text_card_content || {};
+                console.log('Parsed text card data:', { textCardType, textCardContent });
+            } catch (e) {
+                console.error('Failed to parse generation_prompt:', e);
+                showToast('Failed to load text card content', 'error');
+                return;
+            }
 
-                switch(editingTextCardType) {
-                    case 'quote':
-                        content = {
-                            quote: document.getElementById('edit-quote').value,
-                            attribution: document.getElementById('edit-attribution').value
-                        };
-                        break;
-                    case 'tip':
-                        content = {
-                            header: document.getElementById('edit-header').value,
-                            tip: document.getElementById('edit-tip').value,
-                            subtitle: document.getElementById('edit-subtitle').value
-                        };
-                        break;
-                    case 'educational':
-                        // Try multiple selectors for title field
-                        let titleElement = document.getElementById('edit-edu-title');
-                        if (!titleElement) {
-                            titleElement = document.querySelector('[name="edu-title"]');
-                            console.log('Falling back to name selector for title');
-                        }
-                        if (!titleElement) {
-                            titleElement = document.querySelector('#edit-form-container input[type="text"]');
-                            console.log('Falling back to generic input selector for title');
-                        }
+            // Store post ID and type
+            document.getElementById('text-card-edit-post-id').value = postId;
+            document.getElementById('text-card-edit-type').value = textCardType;
 
-                        // Try multiple selectors for points field
-                        let pointsElement = document.getElementById('edit-edu-points');
-                        if (!pointsElement) {
-                            pointsElement = document.querySelector('[name="edu-points"]');
-                            console.log('Falling back to name selector for points');
-                        }
-                        if (!pointsElement) {
-                            pointsElement = document.querySelector('#edit-form-container textarea:not(#edit-caption)');
-                            console.log('Falling back to generic textarea selector for points');
-                        }
+            // Set caption
+            document.getElementById('text-card-edit-caption').value = post.content_text || '';
 
-                        // Debug: log DOM state
-                        console.log('=== EDUCATIONAL EDIT DEBUG ===');
-                        console.log('Title element found:', !!titleElement);
-                        console.log('Title element:', titleElement);
-                        console.log('Title value:', titleElement ? titleElement.value : 'NOT FOUND');
-                        console.log('Points element found:', !!pointsElement);
-                        console.log('Points element:', pointsElement);
-                        console.log('Points value:', pointsElement ? pointsElement.value : 'NOT FOUND');
-                        console.log('Form container HTML:', document.getElementById('edit-form-container')?.innerHTML);
-                        console.log('=== END DEBUG ===');
+            // Build form based on type
+            buildTextCardEditForm(textCardType, textCardContent);
 
-                        if (!titleElement) {
-                            console.error('ERROR: Cannot find title element in DOM!');
-                            alert('Error: Title field not found. Please check the form.');
-                            btn.disabled = false;
-                            btn.textContent = 'Save Changes';
-                            return;
-                        }
+            // Update status
+            document.getElementById('text-card-edit-status').textContent =
+                `Editing ${textCardType} text card`;
 
-                        const titleValue = titleElement.value.trim();
-                        const pointsText = pointsElement ? pointsElement.value : '';
+            // Show modal
+            document.getElementById('text-card-edit-modal').classList.add('active');
+        }
 
-                        content = {
-                            title: titleValue,
-                            points: pointsText.split('\n').filter(p => p.trim() !== '')
-                        };
+        function buildTextCardEditForm(textCardType, content) {
+            const container = document.getElementById('text-card-form-container');
+            let html = '';
 
-                        console.log('Final educational content:', JSON.stringify(content));
-                        break;
-                    case 'motivation':
-                        content = {
-                            statement: document.getElementById('edit-statement').value
-                        };
-                        break;
-                }
+            if (textCardType === 'quote') {
+                html = `
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Quote Text:</label>
+                        <textarea id="tc-quote-text" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(content.quote || '')}</textarea>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Attribution:</label>
+                        <input type="text" id="tc-attribution" value="${escapeHtml(content.attribution || 'Refiloe')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                `;
+            } else if (textCardType === 'tip') {
+                html = `
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Header (e.g., PRO TIP):</label>
+                        <input type="text" id="tc-tip-header" value="${escapeHtml(content.header || 'PRO TIP')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tip Text:</label>
+                        <textarea id="tc-tip-text" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(content.tip || '')}</textarea>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Subtitle:</label>
+                        <input type="text" id="tc-tip-subtitle" value="${escapeHtml(content.subtitle || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                `;
+            } else if (textCardType === 'educational') {
+                const pointsText = (content.points || []).join('\n');
+                html = `
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Title:</label>
+                        <input type="text" id="tc-edu-title" value="${escapeHtml(content.title || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Bullet Points (one per line):</label>
+                        <textarea id="tc-edu-points" rows="6" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(pointsText)}</textarea>
+                        <small style="color: #6b7280;">Enter each bullet point on a new line</small>
+                    </div>
+                `;
+            } else if (textCardType === 'motivation') {
+                html = `
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivation Statement:</label>
+                        <textarea id="tc-motivation-text" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(content.statement || '')}</textarea>
+                    </div>
+                `;
+            } else {
+                html = `<p style="color: #dc2626;">Unknown text card type: ${textCardType}</p>`;
+            }
 
-                // Get the caption
-                const caption = document.getElementById('edit-caption')?.value || '';
+            container.innerHTML = html;
+        }
 
-                // Debug alert to show what's being sent (temporary)
-                if (editingTextCardType === 'educational') {
-                    const debugPayload = {
-                        text_card_type: editingTextCardType,
-                        text_card_content: content,
-                        caption: caption
-                    };
-                    console.log('DEBUG: About to send payload:', JSON.stringify(debugPayload, null, 2));
-                    alert('SENDING EDUCATIONAL CONTENT:\n\nTitle: "' + content.title + '"\nPoints: ' + JSON.stringify(content.points) + '\n\n(Check console for full payload)');
-                }
+        function closeTextCardEditModal() {
+            document.getElementById('text-card-edit-modal').classList.remove('active');
+        }
 
-                const response = await fetch(`/api/dashboard/text-card/${editingPostId}/edit`, {
+        async function saveTextCardEdit() {
+            const postId = document.getElementById('text-card-edit-post-id').value;
+            const textCardType = document.getElementById('text-card-edit-type').value;
+            const caption = document.getElementById('text-card-edit-caption').value;
+
+            // Build content based on type
+            let textCardContent = {};
+
+            if (textCardType === 'quote') {
+                textCardContent = {
+                    quote: document.getElementById('tc-quote-text').value,
+                    attribution: document.getElementById('tc-attribution').value || 'Refiloe'
+                };
+            } else if (textCardType === 'tip') {
+                textCardContent = {
+                    header: document.getElementById('tc-tip-header').value || 'PRO TIP',
+                    tip: document.getElementById('tc-tip-text').value,
+                    subtitle: document.getElementById('tc-tip-subtitle').value
+                };
+            } else if (textCardType === 'educational') {
+                const titleEl = document.getElementById('tc-edu-title');
+                const pointsEl = document.getElementById('tc-edu-points');
+
+                textCardContent = {
+                    title: titleEl ? titleEl.value : '',
+                    points: pointsEl ? pointsEl.value.split('\n').filter(p => p.trim() !== '') : []
+                };
+
+                console.log('Educational content collected:', textCardContent);
+            } else if (textCardType === 'motivation') {
+                textCardContent = {
+                    statement: document.getElementById('tc-motivation-text').value
+                };
+            }
+
+            // Debug: Show what we're sending
+            console.log('Saving text card:', { postId, textCardType, textCardContent, caption });
+
+            // Disable save button
+            const saveBtn = document.getElementById('text-card-save-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/text-card/${postId}/edit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        text_card_type: editingTextCardType,
-                        text_card_content: content,
+                        text_card_type: textCardType,
+                        text_card_content: textCardContent,
                         caption: caption
                     })
                 });
@@ -3831,17 +3919,18 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('✅ Text card updated!', 'success');
-                    closeEditTextCardModal();
-                    await loadPosts();
+                    showToast('Text card updated and image regenerated!', 'success');
+                    closeTextCardEditModal();
+                    refreshPosts();
                 } else {
-                    showToast('❌ ' + (data.error || 'Update failed'), 'error');
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                showToast('❌ Error: ' + error.message, 'error');
+                console.error('Error saving text card:', error);
+                showToast('Failed to save text card', 'error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = '💾 Save & Regenerate';
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Save & Regenerate Image';
             }
         }
         // ========== END FILTER FUNCTIONALITY ==========
