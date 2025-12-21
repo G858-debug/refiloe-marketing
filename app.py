@@ -4595,6 +4595,7 @@ def api_get_post(post_id: str):
 
     try:
         import json
+        log_info(f"🔍 Fetching single post: {post_id}")
 
         result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
 
@@ -4602,6 +4603,7 @@ def api_get_post(post_id: str):
             return jsonify({'success': False, 'error': 'Post not found'}), 404
 
         post = result.data[0]
+        log_info(f"✅ Found post {post_id}, type={post.get('post_type')}, has_generation_prompt={bool(post.get('generation_prompt'))}")
 
         # Parse generation_prompt to extract video_script, image_prompt, and motion_prompt
         video_script = ''
@@ -4648,7 +4650,8 @@ def api_get_post(post_id: str):
                 'motion_prompt': motion_prompt,
                 'is_pinned': post.get('is_pinned', False),
                 'video_url': post.get('video_url', ''),
-                'media_url': post.get('media_url', '')
+                'media_url': post.get('media_url', ''),
+                'generation_prompt': post.get('generation_prompt', '{}')
             }
         })
 
