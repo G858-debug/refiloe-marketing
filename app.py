@@ -6849,7 +6849,7 @@ def api_generate_weekly_text_cards():
                     'content_text': content.get('caption', ''),
                     'post_type': 'text_card',
                     'scheduled_time': scheduled_time.isoformat(),
-                    'media_url': image_url,
+                    'image_url': image_url,
                     'hashtags': content.get('hashtags', []),
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
@@ -6993,12 +6993,12 @@ def api_edit_text_card(post_id):
             log_error("Storage client not available")
             return jsonify({'success': False, 'error': 'Storage client not available'}), 500
 
-        # Use existing media_url path if available, otherwise create new one
-        existing_media_url = post.get('media_url', '')
-        if existing_media_url and 'text-cards/' in existing_media_url:
+        # Use existing image_url path if available, otherwise create new one
+        existing_image_url = post.get('image_url', '')
+        if existing_image_url and 'text-cards/' in existing_image_url:
             # Extract the storage path from the URL
             # URL format: https://...supabase.co/storage/v1/object/public/media/text-cards/...
-            storage_path = existing_media_url.split('/media/')[-1]
+            storage_path = existing_image_url.split('/media/')[-1]
         else:
             # Create new storage path
             storage_path = f"text-cards/{uuid.uuid4().hex[:8]}.png"
@@ -7024,7 +7024,7 @@ def api_edit_text_card(post_id):
 
         # Build update data
         update_data = {
-            'media_url': image_url,
+            'image_url': image_url,
             'generation_prompt': json.dumps(updated_metadata),
             'updated_at': datetime.now(SA_TZ).isoformat()
         }
