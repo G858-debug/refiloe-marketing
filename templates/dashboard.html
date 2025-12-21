@@ -1768,9 +1768,9 @@
                             💬 Text Card Preview
                             <button onclick="window.open('${post.image_url}', '_blank')" class="fullscreen-btn">🔗 Open in New Tab</button>
                         </div>
-                        <div class="text-card-preview">
-                            <img src="${post.image_url}" alt="Text Card Preview" class="text-card-image">
-                            <button class="btn btn-small btn-edit" onclick="openEditTextCard('${post.id}')">
+                        <div class="text-card-preview mb-3">
+                            <img src="${post.image_url}" alt="Text Card Preview" class="img-fluid rounded" style="max-height: 300px; width: auto;">
+                            <button class="btn btn-small btn-edit" onclick="openEditTextCard('${post.id}')" style="margin-top: 10px;">
                                 ✏️ Edit Text
                             </button>
                         </div>
