@@ -423,7 +423,7 @@ class ContentGenerator(_LegacyContentGenerator):
                 num_slides,
             )
         else:
-            log_warning("Failed to parse carousel response | topic=%s", topic)
+            log_warning(f"Failed to parse carousel response | topic={topic}")
 
         return carousel_data
 
@@ -561,10 +561,10 @@ Generate the carousel content now:"""
             return validated
 
         except json.JSONDecodeError as e:
-            log_warning("JSON decode error in carousel response: %s", str(e))
+            log_warning(f"JSON decode error in carousel response: {str(e)}")
             return {}
         except Exception as e:
-            log_warning("Error parsing carousel response: %s", str(e))
+            log_warning(f"Error parsing carousel response: {str(e)}")
             return {}
 
     def _validate_carousel_content(
@@ -745,7 +745,7 @@ Generate the carousel content now:"""
             validated = self._validate_text_card_content(data, content_type)
 
             if not validated:
-                log_warning("Failed to validate text card content | content_type=%s", content_type)
+                log_warning(f"Failed to validate text card content | content_type={content_type}")
                 return {}
 
             # Add metadata
@@ -764,10 +764,10 @@ Generate the carousel content now:"""
             return validated
 
         except json.JSONDecodeError as e:
-            log_warning("JSON decode error in text card response: %s", str(e))
+            log_warning(f"JSON decode error in text card response: {str(e)}")
             return {}
         except Exception as e:
-            log_warning("Error parsing text card response: %s", str(e))
+            log_warning(f"Error parsing text card response: {str(e)}")
             return {}
 
     def _build_text_card_prompt(self, content_type: str) -> str:
@@ -1046,13 +1046,13 @@ Generate the text card content now:"""
                 validated["statement"] = filter_banned_words(statement[:100])
 
             else:
-                log_warning("Unknown content type: %s", content_type)
+                log_warning(f"Unknown content type: {content_type}")
                 return {}
 
             return validated
 
         except Exception as e:
-            log_warning("Error validating text card content: %s", str(e))
+            log_warning(f"Error validating text card content: {str(e)}")
             return {}
 
     # ------------------------------------------------------------------
