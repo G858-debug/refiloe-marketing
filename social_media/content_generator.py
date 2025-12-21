@@ -1103,5 +1103,458 @@ Generate the carousel content now:"""
 
         return base_context + sa_context
 
+    # ------------------------------------------------------------------
+    # Triple Hook System for viral video content
+    # ------------------------------------------------------------------
+    def _get_video_hooks(self) -> Dict[str, Any]:
+        """Get comprehensive triple-hook system for viral videos
+
+        Returns:
+            Dict containing visual_hook, text_hook, and verbal_hook
+        """
+        import random
+
+        viral_hooks = self.config.get('viral_hooks', {})
+
+        # Visual hooks (what viewers SEE in first frame)
+        visual_hooks = viral_hooks.get('visual_hooks', {}).get('examples', [
+            "Transformation result shown first",
+            "Unexpected prop or setup",
+            "Mid-action freeze frame",
+            "Direct eye contact with camera",
+            "Text overlay with bold claim"
+        ])
+
+        # Text hooks (on-screen text for sound-off viewing, 1-7 words)
+        text_hook_templates = viral_hooks.get('text_hooks', {}).get('templates', [
+            "POV: [situation]",
+            "The [thing] nobody talks about",
+            "Stop if you [identifier]",
+            "This changed everything",
+            "Wait for it..."
+        ])
+
+        # Verbal hooks (what is SAID in first 3 seconds)
+        verbal_hook_templates = viral_hooks.get('verbal_hooks', {}).get('templates', [
+            "The message came at [time]...",
+            "Nobody told me [revelation]...",
+            "I lost [thing] because [reason]...",
+            "Stop doing [common mistake]...",
+            "What if I told you [contrarian claim]..."
+        ])
+
+        return {
+            'visual': random.choice(visual_hooks),
+            'text': random.choice(text_hook_templates),
+            'verbal': random.choice(verbal_hook_templates),
+            'all_visual': visual_hooks,
+            'all_text': text_hook_templates,
+            'all_verbal': verbal_hook_templates
+        }
+
+    def _generate_triple_hook(self, theme: str, content_type: str = None) -> Dict[str, str]:
+        """Generate a cohesive triple hook tailored to theme and content type
+
+        Args:
+            theme: Content theme (e.g., 'admin_hacks', 'relatable_trainer_life')
+            content_type: Viral content type (e.g., 'relatable_struggle', 'myth_buster')
+
+        Returns:
+            Dict with 'visual', 'text', 'verbal' hooks and 'text_overlay_script'
+        """
+        import random
+
+        hooks = self._get_video_hooks()
+
+        # Theme-specific hook customization
+        theme_hooks = {
+            'admin_hacks': {
+                'text_templates': [
+                    "POV: Your admin is done",
+                    "This saves 5 hours/week",
+                    "Stop doing this manually"
+                ],
+                'verbal_templates': [
+                    "I used to spend 3 hours on this every week...",
+                    "What if I told you there's a better way...",
+                    "This one automation changed everything..."
+                ]
+            },
+            'relatable_trainer_life': {
+                'text_templates': [
+                    "Every trainer knows this",
+                    "POV: It's 5:47 AM",
+                    "The client excuse hall of fame"
+                ],
+                'verbal_templates': [
+                    "The message came at 5:47 AM...",
+                    "You know that feeling when...",
+                    "I know you've been here..."
+                ]
+            },
+            'client_management_tips': {
+                'text_templates': [
+                    "Why clients actually leave",
+                    "The retention secret",
+                    "Stop losing clients to this"
+                ],
+                'verbal_templates': [
+                    "Nobody told me this when I started...",
+                    "I lost my best client because...",
+                    "The real reason clients ghost you..."
+                ]
+            },
+            'gym_culture_humor': {
+                'text_templates': [
+                    "Gym people are unhinged",
+                    "That one client...",
+                    "Tell me you're a trainer without telling me"
+                ],
+                'verbal_templates': [
+                    "I can't be the only one who...",
+                    "The way I had to keep a straight face when...",
+                    "Trainers, tell me why..."
+                ]
+            },
+            'myth_busting': {
+                'text_templates': [
+                    "This advice is wrong",
+                    "Stop believing this",
+                    "The truth about [topic]"
+                ],
+                'verbal_templates': [
+                    "Everything you've been told about this is wrong...",
+                    "I'm about to make some people angry...",
+                    "This might be controversial but..."
+                ]
+            }
+        }
+
+        # Get theme-specific or fallback to random
+        theme_config = theme_hooks.get(theme, {})
+
+        text_hook = random.choice(theme_config.get('text_templates', hooks['all_text']))
+        verbal_hook = random.choice(theme_config.get('verbal_templates', hooks['all_verbal']))
+        visual_hook = hooks['visual']
+
+        # Create text overlay script (what appears on screen at each moment)
+        text_overlay_script = [
+            {"time": "0-2s", "text": text_hook, "style": "bold, centered"},
+            {"time": "3-5s", "text": "👇 Keep watching", "style": "smaller, bottom"},
+        ]
+
+        return {
+            'visual': visual_hook,
+            'text': text_hook,
+            'verbal': verbal_hook,
+            'text_overlay_script': text_overlay_script,
+            'theme': theme,
+            'content_type': content_type
+        }
+
+    def _create_video_script_prompt(
+        self,
+        theme: str,
+        duration: int,
+        style: str,
+        hook: str,
+        target_duration_seconds: int = 55,
+        target_word_count_min: int = 75,
+        target_word_count_max: int = 100,
+        triple_hook: Dict[str, Any] = None,
+    ) -> str:
+        """Create prompt for video script generation with Triple Hook System
+
+        Args:
+            theme: Content theme
+            duration: Video duration in seconds
+            style: Video style
+            hook: Video hook to use
+            target_duration_seconds: Target duration for optimal video length
+            target_word_count_min: Minimum word count target
+            target_word_count_max: Maximum word count target
+            triple_hook: Triple hook system dict with visual, text, and verbal hooks
+
+        Returns:
+            str: Formatted prompt for video script generation
+        """
+        # Get AI influencer settings
+        ai_settings = self.config.get('ai_influencer_settings', {})
+        personality = ai_settings.get('personality_traits', [])
+        speaking_style = ai_settings.get('speaking_style', {})
+
+        # Calculate timing breakdown
+        hook_duration = 3  # First 3 seconds for hook
+        main_content_duration = duration - hook_duration - 5  # 5 seconds for CTA
+        main_content_end = duration - 5
+        cta_duration = 5
+
+        # Use triple hook if provided, otherwise use legacy hook
+        if triple_hook:
+            triple_hook_section = f"""
+TRIPLE HOOK SYSTEM (CRITICAL - All three must work together):
+
+1. VISUAL HOOK (Frame 1): {triple_hook['visual']}
+   - What the viewer SEES before any audio registers
+   - Must stop the scroll in <1 second
+   - Specify exactly what's on screen
+
+2. TEXT HOOK (0-2s): "{triple_hook['text']}"
+   - On-screen text overlay (1-7 words MAX)
+   - 92% of viewers watch with sound OFF initially
+   - This text must create curiosity alone
+
+3. VERBAL HOOK (0-3s): Start with something like: "{triple_hook['verbal']}"
+   - First words spoken
+   - NO introductions ("Hi, I'm..." = instant scroll)
+   - Pattern interrupt or curiosity gap
+
+VIDEO STRUCTURE:
+- 0-1s: Visual hook + text overlay appears
+- 1-3s: Verbal hook delivered
+- 3-{main_content_end}s: Core content with text overlays at key points
+- {main_content_end}-{duration}s: Strong CTA with visual/text reinforcement
+
+TEXT OVERLAY MOMENTS (specify in script):
+- Opening hook text
+- Key statistic or number (if applicable)
+- "Wait for it..." or retention hook at midpoint
+- CTA text at end
+
+Also update the JSON response format to include:
+- "visual_hook": description of first frame
+- "text_overlays": array of {{"time": "Xs-Ys", "text": "...", "style": "..."}}
+- "triple_hook_summary": brief description of how all three hooks work together
+"""
+        else:
+            triple_hook_section = f"""
+VIDEO STRUCTURE:
+1. Hook (0-3s): {hook}
+2. Main Content (3-{main_content_end}s): Core message with visual cues
+3. CTA ({main_content_end}-{duration}s): Strong call-to-action
+"""
+
+        prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating a {target_duration_seconds}-second video script for personal trainers.
+
+VIDEO SPECIFICATIONS:
+- Target Duration: {target_duration_seconds} seconds (aim for 50-60 seconds optimal range)
+- Maximum Duration: {duration} seconds
+- Style: {style}
+- Theme: {theme}
+- Hook: {hook}
+
+SCRIPT LENGTH REQUIREMENTS (CRITICAL):
+- Target word count: {target_word_count_min}-{target_word_count_max} words MAXIMUM
+- Speaking rate: ~150 words per minute (2.5 words per second)
+- This ensures the script fits within the 50-60 second optimal duration
+- Be concise and impactful - every word must count
+- DO NOT exceed {target_word_count_max} words total
+
+PERSONALITY & VOICE:
+- {', '.join(personality)}
+- Voice: {speaking_style.get('voice', 'First person')}
+- Tone: {speaking_style.get('tone', 'Conversational and engaging')}
+
+VIDEO SCRIPT RESTRICTIONS (CRITICAL):
+- NEVER use "Refiloe" or "I'm Refiloe" in video scripts
+- NEVER use "Hi there" or "Hey there" as greetings
+- Jump straight into the content - no formal introductions
+- Speak TO trainers, not ABOUT yourself
+- Use "you" and "your" language, avoid "I" and "my" when possible
+- Start with a hook, question, or relatable moment
+- Good: "The message came at 5:47 AM..."
+- Good: "You know that feeling when..."
+- Bad: "Hey! I'm Refiloe, and today..."
+- Bad: "Hi there, personal trainers..."
+
+RETENTION OPTIMIZATION:
+- Hook MUST grab attention in first 3 seconds
+- Use power words and emotional triggers
+- Include specific numbers and statistics
+- Create curiosity and urgency
+- Make it impossible to scroll past
+
+{triple_hook_section}
+
+VISUAL CUES TO INCLUDE:
+- Text overlays for key points
+- Gestures and expressions
+- Props or demonstrations
+- Screen recordings if applicable
+- Transitions between topics
+
+TRENDING ELEMENTS:
+- Use current social media language
+- Include relevant hashtags in script
+- Reference popular challenges or trends
+- Use engaging visual descriptions
+
+CALL-TO-ACTION OPTIONS:
+- "Comment 'ADMIN' for the free guide"
+- "Share this with a trainer who needs it"
+- "Save this for your next client"
+- "Which tip will you try first?"
+- "Follow for more trainer hacks"
+
+REEL TITLE REQUIREMENTS (CRITICAL FOR FACEBOOK REELS):
+- Generate an engaging "reel_title" that will be used as the Facebook Reel title
+- Maximum 255 characters (Facebook limit)
+- Must be curiosity-inducing and scroll-stopping
+- Use emotional triggers, time-stamps, or POV format
+- Examples of great reel titles:
+  * "When clients cancel at 6:47 AM... 😤"
+  * "The spreadsheet that changed everything 📊"
+  * "POV: You just got your 10th reschedule this week"
+  * "Nobody talks about THIS part of being a trainer..."
+  * "The message that made me rethink everything 💭"
+  * "5:30 AM training session gone wrong..."
+- Make it impossible to scroll past
+- Should complement the video hook but be standalone engaging
+- Can include 1-2 emojis maximum
+
+IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
+
+OUTPUT FORMAT:
+Please provide your response in the following JSON format:
+{{
+    "title": "Compelling video title",
+    "reel_title": "Engaging Facebook Reel title (max 255 chars, curiosity-inducing, e.g., 'When clients cancel at 6:47 AM... 😤')",
+    "hook": "The exact opening hook text",
+    "visual_hook": "Description of first frame visual",
+    "text_overlays": [
+        {{"time": "0-2s", "text": "Opening hook text", "style": "bold, centered"}},
+        {{"time": "5-7s", "text": "Key point", "style": "medium, bottom"}}
+    ],
+    "triple_hook_summary": "How visual, text, and verbal hooks work together",
+    "script": [
+        {{
+            "time_start": 0,
+            "time_end": 3,
+            "text": "Hook text with exact wording",
+            "visual_cue": "Visual instruction (e.g., 'Point to camera, serious expression')",
+            "tone": "Urgent, attention-grabbing"
+        }},
+        {{
+            "time_start": 3,
+            "time_end": {main_content_end},
+            "text": "Main content with exact wording",
+            "visual_cue": "Visual instruction (e.g., 'Show demonstration, text overlay')",
+            "tone": "Educational, engaging"
+        }},
+        {{
+            "time_start": {main_content_end},
+            "time_end": {duration},
+            "text": "Call-to-action with exact wording",
+            "visual_cue": "Visual instruction (e.g., 'Point to comment section, encouraging smile')",
+            "tone": "Encouraging, action-oriented"
+        }}
+    ],
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"],
+    "visual_notes": "Overall visual direction and style",
+    "retention_hooks": ["List of retention elements used"],
+    "cta_type": "The type of call-to-action used",
+    "estimated_retention": "High/Medium/Low based on hook strength"
+}}
+
+Generate a script that will keep trainers watching until the end!"""
+
+        return prompt
+
+    def create_video_script(
+        self,
+        theme: str,
+        duration: int = 60,
+        style: str = "educational",
+        target_duration_seconds: int = 55,
+    ) -> Dict:
+        """Generate time-coded video scripts with Triple Hook System
+
+        Args:
+            theme: Content theme for the video
+            duration: Video duration in seconds (30, 60, 90, 120)
+            style: Video style (educational, motivational, behind_scenes, tutorial, story)
+            target_duration_seconds: Target duration for optimal video length (default: 55 for 50-60s range)
+
+        Returns:
+            Dict: Structured video script with triple hooks, time codes, visual cues, and CTAs
+        """
+        import random
+
+        log_info(
+            f"Creating video script with Triple Hook System - Theme: {theme}, "
+            f"Duration: {duration}s, Target: {target_duration_seconds}s, Style: {style}"
+        )
+
+        try:
+            # Generate triple hook for this theme
+            triple_hook = self._generate_triple_hook(theme)
+
+            # Get video-specific hooks (for legacy compatibility)
+            video_hooks = self._get_video_hooks()
+            selected_hook = video_hooks.get('verbal', 'Stop scrolling if you\'re a trainer who...')
+
+            # Calculate target word count (assuming ~150 words per minute speaking rate)
+            # For 50-60 seconds, that's 75-100 words
+            target_word_count_min = int((target_duration_seconds - 5) / 60 * 150 * 0.9)  # Lower bound
+            target_word_count_max = int((target_duration_seconds + 5) / 60 * 150 * 1.1)  # Upper bound
+
+            # Create video script prompt with triple hook
+            prompt = self._create_video_script_prompt(
+                theme,
+                duration,
+                style,
+                selected_hook,
+                target_duration_seconds,
+                target_word_count_min,
+                target_word_count_max,
+                triple_hook,
+            )
+
+            # Call Claude API
+            response = self._call_claude_with_retry(prompt)
+
+            if not response:
+                log_error("Failed to get response from Claude API for video script")
+                return {}
+
+            # Parse video script response
+            script_data = self._parse_video_script_response(response, theme, duration, style)
+
+            if script_data:
+                # Add triple hook metadata
+                script_data['triple_hook'] = triple_hook
+
+                # Validate word count
+                script_text = " ".join([segment.get("text", "") for segment in script_data.get("script", [])])
+                word_count = len(script_text.split())
+
+                if word_count > 100:
+                    log_warning(
+                        f"Video script exceeds 100 words (actual: {word_count} words). "
+                        f"This may exceed the target duration of 50-60 seconds. "
+                        f"Consider requesting a shorter version."
+                    )
+                    script_data["word_count_warning"] = {
+                        "actual_words": word_count,
+                        "max_recommended": 100,
+                        "exceeded_by": word_count - 100,
+                    }
+
+                script_data["word_count"] = word_count
+                script_data["target_duration_seconds"] = target_duration_seconds
+
+                log_info(
+                    f"Successfully generated video script with Triple Hook System: {theme} - {duration}s - {style} "
+                    f"(word count: {word_count}, target: {target_word_count_min}-{target_word_count_max})"
+                )
+                return script_data
+            else:
+                log_error("Failed to parse video script response")
+                return {}
+
+        except Exception as e:
+            log_error(f"Error creating video script: {str(e)}")
+            return {}
+
 
 __all__ = ["ContentGenerator"]
