@@ -3567,19 +3567,26 @@
                     return;
                 }
 
-                // Parse metadata
-                let metadata = {};
+                // Parse generation_prompt to get text card content
+                let textCardType = 'quote';
+                let textCardContent = {};
+
                 try {
-                    metadata = typeof post.metadata === 'string' ? JSON.parse(post.metadata) : (post.metadata || {});
+                    const genPrompt = typeof post.generation_prompt === 'string'
+                        ? JSON.parse(post.generation_prompt)
+                        : (post.generation_prompt || {});
+                    textCardType = genPrompt.text_card_type || 'quote';
+                    textCardContent = genPrompt.text_card_content || {};
                 } catch (e) {
-                    metadata = {};
+                    console.error('Failed to parse generation_prompt:', e);
                 }
 
-                editingTextCardType = metadata.text_card_type || 'quote';
-                const content = metadata.text_card_content || {};
+                editingTextCardType = textCardType;
+                const content = textCardContent;
 
                 // Build form based on type
-                const formHtml = buildEditForm(editingTextCardType, content);
+                const caption = post.content_text || '';
+                const formHtml = buildEditForm(editingTextCardType, content, caption);
                 document.getElementById('edit-form-container').innerHTML = formHtml;
 
                 // Set preview image
@@ -3593,10 +3600,12 @@
             }
         }
 
-        function buildEditForm(type, content) {
+        function buildEditForm(type, content, caption = '') {
+            let formHtml = '';
+
             switch(type) {
                 case 'quote':
-                    return `
+                    formHtml = `
                         <div class="edit-form-group">
                             <label>Quote</label>
                             <textarea id="edit-quote" maxlength="150">${content.quote || ''}</textarea>
@@ -3607,8 +3616,9 @@
                             <input type="text" id="edit-attribution" maxlength="50" value="${content.attribution || ''}">
                         </div>
                     `;
+                    break;
                 case 'tip':
-                    return `
+                    formHtml = `
                         <div class="edit-form-group">
                             <label>Header Badge</label>
                             <input type="text" id="edit-header" maxlength="20" value="${content.header || ''}">
@@ -3623,9 +3633,10 @@
                             <input type="text" id="edit-subtitle" maxlength="80" value="${content.subtitle || ''}">
                         </div>
                     `;
+                    break;
                 case 'educational':
                     const points = content.points || ['', '', '', '', ''];
-                    return `
+                    formHtml = `
                         <div class="edit-form-group">
                             <label>Title</label>
                             <input type="text" id="edit-title" maxlength="50" value="${content.title || ''}">
@@ -3639,17 +3650,30 @@
                             </div>
                         </div>
                     `;
+                    break;
                 case 'motivation':
-                    return `
+                    formHtml = `
                         <div class="edit-form-group">
                             <label>Statement</label>
                             <textarea id="edit-statement" maxlength="100">${content.statement || ''}</textarea>
                             <div class="char-count"><span id="statement-count">${(content.statement || '').length}</span>/100</div>
                         </div>
                     `;
+                    break;
                 default:
                     return '<p>Unknown text card type</p>';
             }
+
+            // Add caption field for all types
+            formHtml += `
+                <div class="edit-form-group" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <label>Caption (post text)</label>
+                    <textarea id="edit-caption" maxlength="500" rows="3">${caption}</textarea>
+                    <div class="char-count"><span id="caption-count">${caption.length}</span>/500</div>
+                </div>
+            `;
+
+            return formHtml;
         }
 
         function closeEditTextCardModal() {
@@ -3698,10 +3722,16 @@
                         break;
                 }
 
+                // Get the caption
+                const caption = document.getElementById('edit-caption')?.value || '';
+
                 const response = await fetch(`/api/dashboard/text-card/${editingPostId}/edit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(content)
+                    body: JSON.stringify({
+                        content: content,
+                        caption: caption
+                    })
                 });
 
                 const data = await response.json();
@@ -3748,6 +3778,11 @@
                 document.getElementById('tip-count').textContent = e.target.value.length;
             } else if (e.target.id === 'edit-statement') {
                 document.getElementById('statement-count').textContent = e.target.value.length;
+            } else if (e.target.id === 'edit-caption') {
+                const captionCountEl = document.getElementById('caption-count');
+                if (captionCountEl) {
+                    captionCountEl.textContent = e.target.value.length;
+                }
             }
         });
 
