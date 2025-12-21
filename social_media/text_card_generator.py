@@ -80,23 +80,23 @@ class TextCardGenerator:
             log_error(f"Failed to fetch image from {url}: {e}")
             return None
 
-    def generate_text_card(self, content_type: str, content: Dict[str, Any]) -> str:
+    def generate_text_card(self, content: Dict[str, Any], content_type: str) -> str:
         """Generate text card image and return file path.
 
         Args:
-            content_type: One of 'quote', 'tip', 'educational', 'motivation'
             content: Dict with type-specific keys:
                 - quote: {'quote': str, 'attribution': str}
                 - tip: {'header': str, 'tip': str, 'subtitle': str}
                 - educational: {'title': str, 'points': List[str]}
                 - motivation: {'statement': str}
+            content_type: One of 'quote', 'tip', 'educational', 'motivation'
 
         Returns:
             str: Path to generated image file
         """
         content_type = content_type.lower()
 
-        log_info(f"Generating {content_type} text card")
+        log_info(f"Generating {content_type} text card with provided content")
 
         try:
             # Validate content type
@@ -105,7 +105,7 @@ class TextCardGenerator:
                 log_error(f"Unknown content type: {content_type}")
                 raise ValueError(f"Unknown content type: {content_type}. Must be one of: {', '.join(valid_types)}")
 
-            # Create unified layout for all types
+            # Create unified layout for all types using the provided content
             image = self._create_unified_layout(content_type, content)
 
             # Save image
