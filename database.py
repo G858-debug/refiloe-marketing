@@ -126,6 +126,7 @@ class SocialMediaDatabase:
                 'title': post_data.get('title', ''),
                 'content_theme': post_data.get('content_theme', ''),
                 'image_ids': post_data.get('image_ids', []),
+                'image_url': post_data.get('image_url'),
                 'scheduled_time': post_data.get('scheduled_time'),
                 'published_time': post_data.get('published_time'),
                 'status': status,
