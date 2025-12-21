@@ -1252,6 +1252,83 @@ Generate the carousel content now:"""
             'content_type': content_type
         }
 
+    def _select_video_format(self, theme: str, content_type: str = None) -> Dict[str, Any]:
+        """Select optimal video format based on content type and theme
+
+        Args:
+            theme: Content theme
+            content_type: Optional viral content type override
+
+        Returns:
+            Dict with duration_range, target_words, structure, format_name
+        """
+        video_formats = self.config.get('video_formats', {})
+        viral_content_types = self.config.get('viral_content_types', {})
+
+        # Default format configurations
+        default_formats = {
+            'quick_hit': {
+                'duration_range': [15, 25],
+                'target_words': [25, 40],
+                'structure': {'hook': 2, 'content': 12, 'cta': 3},
+                'best_for': ['myth_busting', 'quick_tips', 'relatable_moments', 'challenges']
+            },
+            'standard': {
+                'duration_range': [30, 45],
+                'target_words': [50, 75],
+                'structure': {'hook': 3, 'setup': 8, 'content': 25, 'cta': 5},
+                'best_for': ['tutorials', 'educational', 'behind_scenes']
+            },
+            'story': {
+                'duration_range': [45, 60],
+                'target_words': [75, 100],
+                'structure': {'hook': 3, 'story_setup': 10, 'tension': 20, 'resolution': 15, 'cta': 7},
+                'best_for': ['transformations', 'client_stories', 'personal_journey']
+            }
+        }
+
+        # Merge with config
+        for fmt_name, fmt_config in video_formats.items():
+            if fmt_name in default_formats:
+                default_formats[fmt_name].update(fmt_config)
+            else:
+                default_formats[fmt_name] = fmt_config
+
+        # Theme to format mapping
+        theme_format_map = {
+            'admin_hacks': 'quick_hit',
+            'relatable_trainer_life': 'quick_hit',
+            'gym_culture_humor': 'quick_hit',
+            'myth_busting': 'quick_hit',
+            'client_management_tips': 'standard',
+            'engagement_questions': 'quick_hit',
+            'client_stories': 'story',
+            'growth_mindset': 'standard'
+        }
+
+        # Content type overrides
+        content_type_format_map = {
+            'relatable_struggle': 'quick_hit',
+            'myth_buster': 'quick_hit',
+            'transformation_reveal': 'story',
+            'challenge_content': 'quick_hit',
+            'behind_scenes': 'standard',
+            'quick_tip': 'quick_hit'
+        }
+
+        # Determine format
+        if content_type and content_type in content_type_format_map:
+            format_name = content_type_format_map[content_type]
+        elif theme in theme_format_map:
+            format_name = theme_format_map[theme]
+        else:
+            format_name = 'standard'  # Default
+
+        selected_format = default_formats.get(format_name, default_formats['standard'])
+        selected_format['format_name'] = format_name
+
+        return selected_format
+
     def _create_video_script_prompt(
         self,
         theme: str,
@@ -1463,40 +1540,62 @@ Generate a script that will keep trainers watching until the end!"""
     def create_video_script(
         self,
         theme: str,
-        duration: int = 60,
+        duration: int = None,
         style: str = "educational",
-        target_duration_seconds: int = 55,
+        target_duration_seconds: int = None,
+        content_type: str = None,
+        format_override: str = None,
     ) -> Dict:
-        """Generate time-coded video scripts with Triple Hook System
+        """Generate time-coded video scripts with automatic format selection
 
         Args:
             theme: Content theme for the video
-            duration: Video duration in seconds (30, 60, 90, 120)
+            duration: Video duration in seconds (optional - auto-selected if None)
             style: Video style (educational, motivational, behind_scenes, tutorial, story)
-            target_duration_seconds: Target duration for optimal video length (default: 55 for 50-60s range)
+            target_duration_seconds: Target duration (optional - auto-selected if None)
+            content_type: Viral content type for format optimization
+            format_override: Force specific format ('quick_hit', 'standard', 'story')
 
         Returns:
-            Dict: Structured video script with triple hooks, time codes, visual cues, and CTAs
+            Dict: Structured video script with time codes, visual cues, and CTAs
         """
         import random
 
+        # Auto-select format if not specified
+        if format_override:
+            video_format = self.config.get('video_formats', {}).get(format_override, {})
+            video_format['format_name'] = format_override
+        else:
+            video_format = self._select_video_format(theme, content_type)
+
+        format_name = video_format.get('format_name', 'standard')
+        duration_range = video_format.get('duration_range', [30, 45])
+        word_range = video_format.get('target_words', [50, 75])
+
+        # Set duration from format if not specified
+        if duration is None:
+            duration = duration_range[1]  # Use upper bound
+
+        if target_duration_seconds is None:
+            # Target middle of range
+            target_duration_seconds = (duration_range[0] + duration_range[1]) // 2
+
+        # Calculate word counts from format
+        target_word_count_min = word_range[0]
+        target_word_count_max = word_range[1]
+
         log_info(
-            f"Creating video script with Triple Hook System - Theme: {theme}, "
-            f"Duration: {duration}s, Target: {target_duration_seconds}s, Style: {style}"
+            f"Creating video script - Theme: {theme}, Format: {format_name}, "
+            f"Duration: {target_duration_seconds}s, Words: {target_word_count_min}-{target_word_count_max}"
         )
 
         try:
             # Generate triple hook for this theme
-            triple_hook = self._generate_triple_hook(theme)
+            triple_hook = self._generate_triple_hook(theme, content_type)
 
             # Get video-specific hooks (for legacy compatibility)
             video_hooks = self._get_video_hooks()
             selected_hook = video_hooks.get('verbal', 'Stop scrolling if you\'re a trainer who...')
-
-            # Calculate target word count (assuming ~150 words per minute speaking rate)
-            # For 50-60 seconds, that's 75-100 words
-            target_word_count_min = int((target_duration_seconds - 5) / 60 * 150 * 0.9)  # Lower bound
-            target_word_count_max = int((target_duration_seconds + 5) / 60 * 150 * 1.1)  # Upper bound
 
             # Create video script prompt with triple hook
             prompt = self._create_video_script_prompt(
@@ -1524,27 +1623,33 @@ Generate a script that will keep trainers watching until the end!"""
                 # Add triple hook metadata
                 script_data['triple_hook'] = triple_hook
 
+                # Add video format metadata
+                script_data['video_format'] = format_name
+                script_data['format_config'] = video_format
+
                 # Validate word count
                 script_text = " ".join([segment.get("text", "") for segment in script_data.get("script", [])])
                 word_count = len(script_text.split())
 
-                if word_count > 100:
+                # Use format-specific max words for validation
+                max_recommended = word_range[1]
+                if word_count > max_recommended:
                     log_warning(
-                        f"Video script exceeds 100 words (actual: {word_count} words). "
-                        f"This may exceed the target duration of 50-60 seconds. "
+                        f"Video script exceeds {max_recommended} words (actual: {word_count} words). "
+                        f"This may exceed the target duration of {target_duration_seconds} seconds. "
                         f"Consider requesting a shorter version."
                     )
                     script_data["word_count_warning"] = {
                         "actual_words": word_count,
-                        "max_recommended": 100,
-                        "exceeded_by": word_count - 100,
+                        "max_recommended": max_recommended,
+                        "exceeded_by": word_count - max_recommended,
                     }
 
                 script_data["word_count"] = word_count
                 script_data["target_duration_seconds"] = target_duration_seconds
 
                 log_info(
-                    f"Successfully generated video script with Triple Hook System: {theme} - {duration}s - {style} "
+                    f"Successfully generated video script with Triple Hook System: {theme} - {duration}s - {style} - {format_name} "
                     f"(word count: {word_count}, target: {target_word_count_min}-{target_word_count_max})"
                 )
                 return script_data
@@ -1555,6 +1660,40 @@ Generate a script that will keep trainers watching until the end!"""
         except Exception as e:
             log_error(f"Error creating video script: {str(e)}")
             return {}
+
+    def create_quick_hit_script(self, theme: str, content_type: str = 'quick_tip') -> Dict:
+        """Generate a quick-hit video script (15-25 seconds) optimized for virality
+
+        Args:
+            theme: Content theme
+            content_type: Viral content type
+
+        Returns:
+            Dict: Short, punchy video script
+        """
+        return self.create_video_script(
+            theme=theme,
+            style='punchy',
+            content_type=content_type,
+            format_override='quick_hit'
+        )
+
+    def create_story_script(self, theme: str, story_type: str = 'transformation') -> Dict:
+        """Generate a story-format video script (45-60 seconds) with narrative arc
+
+        Args:
+            theme: Content theme
+            story_type: Type of story (transformation, journey, case_study)
+
+        Returns:
+            Dict: Narrative video script with tension and resolution
+        """
+        return self.create_video_script(
+            theme=theme,
+            style='story',
+            content_type='transformation_reveal' if story_type == 'transformation' else 'behind_scenes',
+            format_override='story'
+        )
 
 
 __all__ = ["ContentGenerator"]
