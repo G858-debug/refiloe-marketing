@@ -4092,7 +4092,7 @@ def api_approve_media(post_id):
 
 @app.route('/api/dashboard/reject/<post_id>', methods=['POST'])
 def api_reject_post(post_id):
-    """API: Delete a single post (reject endpoint kept for backward compatibility)"""
+    """API: Reject a post by updating its status to 'rejected'"""
     log_info(f"📥 Request: /api/dashboard/reject/{post_id}")
 
     # Validate post_id format (should be UUID)
@@ -4129,49 +4129,56 @@ def api_reject_post(post_id):
 
         # Check if post exists first
         log_info(f"🔍 Checking if post {post_id} exists")
-        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text').eq('id', post_id).execute()
+        check_result = supabase_client.table('social_posts').select('id, status, platform, content_text, post_type').eq('id', post_id).execute()
 
         if not check_result.data:
             log_error(f"❌ Post {post_id} not found")
             return api_error_response('Post not found', 404, {'post_id': post_id})
 
         post_info = check_result.data[0]
-        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}")
+        log_info(f"✅ Post found - Status: {post_info.get('status')}, Platform: {post_info.get('platform')}, Type: {post_info.get('post_type')}")
 
-        # Prevent deleting published posts
+        # Prevent rejecting published posts
         if post_info.get('status') == 'published':
-            log_error(f"❌ Cannot delete published post {post_id}")
+            log_error(f"❌ Cannot reject published post {post_id}")
             return api_error_response(
-                'Cannot delete a post that has already been published',
+                'Cannot reject a post that has already been published',
                 400,
                 {'post_id': post_id, 'current_status': 'published'}
             )
 
-        # Delete the post completely from database
+        # Update the post status to 'rejected'
         start_time = datetime.now()
-        result = supabase_client.table('social_posts').delete().eq('id', post_id).execute()
+        update_data = {'status': 'rejected'}
+        if reason:
+            update_data['rejection_reason'] = reason
 
-        delete_time = (datetime.now() - start_time).total_seconds()
+        result = supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        update_time = (datetime.now() - start_time).total_seconds()
 
         if result.data:
-            log_info(f"✅ Post {post_id} deleted from database in {delete_time:.2f}s")
+            log_info(f"✅ Post {post_id} rejected - status updated to 'rejected' in {update_time:.2f}s")
             response_data = {
                 'success': True,
-                'message': 'Post deleted',
+                'message': 'Post rejected',
                 'post_id': post_id,
-                'delete_time': delete_time
+                'new_status': 'rejected',
+                'update_time': update_time
             }
+            if reason:
+                response_data['reason'] = reason
             return jsonify(response_data)
         else:
-            log_error(f"❌ Failed to delete post {post_id}")
+            log_error(f"❌ Failed to reject post {post_id}")
             return api_error_response(
-                'Failed to delete post',
+                'Failed to reject post',
                 500,
                 {'post_id': post_id}
             )
 
     except Exception as e:
-        log_error(f"❌ Error deleting post {post_id}: {e}")
+        log_error(f"❌ Error rejecting post {post_id}: {e}")
         log_error(traceback.format_exc())
         return api_error_response(
             str(e),
