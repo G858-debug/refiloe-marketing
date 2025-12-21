@@ -1781,7 +1781,7 @@ Your video has been uploaded to Facebook as a DRAFT.
                 "platform": "facebook",
                 "content_text": content.get('caption', ''),
                 "scheduled_time": today_4pm.isoformat(),
-                "media_url": public_url,
+                "image_url": public_url,
                 "metadata": {
                     "content_type": "text_card",
                     "text_card_type": content['type'],
