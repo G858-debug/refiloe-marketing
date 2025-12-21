@@ -129,6 +129,10 @@ class VideoGenerator:
             style: Content style preset (educational, motivational, tips, etc.).
             background_music: Whether to include background music.
             metadata: Optional metadata to persist with the video record.
+                Can include B-roll production data from process_script_with_broll():
+                    - broll_cues: List of B-roll specifications
+                    - production_timeline: Timeline with avatar and B-roll segments
+                    - text_overlays: Text overlay specifications
             content_text: Optional free-form content text used to influence avatar selection.
             content_type: Optional content category used by avatar mapping logic.
             wait_for_completion: If True (default), poll until video completes. If False, return immediately after submission.
@@ -136,6 +140,18 @@ class VideoGenerator:
         Returns:
             Dict with video metadata. When wait_for_completion=True, includes video_url on success.
             When wait_for_completion=False, returns with status='processing' and video_url=None.
+
+        Example:
+            # Generate video with B-roll data
+            script_data = {...}  # Structured script with segments
+            broll_data = video_gen.process_script_with_broll(script_data)
+            result = video_gen.generate_avatar_video(
+                script_text="...",
+                metadata={
+                    'broll_cues': broll_data['broll_cues'],
+                    'production_timeline': broll_data['production_timeline'],
+                }
+            )
         """
 
         log_info("Starting HeyGen avatar video generation")
@@ -968,6 +984,55 @@ class VideoGenerator:
             log_error(f"Failed to generate video script: {exc}")
             return None
 
+    def process_script_with_broll(
+        self,
+        script_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Process a structured video script and extract B-roll cues and timeline.
+
+        This method takes a structured script with segments and timing information,
+        extracts B-roll cues, and generates a production timeline.
+
+        Args:
+            script_data: Structured script data with segments containing:
+                - script: List of segments with timing, text, b_roll_cue, etc.
+
+        Returns:
+            Dict containing:
+                - broll_cues: List of B-roll specifications
+                - production_timeline: Complete timeline with avatar and B-roll segments
+                - has_broll_suggestions: Boolean indicating if B-roll cues were found
+                - script_data: Original script data
+        """
+        try:
+            # Extract B-roll cues for manual or automated insertion
+            broll_cues = self._extract_broll_cues(script_data)
+            timeline = self._generate_broll_timeline(script_data)
+
+            result = {
+                'script_data': script_data,
+                'broll_cues': broll_cues,
+                'production_timeline': timeline,
+                'has_broll_suggestions': len(broll_cues) > 0
+            }
+
+            log_info(
+                f"Processed script with B-roll: found {len(broll_cues)} B-roll cues, "
+                f"generated timeline with {len(timeline)} segments"
+            )
+
+            return result
+
+        except Exception as exc:  # pylint: disable=broad-except
+            log_error(f"Failed to process script with B-roll: {exc}")
+            return {
+                'script_data': script_data,
+                'broll_cues': [],
+                'production_timeline': [],
+                'has_broll_suggestions': False,
+                'error': str(exc)
+            }
+
     # ------------------------------------------------------------------
     # Internal helpers
 
@@ -1021,6 +1086,121 @@ class VideoGenerator:
             log_info(f"Applied {substitutions_made} pronunciation substitution(s) for HeyGen narration")
 
         return narration_script
+
+    def _extract_broll_cues(self, script_data: Dict) -> List[Dict]:
+        """Extract B-roll cues from a video script for manual or automated insertion
+
+        Args:
+            script_data: Parsed video script data
+
+        Returns:
+            List of B-roll cue specifications with timing
+        """
+        broll_cues = []
+
+        script_segments = script_data.get('script', [])
+
+        for segment in script_segments:
+            broll_cue = segment.get('b_roll_cue')
+
+            if broll_cue and broll_cue.lower() not in ['null', 'none', 'n/a', '']:
+                cues = {
+                    'time_start': segment.get('time_start', 0),
+                    'time_end': segment.get('time_end', 0),
+                    'description': broll_cue,
+                    'segment_type': segment.get('segment_type', 'content'),
+                    'suggested_keywords': self._extract_broll_keywords(broll_cue),
+                    'duration': segment.get('time_end', 0) - segment.get('time_start', 0)
+                }
+                broll_cues.append(cues)
+
+        return broll_cues
+
+    def _extract_broll_keywords(self, broll_description: str) -> List[str]:
+        """Extract searchable keywords from B-roll description
+
+        Args:
+            broll_description: Description of needed B-roll
+
+        Returns:
+            List of keywords for stock footage search
+        """
+        # Common B-roll categories for fitness content
+        category_keywords = {
+            'gym': ['gym', 'workout', 'exercise', 'weights', 'training'],
+            'client': ['personal training', 'coaching', 'client session', 'fitness consultation'],
+            'admin': ['laptop', 'phone', 'scheduling', 'calendar', 'paperwork'],
+            'lifestyle': ['morning routine', 'healthy lifestyle', 'fitness motivation'],
+            'equipment': ['dumbbells', 'treadmill', 'exercise equipment', 'gym equipment'],
+            'success': ['celebration', 'achievement', 'high five', 'happy client'],
+            'struggle': ['tired', 'exhausted', 'challenge', 'difficult']
+        }
+
+        description_lower = broll_description.lower()
+        keywords = []
+
+        for category, kws in category_keywords.items():
+            if category in description_lower or any(kw in description_lower for kw in kws):
+                keywords.extend(kws[:3])  # Add top 3 from matching category
+
+        # Also extract nouns from description
+        # Simple extraction - in production, could use NLP
+        words = description_lower.split()
+        skip_words = {'the', 'a', 'an', 'of', 'for', 'to', 'with', 'and', 'or', 'in', 'on', 'at'}
+        extracted = [w for w in words if w not in skip_words and len(w) > 3]
+        keywords.extend(extracted[:5])
+
+        return list(set(keywords))[:10]  # Deduplicate and limit
+
+    def _generate_broll_timeline(self, script_data: Dict, include_avatar_segments: bool = True) -> List[Dict]:
+        """Generate complete timeline showing avatar and B-roll segments
+
+        Args:
+            script_data: Parsed video script
+            include_avatar_segments: Whether to include avatar-only segments
+
+        Returns:
+            List of timeline segments with type and content
+        """
+        timeline = []
+        broll_cues = self._extract_broll_cues(script_data)
+
+        script_segments = script_data.get('script', [])
+
+        for segment in script_segments:
+            time_start = segment.get('time_start', 0)
+            time_end = segment.get('time_end', 0)
+
+            # Check if this segment has B-roll
+            has_broll = any(
+                cue['time_start'] == time_start
+                for cue in broll_cues
+            )
+
+            if has_broll:
+                matching_cue = next(c for c in broll_cues if c['time_start'] == time_start)
+                timeline.append({
+                    'time_start': time_start,
+                    'time_end': time_end,
+                    'type': 'broll',
+                    'spoken_text': segment.get('text', ''),
+                    'broll_description': matching_cue['description'],
+                    'broll_keywords': matching_cue['suggested_keywords'],
+                    'text_overlay': segment.get('text_overlay'),
+                    'visual_direction': segment.get('visual_direction')
+                })
+            elif include_avatar_segments:
+                timeline.append({
+                    'time_start': time_start,
+                    'time_end': time_end,
+                    'type': 'avatar',
+                    'spoken_text': segment.get('text', ''),
+                    'visual_direction': segment.get('visual_direction'),
+                    'text_overlay': segment.get('text_overlay'),
+                    'motion_prompt': segment.get('motion_prompt')
+                })
+
+        return timeline
 
     def _build_style_presets(self) -> Dict[str, Dict[str, Any]]:
         defaults = {
@@ -1314,6 +1494,25 @@ class VideoGenerator:
         background_music: bool,
         metadata: Dict[str, Any],
     ) -> None:
+        """Store video generation record to database.
+
+        The metadata dict can include B-roll production data:
+            - broll_cues: List of B-roll cue specifications with timing
+            - production_timeline: Complete timeline with avatar and B-roll segments
+            - text_overlays: Text overlay specifications
+            - triple_hook: Hook data for viral content
+            - ... any other relevant metadata
+
+        Args:
+            video_id: HeyGen video identifier
+            video_data: Video metadata from HeyGen API
+            script_chunks: Segmented script text
+            avatar_id: Avatar identifier used
+            voice_id: Voice identifier used
+            style: Video style preset
+            background_music: Whether background music was enabled
+            metadata: Additional metadata including B-roll data
+        """
         if not self.supabase_client:
             log_warning("Supabase client not configured; skipping video persistence")
             return
