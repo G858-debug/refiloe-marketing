@@ -55,9 +55,6 @@ class TextCardGenerator:
         self.output_dir = Path("/tmp/text_cards")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Fetch and cache avatar
-        self.avatar = self._fetch_avatar()
-
         log_info(f"TextCardGenerator initialized. Output directory: {self.output_dir}")
 
     def generate_text_card(self, content_type: str, content: Dict[str, Any]) -> str:
@@ -100,101 +97,77 @@ class TextCardGenerator:
             log_error(f"Failed to generate text card: {str(e)}")
             raise
 
-    def _fetch_avatar(self) -> Optional[Image.Image]:
-        """Fetch avatar from URL and return as PIL Image.
+    def _draw_gradient_background(self) -> Image.Image:
+        """Create dark purple gradient background.
 
         Returns:
-            PIL.Image or None: Avatar image or None if fetch fails
+            PIL.Image: Image with purple gradient background (#2D1B3D to #1A0F24)
         """
-        try:
-            log_info(f"Fetching avatar from {self.AVATAR_URL}")
-            response = requests.get(self.AVATAR_URL, timeout=10)
-            response.raise_for_status()
+        # Create base image
+        image = Image.new('RGB', (self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
+        draw = ImageDraw.Draw(image)
 
-            avatar = Image.open(BytesIO(response.content))
-            log_info("Avatar fetched successfully")
-            return avatar
-        except Exception as e:
-            log_warning(f"Failed to fetch avatar: {str(e)}. Cards will be generated without avatar.")
-            return None
+        # Define gradient colors
+        top_color = self._hex_to_rgb("#2D1B3D")
+        bottom_color = self._hex_to_rgb("#1A0F24")
 
-    def _create_circular_avatar(self, size: int = None) -> Optional[Image.Image]:
-        """Create circular avatar with sage green border.
+        # Draw gradient line by line
+        for y in range(self.IMAGE_HEIGHT):
+            # Calculate interpolation ratio
+            ratio = y / self.IMAGE_HEIGHT
+
+            # Interpolate RGB values
+            r = int(top_color[0] + (bottom_color[0] - top_color[0]) * ratio)
+            g = int(top_color[1] + (bottom_color[1] - top_color[1]) * ratio)
+            b = int(top_color[2] + (bottom_color[2] - top_color[2]) * ratio)
+
+            # Draw horizontal line
+            draw.line([(0, y), (self.IMAGE_WIDTH, y)], fill=(r, g, b))
+
+        return image
+
+    def _draw_blob_shapes(self, image: Image.Image) -> Image.Image:
+        """Add organic blob/curved shapes around edges.
 
         Args:
-            size: Avatar size (defaults to AVATAR_SIZE)
+            image: Base image to add blobs to
 
         Returns:
-            PIL.Image or None: Circular avatar with border or None if avatar not available
+            PIL.Image: Image with decorative blob shapes
         """
-        if self.avatar is None:
-            return None
-
-        size = size or self.AVATAR_SIZE
-
-        try:
-            # Resize avatar to desired size
-            avatar = self.avatar.copy()
-            avatar = avatar.resize((size, size), Image.Resampling.LANCZOS)
-
-            # Create circular mask
-            mask = Image.new('L', (size, size), 0)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.ellipse((0, 0, size, size), fill=255)
-
-            # Create output image with transparency
-            output = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-
-            # Convert avatar to RGBA if needed
-            if avatar.mode != 'RGBA':
-                avatar = avatar.convert('RGBA')
-
-            # Composite avatar with mask
-            output.paste(avatar, (0, 0), mask)
-
-            # Add sage green border (draw a ring)
-            border_draw = ImageDraw.Draw(output)
-            border_color = self._hex_to_rgb(self.ACCENT_COLOR) + (255,)  # Add alpha
-            border_width = 3
-            border_draw.ellipse(
-                [(0, 0), (size - 1, size - 1)],
-                outline=border_color,
-                width=border_width
-            )
-
-            return output
-        except Exception as e:
-            log_warning(f"Failed to create circular avatar: {str(e)}")
-            return None
-
-    def _add_geometric_pattern(self, image: Image.Image) -> Image.Image:
-        """Add subtle geometric pattern overlay to background.
-
-        Args:
-            image: Base image to add pattern to
-
-        Returns:
-            PIL.Image: Image with pattern overlay
-        """
-        # Create a semi-transparent overlay
+        # Create overlay for blobs with transparency
         overlay = Image.new('RGBA', (self.IMAGE_WIDTH, self.IMAGE_HEIGHT), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
-        # Pattern color: warm beige with low opacity
-        pattern_color = self._hex_to_rgb(self.BACKGROUND_BEIGE) + (25,)  # Very subtle opacity
+        # Define blob colors with transparency
+        blob_colors = [
+            self._hex_to_rgb("#8B6914") + (120,),  # Brown with transparency
+            self._hex_to_rgb("#C4A574") + (100,),  # Tan with transparency
+            self._hex_to_rgb("#D4B896") + (90,),   # Beige with transparency
+        ]
 
-        # Draw soft circles in a subtle pattern
-        circle_size = 80
-        spacing = 200
+        # Define blob positions and sizes (organic shapes in corners/edges)
+        blobs = [
+            # Top-left corner
+            {'xy': [(-80, -80), (280, 280)], 'color': blob_colors[0]},
+            # Top-right corner
+            {'xy': [(self.IMAGE_WIDTH - 250, -100), (self.IMAGE_WIDTH + 100, 250)], 'color': blob_colors[1]},
+            # Bottom-left corner
+            {'xy': [(-100, self.IMAGE_HEIGHT - 300), (300, self.IMAGE_HEIGHT + 100)], 'color': blob_colors[2]},
+            # Bottom-right corner
+            {'xy': [(self.IMAGE_WIDTH - 320, self.IMAGE_HEIGHT - 280),
+                   (self.IMAGE_WIDTH + 80, self.IMAGE_HEIGHT + 80)], 'color': blob_colors[0]},
+            # Right side
+            {'xy': [(self.IMAGE_WIDTH - 200, self.IMAGE_HEIGHT // 2 - 150),
+                   (self.IMAGE_WIDTH + 50, self.IMAGE_HEIGHT // 2 + 150)], 'color': blob_colors[1]},
+            # Left side
+            {'xy': [(-120, self.IMAGE_HEIGHT // 2 - 100),
+                   (180, self.IMAGE_HEIGHT // 2 + 200)], 'color': blob_colors[2]},
+        ]
 
-        for y in range(-circle_size, self.IMAGE_HEIGHT + circle_size, spacing):
-            for x in range(-circle_size, self.IMAGE_WIDTH + circle_size, spacing):
-                # Offset every other row
-                offset_x = spacing // 2 if (y // spacing) % 2 == 1 else 0
-                draw.ellipse(
-                    [(x + offset_x, y), (x + offset_x + circle_size, y + circle_size)],
-                    fill=pattern_color
-                )
+        # Draw blob shapes
+        for blob in blobs:
+            draw.ellipse(blob['xy'], fill=blob['color'])
 
         # Composite overlay onto image
         if image.mode != 'RGBA':
@@ -203,8 +176,161 @@ class TextCardGenerator:
         image = Image.alpha_composite(image, overlay)
         return image.convert('RGB')
 
+    def _draw_frame(self, image: Image.Image) -> Image.Image:
+        """Draw white rectangular border/frame.
+
+        Args:
+            image: Base image to add frame to
+
+        Returns:
+            PIL.Image: Image with white frame
+        """
+        draw = ImageDraw.Draw(image)
+
+        # Frame parameters
+        frame_inset = 70  # Inset from edges
+        frame_color = (255, 255, 255)  # White
+        frame_width = 3  # Line thickness
+        corner_radius = 15  # Slight rounded corners
+
+        # Calculate frame coordinates
+        x1 = frame_inset
+        y1 = frame_inset
+        x2 = self.IMAGE_WIDTH - frame_inset
+        y2 = self.IMAGE_HEIGHT - frame_inset
+
+        # Draw rounded rectangle frame
+        draw.rounded_rectangle(
+            [(x1, y1), (x2, y2)],
+            radius=corner_radius,
+            outline=frame_color,
+            width=frame_width
+        )
+
+        return image
+
+    def _draw_content(self, draw: ImageDraw.Draw, content: Dict[str, Any], content_type: str):
+        """Draw unified text content layout for all content types.
+
+        Args:
+            draw: ImageDraw object
+            content: Content dictionary
+            content_type: Type of content (quote, tip, educational, motivation)
+        """
+        # White text color for all content
+        text_color = (255, 255, 255)
+
+        # Load fonts
+        label_font = self._load_font(bold=True, size=32)
+        main_font = self._load_font(bold=True, size=72)
+        supporting_font = self._load_font(bold=False, size=48)
+        small_font = self._load_font(bold=False, size=40)
+        watermark_font = self._load_font(bold=True, size=36)
+
+        # Frame boundaries
+        frame_inset = 70
+        content_padding = 100  # Extra padding inside frame
+        max_width = self.IMAGE_WIDTH - (2 * frame_inset) - (2 * content_padding)
+
+        # Starting Y position (inside frame)
+        current_y = frame_inset + 80
+
+        # 1. Content type label at top (uppercase, letter-spaced)
+        label_map = {
+            'quote': 'Q U O T E',
+            'tip': 'P R O   T I P',
+            'educational': 'E D U C A T I O N',
+            'motivation': 'M O T I V A T I O N'
+        }
+        label_text = label_map.get(content_type, content_type.upper())
+
+        bbox = draw.textbbox((0, 0), label_text, font=label_font)
+        label_width = bbox[2] - bbox[0]
+        label_x = (self.IMAGE_WIDTH - label_width) // 2
+        draw.text((label_x, current_y), label_text, font=label_font, fill=text_color)
+
+        current_y += 100
+
+        # 2. Main content (large centered text)
+        if content_type == 'quote':
+            main_text = content.get('quote', '')
+            supporting_text = f"— {content.get('attribution', 'Refiloe')}"
+        elif content_type == 'tip':
+            main_text = content.get('tip', '')
+            supporting_text = content.get('subtitle', '')
+        elif content_type == 'educational':
+            main_text = content.get('title', '')
+            supporting_text = None  # Will handle bullet points separately
+        elif content_type == 'motivation':
+            main_text = content.get('statement', '')
+            supporting_text = None
+        else:
+            main_text = ''
+            supporting_text = None
+
+        # Wrap and draw main text
+        wrapped_main = self._wrap_text(main_text, main_font, max_width)
+        line_height = 85
+
+        for line in wrapped_main:
+            bbox = draw.textbbox((0, 0), line, font=main_font)
+            text_width = bbox[2] - bbox[0]
+            text_x = (self.IMAGE_WIDTH - text_width) // 2
+            draw.text((text_x, current_y), line, font=main_font, fill=text_color)
+            current_y += line_height
+
+        current_y += 40
+
+        # 3. Decorative horizontal line
+        line_width = 200
+        line_x = (self.IMAGE_WIDTH - line_width) // 2
+        draw.line([(line_x, current_y), (line_x + line_width, current_y)],
+                 fill=text_color, width=3)
+
+        current_y += 60
+
+        # 4. Supporting text (attribution, subtitle, or bullet points)
+        if content_type == 'educational':
+            # Handle bullet points
+            points = content.get('points', [])
+            for point in points[:4]:  # Limit to 4 points
+                # Draw bullet circle
+                bullet_x = frame_inset + content_padding
+                bullet_radius = 8
+                draw.ellipse(
+                    [(bullet_x - bullet_radius, current_y + 20 - bullet_radius),
+                     (bullet_x + bullet_radius, current_y + 20 + bullet_radius)],
+                    fill=text_color
+                )
+
+                # Draw bullet text
+                bullet_text_x = bullet_x + bullet_radius + 20
+                wrapped_point = self._wrap_text(point, small_font, max_width - 50)
+                for point_line in wrapped_point[:2]:  # Max 2 lines per bullet
+                    draw.text((bullet_text_x, current_y), point_line,
+                             font=small_font, fill=text_color)
+                    current_y += 50
+
+                current_y += 20  # Space between bullets
+        elif supporting_text:
+            # Draw attribution or subtitle (centered)
+            bbox = draw.textbbox((0, 0), supporting_text, font=supporting_font)
+            text_width = bbox[2] - bbox[0]
+            text_x = (self.IMAGE_WIDTH - text_width) // 2
+            draw.text((text_x, current_y), supporting_text,
+                     font=supporting_font, fill=text_color)
+
+        # 5. Bottom watermark "REFILOE"
+        watermark_text = "REFILOE"
+        bbox = draw.textbbox((0, 0), watermark_text, font=watermark_font)
+        watermark_width = bbox[2] - bbox[0]
+        watermark_x = (self.IMAGE_WIDTH - watermark_width) // 2
+        watermark_y = self.IMAGE_HEIGHT - frame_inset - 60
+        draw.text((watermark_x, watermark_y), watermark_text,
+                 font=watermark_font, fill=text_color)
+
     def _create_unified_layout(self, content_type: str, content: Dict[str, Any]) -> Image.Image:
-        """Create unified layout for all text card types.
+        """Create unified layout for all text card types with new design.
 
         Args:
             content_type: Type of content (quote, tip, educational, motivation)
@@ -213,241 +339,20 @@ class TextCardGenerator:
         Returns:
             PIL.Image: Generated card with unified layout
         """
-        # Create base image with cream background
-        image = Image.new('RGB', (self.IMAGE_WIDTH, self.IMAGE_HEIGHT), self._hex_to_rgb(self.BACKGROUND_CREAM))
+        # 1. Create gradient background
+        image = self._draw_gradient_background()
 
-        # Add geometric pattern
-        image = self._add_geometric_pattern(image)
+        # 2. Add decorative blob shapes
+        image = self._draw_blob_shapes(image)
 
+        # 3. Add white frame
+        image = self._draw_frame(image)
+
+        # 4. Draw content
         draw = ImageDraw.Draw(image)
-
-        text_color = self._hex_to_rgb(self.TEXT_COLOR)
-        accent_color = self._hex_to_rgb(self.ACCENT_COLOR)
-
-        # Load fonts
-        name_font = self._load_font(bold=True, size=self.NAME_FONT_SIZE)
-        tagline_font = self._load_font(bold=False, size=self.TAGLINE_FONT_SIZE)
-        content_font = self._load_font(bold=False, size=self.CONTENT_FONT_SIZE)
-        attribution_font = self._load_font(bold=False, size=self.ATTRIBUTION_FONT_SIZE)
-        header_font = self._load_font(bold=True, size=self.HEADER_FONT_SIZE)
-        subtitle_font = self._load_font(bold=False, size=self.SUBTITLE_FONT_SIZE)
-        bullet_font = self._load_font(bold=False, size=self.BULLET_FONT_SIZE)
-
-        # Add avatar and brand header
-        current_y = self.PADDING
-
-        # Avatar (top left)
-        avatar_x = self.PADDING
-        avatar_y = current_y
-
-        circular_avatar = self._create_circular_avatar()
-        if circular_avatar:
-            image.paste(circular_avatar, (avatar_x, avatar_y), circular_avatar)
-
-        # Brand name and tagline (next to avatar)
-        name_x = avatar_x + self.AVATAR_SIZE + 20
-        name_y = avatar_y + 10
-
-        draw.text((name_x, name_y), "Refiloe", font=name_font, fill=text_color)
-
-        tagline_y = name_y + self.NAME_FONT_SIZE + 5
-        tagline_color = tuple(min(255, c + 40) for c in text_color)  # Lighter shade
-        draw.text((name_x, tagline_y), "Personal assistant | trainer", font=tagline_font, fill=tagline_color)
-
-        # Content area starts below header
-        content_start_y = avatar_y + self.AVATAR_SIZE + 80
-
-        # Render content based on type
-        if content_type == 'quote':
-            self._render_quote_content(
-                draw, content.get('quote', ''), content.get('attribution', ''),
-                content_font, attribution_font, text_color, accent_color, content_start_y
-            )
-        elif content_type == 'tip':
-            self._render_tip_content(
-                draw, content.get('header', ''), content.get('tip', ''), content.get('subtitle'),
-                header_font, content_font, subtitle_font, text_color, accent_color, content_start_y
-            )
-        elif content_type == 'educational':
-            self._render_educational_content(
-                draw, content.get('title', ''), content.get('points', []),
-                header_font, bullet_font, text_color, accent_color, content_start_y
-            )
-        elif content_type == 'motivation':
-            self._render_motivation_content(
-                draw, content.get('statement', ''),
-                content_font, text_color, accent_color, content_start_y
-            )
-
-        # Add watermark
-        image = self._add_watermark(image)
+        self._draw_content(draw, content, content_type)
 
         return image
-
-    def _render_quote_content(self, draw: ImageDraw.Draw, quote: str, attribution: str,
-                              content_font: ImageFont, attribution_font: ImageFont,
-                              text_color: Tuple[int, int, int], accent_color: Tuple[int, int, int],
-                              start_y: int):
-        """Render quote content with decorative elements."""
-        # Decorative quote marks in sage green
-        quote_mark_font = self._load_font(bold=True, size=120)
-        quote_mark = '"'
-        bbox = draw.textbbox((0, 0), quote_mark, font=quote_mark_font)
-        mark_width = bbox[2] - bbox[0]
-        mark_x = (self.IMAGE_WIDTH - mark_width) // 2
-        draw.text((mark_x, start_y), quote_mark, font=quote_mark_font, fill=accent_color)
-
-        # Quote text (centered, wrapped)
-        max_width = self.IMAGE_WIDTH - (2 * self.PADDING) - 40
-        wrapped_quote = self._wrap_text(quote, content_font, max_width)
-
-        line_height = self.CONTENT_FONT_SIZE + 20
-        quote_y = start_y + 150
-
-        for line in wrapped_quote:
-            bbox = draw.textbbox((0, 0), line, font=content_font)
-            text_width = bbox[2] - bbox[0]
-            x = (self.IMAGE_WIDTH - text_width) // 2
-            draw.text((x, quote_y), line, font=content_font, fill=text_color)
-            quote_y += line_height
-
-        # Attribution (— Refiloe)
-        attribution_text = f"— {attribution if attribution else 'Refiloe'}"
-        bbox = draw.textbbox((0, 0), attribution_text, font=attribution_font)
-        attr_width = bbox[2] - bbox[0]
-        attr_x = (self.IMAGE_WIDTH - attr_width) // 2
-        attr_y = quote_y + 40
-        draw.text((attr_x, attr_y), attribution_text, font=attribution_font, fill=text_color)
-
-        # Decorative accent line
-        line_width = 200
-        line_x = (self.IMAGE_WIDTH - line_width) // 2
-        line_y = attr_y + 60
-        draw.line([(line_x, line_y), (line_x + line_width, line_y)], fill=accent_color, width=4)
-
-    def _render_tip_content(self, draw: ImageDraw.Draw, header: str, tip: str, subtitle: Optional[str],
-                            header_font: ImageFont, content_font: ImageFont, subtitle_font: ImageFont,
-                            text_color: Tuple[int, int, int], accent_color: Tuple[int, int, int],
-                            start_y: int):
-        """Render tip content with header badge."""
-        # Header badge (sage green background)
-        badge_padding = 20
-        bbox = draw.textbbox((0, 0), header, font=header_font)
-        badge_width = bbox[2] - bbox[0] + (badge_padding * 2)
-        badge_height = self.HEADER_FONT_SIZE + 30
-        badge_x = (self.IMAGE_WIDTH - badge_width) // 2
-        badge_y = start_y
-
-        draw.rounded_rectangle(
-            [(badge_x, badge_y), (badge_x + badge_width, badge_y + badge_height)],
-            radius=15,
-            fill=accent_color
-        )
-
-        # Header text in white
-        header_x = badge_x + badge_padding
-        header_y = badge_y + 15
-        draw.text((header_x, header_y), header, font=header_font, fill=self._hex_to_rgb(self.TEXT_WHITE))
-
-        # Tip text (centered)
-        max_width = self.IMAGE_WIDTH - (2 * self.PADDING) - 40
-        wrapped_tip = self._wrap_text(tip, content_font, max_width)
-
-        line_height = self.CONTENT_FONT_SIZE + 20
-        tip_y = badge_y + badge_height + 60
-
-        for line in wrapped_tip:
-            bbox = draw.textbbox((0, 0), line, font=content_font)
-            text_width = bbox[2] - bbox[0]
-            x = (self.IMAGE_WIDTH - text_width) // 2
-            draw.text((x, tip_y), line, font=content_font, fill=text_color)
-            tip_y += line_height
-
-        # Optional subtitle
-        if subtitle:
-            subtitle_y = tip_y + 40
-            bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
-            subtitle_width = bbox[2] - bbox[0]
-            subtitle_x = (self.IMAGE_WIDTH - subtitle_width) // 2
-            draw.text((subtitle_x, subtitle_y), subtitle, font=subtitle_font, fill=text_color)
-
-    def _render_educational_content(self, draw: ImageDraw.Draw, title: str, points: List[str],
-                                     header_font: ImageFont, bullet_font: ImageFont,
-                                     text_color: Tuple[int, int, int], accent_color: Tuple[int, int, int],
-                                     start_y: int):
-        """Render educational content with bullet points."""
-        # Title (centered, bold)
-        max_width = self.IMAGE_WIDTH - (2 * self.PADDING)
-        wrapped_title = self._wrap_text(title, header_font, max_width)[:2]
-
-        title_y = start_y
-        line_height = self.HEADER_FONT_SIZE + 15
-
-        for line in wrapped_title:
-            bbox = draw.textbbox((0, 0), line, font=header_font)
-            text_width = bbox[2] - bbox[0]
-            x = (self.IMAGE_WIDTH - text_width) // 2
-            draw.text((x, title_y), line, font=header_font, fill=text_color)
-            title_y += line_height
-
-        # Bullet points
-        bullet_y = title_y + 60
-        bullet_spacing = 70
-        max_bullet_width = self.IMAGE_WIDTH - (2 * self.PADDING) - 60
-
-        circle_radius = 10
-        circle_offset_x = self.PADDING + 30
-        text_offset_x = circle_offset_x + circle_radius + 25
-
-        for point in points[:5]:
-            # Sage green circle bullet
-            draw.ellipse(
-                [
-                    (circle_offset_x - circle_radius, bullet_y + self.BULLET_FONT_SIZE // 2 - circle_radius),
-                    (circle_offset_x + circle_radius, bullet_y + self.BULLET_FONT_SIZE // 2 + circle_radius)
-                ],
-                fill=accent_color
-            )
-
-            # Bullet text
-            wrapped_point = self._wrap_text(point, bullet_font, max_bullet_width)
-            point_line_height = self.BULLET_FONT_SIZE + 10
-
-            for line in wrapped_point[:2]:  # Max 2 lines per bullet
-                draw.text((text_offset_x, bullet_y), line, font=bullet_font, fill=text_color)
-                bullet_y += point_line_height
-
-            bullet_y += bullet_spacing - (point_line_height * min(len(wrapped_point), 2))
-
-    def _render_motivation_content(self, draw: ImageDraw.Draw, statement: str,
-                                    content_font: ImageFont,
-                                    text_color: Tuple[int, int, int], accent_color: Tuple[int, int, int],
-                                    start_y: int):
-        """Render motivational statement prominently."""
-        # Use larger, bold font for motivation
-        motivation_font = self._load_font(bold=True, size=80)
-
-        # Wrap statement
-        max_width = self.IMAGE_WIDTH - (2 * self.PADDING) - 40
-        wrapped_statement = self._wrap_text(statement, motivation_font, max_width)
-
-        # Center vertically in remaining space
-        line_height = 85 + 20
-        total_height = len(wrapped_statement) * line_height
-        statement_y = start_y + (self.IMAGE_HEIGHT - start_y - 150 - total_height) // 2
-
-        for line in wrapped_statement:
-            bbox = draw.textbbox((0, 0), line, font=motivation_font)
-            text_width = bbox[2] - bbox[0]
-            x = (self.IMAGE_WIDTH - text_width) // 2
-            draw.text((x, statement_y), line, font=motivation_font, fill=text_color)
-            statement_y += line_height
-
-        # Decorative accent lines (minimal)
-        line_width = 150
-        line_x = (self.IMAGE_WIDTH - line_width) // 2
-        line_y = statement_y + 40
-        draw.line([(line_x, line_y), (line_x + line_width, line_y)], fill=accent_color, width=4)
 
     def _load_font(self, bold: bool = False, size: int = 48) -> ImageFont.FreeTypeFont:
         """Load font with fallback. Use pattern from carousel_template_generator.py.
@@ -529,40 +434,6 @@ class TextCardGenerator:
             lines.append(' '.join(current_line))
 
         return lines
-
-    def _add_watermark(self, image: Image.Image) -> Image.Image:
-        """Add subtle REFILOE watermark in bottom right corner.
-
-        Args:
-            image: Image to add watermark to
-
-        Returns:
-            PIL.Image: Image with watermark added
-        """
-        draw = ImageDraw.Draw(image)
-
-        # Use subtle color for watermark
-        watermark_color = self._hex_to_rgb(self.ACCENT_COLOR)
-        # Make it more subtle by adjusting opacity (through a lighter shade)
-        watermark_color = tuple(min(255, c + 60) for c in watermark_color)
-
-        # Load small font
-        watermark_font = self._load_font(bold=False, size=self.WATERMARK_SIZE)
-
-        # Watermark text
-        watermark_text = "REFILOE"
-
-        # Position in bottom right corner
-        bbox = draw.textbbox((0, 0), watermark_text, font=watermark_font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-
-        x = self.IMAGE_WIDTH - self.PADDING - text_width
-        y = self.IMAGE_HEIGHT - self.PADDING - text_height - 10
-
-        draw.text((x, y), watermark_text, font=watermark_font, fill=watermark_color)
-
-        return image
 
     def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
         """Convert hex color to RGB tuple.
