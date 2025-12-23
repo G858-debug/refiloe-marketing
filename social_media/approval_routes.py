@@ -1041,6 +1041,44 @@ def approve_post(post_id: str):
                 'upload_error': upload_result.get('error')
             })
 
+    # Check if it's an image/carousel/text_card post - upload to Facebook scheduler immediately
+    if post_type in ('image', 'carousel', 'text_card'):
+        log_info(f"Image/carousel/text_card post detected (type={post_type}) - uploading to Facebook scheduler immediately")
+
+        # Upload image post to Facebook scheduler
+        upload_result = _upload_image_to_facebook_scheduler(db, post)
+
+        if upload_result.get('success'):
+            facebook_post_id = upload_result.get('facebook_post_id')
+
+            # Update post status to scheduled_on_facebook
+            update_fields = {
+                'status': 'scheduled_on_facebook',
+                'facebook_post_id': facebook_post_id,
+                'updated_at': _current_iso_timestamp(db)
+            }
+            _update_post_fields(db, post_id, update_fields)
+
+            log_info(f"Image post uploaded and scheduled on Facebook: {facebook_post_id}")
+
+            return jsonify({
+                'success': True,
+                'message': f'{post_type.replace("_", " ").title()} post approved and scheduled on Facebook.',
+                'post_id': post_id,
+                'facebook_post_id': facebook_post_id,
+                'status': 'scheduled_on_facebook'
+            })
+        else:
+            log_error(f"Failed to upload image post to Facebook scheduler: {upload_result.get('error')}")
+            # Keep as scheduled - scheduler will retry later
+            return jsonify({
+                'success': True,
+                'message': 'Post approved but Facebook upload failed. Scheduler will retry.',
+                'post_id': post_id,
+                'status': 'scheduled',
+                'upload_error': upload_result.get('error')
+            })
+
     # Check if we should post immediately (non-video posts)
     if _should_post_immediately(post):
         log_info(f"Post {post_id} scheduled for immediate posting")
