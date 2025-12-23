@@ -1947,24 +1947,25 @@ Generate the text card content now:"""
         video_formats = self.config.get('video_formats', {})
         viral_content_types = self.config.get('viral_content_types', {})
 
-        # Default format configurations
+        # Default format configurations (optimized for 30-45 second videos)
+        # Word counts based on ~2.5 words/second speaking rate
         default_formats = {
             'quick_hit': {
-                'duration_range': [15, 25],
-                'target_words': [25, 40],
-                'structure': {'hook': 2, 'content': 12, 'cta': 3},
+                'duration_range': [15, 30],
+                'target_words': [75, 90],  # 30 seconds: 75-90 words
+                'structure': {'hook': 3, 'content': 22, 'cta': 5},
                 'best_for': ['myth_busting', 'quick_tips', 'relatable_moments', 'challenges']
             },
             'standard': {
                 'duration_range': [30, 45],
-                'target_words': [50, 75],
-                'structure': {'hook': 3, 'setup': 8, 'content': 25, 'cta': 5},
+                'target_words': [110, 135],  # 45 seconds (default): 110-135 words
+                'structure': {'hook': 3, 'problem': 5, 'content': 27, 'cta': 10},
                 'best_for': ['tutorials', 'educational', 'behind_scenes']
             },
             'story': {
                 'duration_range': [45, 60],
-                'target_words': [75, 100],
-                'structure': {'hook': 3, 'story_setup': 10, 'tension': 20, 'resolution': 15, 'cta': 7},
+                'target_words': [150, 180],  # 60 seconds: 150-180 words (longer content only)
+                'structure': {'hook': 3, 'story_setup': 10, 'tension': 25, 'resolution': 15, 'cta': 7},
                 'best_for': ['transformations', 'client_stories', 'personal_journey']
             }
         }
@@ -2153,9 +2154,9 @@ Generate the text card content now:"""
         duration: int,
         style: str,
         hook: str,
-        target_duration_seconds: int = 55,
-        target_word_count_min: int = 75,
-        target_word_count_max: int = 100,
+        target_duration_seconds: int = 45,
+        target_word_count_min: int = 110,
+        target_word_count_max: int = 135,
         triple_hook: Dict[str, Any] = None,
         cta: Dict[str, str] = None,
         retention_hooks: List[Dict] = None,
@@ -2167,9 +2168,9 @@ Generate the text card content now:"""
             duration: Video duration in seconds
             style: Video style
             hook: Video hook to use
-            target_duration_seconds: Target duration for optimal video length
-            target_word_count_min: Minimum word count target
-            target_word_count_max: Maximum word count target
+            target_duration_seconds: Target duration for optimal video length (default: 45s)
+            target_word_count_min: Minimum word count target (default: 110 for 45s)
+            target_word_count_max: Maximum word count target (default: 135 for 45s)
             triple_hook: Triple hook system dict with visual, text, and verbal hooks
 
         Returns:
@@ -2182,9 +2183,49 @@ Generate the text card content now:"""
 
         # Calculate timing breakdown
         hook_duration = 3  # First 3 seconds for hook
-        main_content_duration = duration - hook_duration - 5  # 5 seconds for CTA
-        main_content_end = duration - 5
-        cta_duration = 5
+        main_content_duration = duration - hook_duration - 10  # 10 seconds for CTA
+        main_content_end = duration - 10
+        cta_duration = 10
+
+        # Video timing structure template (45-second default)
+        video_timing_structure = f"""
+VIDEO STRUCTURE ({target_duration_seconds}-second template):
+
+[0-3 sec] HOOK - Pattern interrupt, bold statement, or curiosity gap
+- Text overlay with hook (3-7 words max)
+- Direct eye contact, high energy
+- Script: ~15-20 words
+
+[3-8 sec] PROBLEM/CONTEXT - Establish relatability
+- "You know that feeling when..."
+- Connect to universal trainer experience
+- Script: ~20-25 words
+
+[8-{main_content_end} sec] CONTENT - 2-3 key points maximum
+- Natural gestures, varied energy
+- Text overlays for each key point
+- Script: ~60-70 words
+
+[{main_content_end}-{duration} sec] CTA - Clear next step
+- Comment trigger or save prompt
+- Friendly, inviting tone
+- Script: ~15-20 words
+
+TOTAL: {target_word_count_min}-{target_word_count_max} words for {target_duration_seconds}-second video
+"""
+
+        # Hook type templates for variety
+        hook_templates = """
+HOOK TYPES TO USE (pick one that fits the content):
+
+A. CALL-OUT HOOK: "If you're a trainer who [specific situation], this is for you"
+B. CURIOSITY HOOK: "I stopped doing [thing] and [unexpected result]"
+C. CONTRARIAN HOOK: "Unpopular opinion: [statement]"
+D. STORY HOOK: "So this happened yesterday..."
+E. STATISTIC HOOK: "[X]% of trainers don't know this..."
+
+Your hook MUST be in the first 3 seconds. No preamble. Start strong.
+"""
 
         # Use triple hook if provided, otherwise use legacy hook
         if triple_hook:
@@ -2267,7 +2308,7 @@ Use them to bridge between segments and maintain curiosity.
         prompt = f"""You are {ai_settings.get('name', 'Refiloe')}, creating a {target_duration_seconds}-second video script for personal trainers.
 
 VIDEO SPECIFICATIONS:
-- Target Duration: {target_duration_seconds} seconds (aim for 50-60 seconds optimal range)
+- Target Duration: {target_duration_seconds} seconds (aim for 30-45 seconds optimal range)
 - Maximum Duration: {duration} seconds
 - Style: {style}
 - Theme: {theme}
@@ -2276,9 +2317,13 @@ VIDEO SPECIFICATIONS:
 SCRIPT LENGTH REQUIREMENTS (CRITICAL):
 - Target word count: {target_word_count_min}-{target_word_count_max} words MAXIMUM
 - Speaking rate: ~150 words per minute (2.5 words per second)
-- This ensures the script fits within the 50-60 second optimal duration
+- This ensures the script fits within the 30-45 second optimal duration
 - Be concise and impactful - every word must count
 - DO NOT exceed {target_word_count_max} words total
+
+{video_timing_structure}
+
+{hook_templates}
 
 PERSONALITY & VOICE:
 - {', '.join(personality)}
@@ -2422,6 +2467,101 @@ Generate a script that will keep trainers watching until the end!"""
 
         return prompt
 
+    def _validate_timing_structure(
+        self,
+        script_data: Dict,
+        target_duration: int,
+        target_word_count_min: int,
+        target_word_count_max: int
+    ) -> Dict:
+        """Validate video script timing structure and word counts
+
+        Args:
+            script_data: The parsed script data
+            target_duration: Target duration in seconds
+            target_word_count_min: Minimum word count
+            target_word_count_max: Maximum word count
+
+        Returns:
+            Dict with validation results and any warnings
+        """
+        validation = {
+            "valid": True,
+            "warnings": [],
+            "segment_analysis": []
+        }
+
+        script_segments = script_data.get("script", [])
+        if not script_segments:
+            validation["valid"] = False
+            validation["warnings"].append("No script segments found")
+            return validation
+
+        # Expected timing structure for 45-second video
+        expected_structure = {
+            "hook": {"start": 0, "end": 3, "words": (15, 20)},
+            "problem": {"start": 3, "end": 8, "words": (20, 25)},
+            "content": {"start": 8, "end": target_duration - 10, "words": (60, 70)},
+            "cta": {"start": target_duration - 10, "end": target_duration, "words": (15, 20)}
+        }
+
+        # Analyze each segment
+        for segment in script_segments:
+            segment_type = segment.get("segment_type", "unknown")
+            time_start = segment.get("time_start", 0)
+            time_end = segment.get("time_end", 0)
+            text = segment.get("text", "")
+            word_count = len(text.split())
+
+            segment_analysis = {
+                "type": segment_type,
+                "time_range": f"{time_start}-{time_end}s",
+                "word_count": word_count,
+                "has_text_overlay": bool(segment.get("text_overlay"))
+            }
+
+            # Check if hook is in first 3 seconds
+            if segment_type == "hook":
+                if time_start != 0:
+                    validation["warnings"].append(
+                        f"Hook should start at 0 seconds (currently {time_start}s)"
+                    )
+                if time_end > 3:
+                    validation["warnings"].append(
+                        f"Hook exceeds 3 seconds (ends at {time_end}s)"
+                    )
+
+            # Verify CTA is in the final segment
+            if segment_type == "cta":
+                expected_cta_start = target_duration - 10
+                if time_start < expected_cta_start - 2:
+                    validation["warnings"].append(
+                        f"CTA starts too early ({time_start}s), should be around {expected_cta_start}s"
+                    )
+
+            validation["segment_analysis"].append(segment_analysis)
+
+        # Overall word count validation
+        total_words = sum(len(seg.get("text", "").split()) for seg in script_segments)
+        if total_words < target_word_count_min:
+            validation["warnings"].append(
+                f"Script is too short ({total_words} words, minimum {target_word_count_min})"
+            )
+        elif total_words > target_word_count_max:
+            validation["warnings"].append(
+                f"Script is too long ({total_words} words, maximum {target_word_count_max})"
+            )
+
+        # Check for required segments
+        segment_types = [seg.get("segment_type") for seg in script_segments]
+        required_segments = ["hook", "cta"]
+        for required in required_segments:
+            if required not in segment_types:
+                validation["valid"] = False
+                validation["warnings"].append(f"Missing required segment: {required}")
+
+        return validation
+
     def create_video_script(
         self,
         theme: str,
@@ -2545,6 +2685,19 @@ Generate a script that will keep trainers watching until the end!"""
                 script_data["word_count"] = word_count
                 script_data["target_duration_seconds"] = target_duration_seconds
 
+                # Validate timing structure
+                timing_validation = self._validate_timing_structure(
+                    script_data,
+                    target_duration_seconds,
+                    target_word_count_min,
+                    target_word_count_max
+                )
+                script_data["timing_validation"] = timing_validation
+
+                if timing_validation["warnings"]:
+                    for warning in timing_validation["warnings"]:
+                        log_warning(f"Timing structure validation: {warning}")
+
                 log_info(
                     f"Successfully generated video script with Triple Hook System: {theme} - {duration}s - {style} - {format_name} "
                     f"(word count: {word_count}, target: {target_word_count_min}-{target_word_count_max})"
@@ -2559,7 +2712,7 @@ Generate a script that will keep trainers watching until the end!"""
             return {}
 
     def create_quick_hit_script(self, theme: str, content_type: str = 'quick_tip') -> Dict:
-        """Generate a quick-hit video script (15-25 seconds) optimized for virality
+        """Generate a quick-hit video script (15-30 seconds, 75-90 words) optimized for virality
 
         Args:
             theme: Content theme
@@ -2576,7 +2729,9 @@ Generate a script that will keep trainers watching until the end!"""
         )
 
     def create_story_script(self, theme: str, story_type: str = 'transformation') -> Dict:
-        """Generate a story-format video script (45-60 seconds) with narrative arc
+        """Generate a story-format video script (45-60 seconds, 150-180 words) with narrative arc
+
+        Note: This format is for longer content only. Default format is now 30-45 seconds.
 
         Args:
             theme: Content theme
