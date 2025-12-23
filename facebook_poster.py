@@ -367,6 +367,9 @@ class FacebookPoster:
             # Build description with optional schedule hint
             description = post_data.get('content_text', '')
 
+            # Get hashtags from post_data
+            hashtags = post_data.get('hashtags', [])
+
             if post_as_draft and include_schedule_hint and scheduled_time:
                 # Format the scheduled time for display
                 SA_TZ = pytz.timezone('Africa/Johannesburg')
@@ -390,9 +393,12 @@ class FacebookPoster:
                     description = f"{description}\n\n---\n📅 Suggested posting: {schedule_hint}"
                     log_info(f"Added schedule hint to description: {schedule_hint}")
 
+            # Format description with hashtags
+            formatted_description = self._format_caption_with_hashtags(description, hashtags)
+
             # Prepare video post parameters
             video_params = {
-                'description': description,
+                'description': formatted_description,
                 'file_url': video_url,
                 'access_token': self.page_access_token,
             }
