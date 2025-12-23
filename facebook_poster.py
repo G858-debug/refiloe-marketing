@@ -145,7 +145,70 @@ class FacebookPoster:
                 'post_id': None,
                 'error': str(e)
             }
-    
+
+    def create_scheduled_post(
+        self,
+        content_text: str,
+        scheduled_timestamp: int,
+        image_ids: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        Create a scheduled post on Facebook Page.
+
+        Args:
+            content_text: The text content to post
+            scheduled_timestamp: Unix timestamp for when to publish the post
+            image_ids: Optional list of Facebook media IDs for multi-photo posts
+
+        Returns:
+            Dictionary with success status, post_id, and error message
+        """
+        try:
+            log_info(f"Creating scheduled post for page {self.page_id} at timestamp {scheduled_timestamp}")
+
+            # Prepare post parameters
+            post_params = {
+                'message': content_text,
+                'published': 'false',
+                'scheduled_publish_time': scheduled_timestamp,
+                'access_token': self.page_access_token
+            }
+
+            # Add images if provided (multi-photo post)
+            if image_ids:
+                # Facebook requires indexed parameters for attached_media
+                # Format: attached_media[0]={"media_fbid":"123"}, attached_media[1]={"media_fbid":"456"}
+                for idx, media_id in enumerate(image_ids):
+                    post_params[f'attached_media[{idx}]'] = json.dumps({'media_fbid': media_id})
+
+            # Make API request
+            url = f"{self.base_url}/{self.page_id}/feed"
+            response = self._make_api_request('POST', url, data=post_params)
+
+            if response.get('id'):
+                log_info(f"Successfully created scheduled post: {response['id']}")
+                return {
+                    'success': True,
+                    'post_id': response['id'],
+                    'error': None
+                }
+            else:
+                error_msg = response.get('error', {}).get('message', 'Unknown error')
+                log_error(f"Failed to create scheduled post: {error_msg}")
+                return {
+                    'success': False,
+                    'post_id': None,
+                    'error': error_msg
+                }
+
+        except Exception as e:
+            log_error(f"Exception in create_scheduled_post: {e}")
+            return {
+                'success': False,
+                'post_id': None,
+                'error': str(e)
+            }
+
     def upload_image(self, image_path: str) -> str:
         """
         Upload image to Facebook and return the image ID.
