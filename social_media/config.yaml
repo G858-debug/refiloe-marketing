@@ -647,3 +647,91 @@ content_themes:
       - "Free vs paid tools: Where to invest"
       - "Automation tools that save real time"
       - "Apps your clients will actually use"
+
+# =============================================================================
+# TEXT CARD TYPES
+# =============================================================================
+# Different text card formats with specific guidelines
+text_card_types:
+  quote:
+    percentage: 20
+    description: "Inspirational or thought-provoking quotes"
+    subtypes:
+      - contrarian  # Challenge common beliefs
+      - relatable_truth  # Say what everyone thinks
+      - wisdom_drop  # Insight from experience
+    max_quote_length: 150
+    examples:
+      - "Your clients don't pay for workouts. They pay for the transformation you help them believe is possible."
+      - "The best trainers aren't the fittest. They're the ones who make clients feel seen."
+      - "Three years in, I learned: systems beat motivation every single time."
+
+  tip:
+    percentage: 25
+    description: "Actionable advice with clear benefit"
+    headers:
+      - "TIME SAVER"
+      - "PRICING HACK"
+      - "CLIENT WIN"
+      - "PRO TIP"
+      - "RETENTION HACK"
+      - "BOOKING TIP"
+      - "ADMIN SHORTCUT"
+    max_tip_length: 200
+    examples:
+      - header: "TIME SAVER"
+        tip: "Send session reminders 24 hours before. Cuts no-shows by 70%."
+        subtitle: "Works with any scheduling app"
+      - header: "CLIENT RETENTION"
+        tip: "Text your client within 2 hours of their session with one specific thing they did well."
+        subtitle: "Takes 30 seconds, builds loyalty"
+
+  educational:
+    percentage: 25
+    description: "Numbered lists with valuable insights"
+    title_patterns:
+      - "{number} Signs That {outcome}"
+      - "{number} Mistakes {audience} Make With {topic}"
+      - "{number} Things {successful_people} Do Differently"
+      - "The {number} Rules of {topic}"
+      - "{number} Red Flags in {context}"
+      - "{number} Green Flags of {positive_thing}"
+    min_points: 3
+    max_points: 7
+    max_point_length: 60
+    examples:
+      - title: "5 Signs a Client Will Ghost You"
+        points:
+          - "They reschedule twice in the first week"
+          - "They ask about refunds before starting"
+          - "They're vague about their actual goals"
+          - "They compare your rates to big box gyms"
+          - "They don't respond to check-in messages"
+
+  motivation:
+    percentage: 15
+    description: "Bold, declarative statements"
+    subtypes:
+      - identity  # "You're not just a trainer..."
+      - permission  # "You're allowed to..."
+      - challenge  # "If your business depends on..."
+    max_statement_length: 120
+    examples:
+      - "You're not just a trainer. You're building an empire, one rep at a time."
+      - "You're allowed to fire clients who drain your energy."
+      - "Stop competing on price. Start competing on results."
+
+  comparison:
+    percentage: 15
+    description: "Do this, not that format"
+    structure:
+      dont_label: "❌ DON'T"
+      do_label: "✅ DO"
+      why_label: "WHY"
+    examples:
+      - dont: "How was your workout?"
+        do: "That deadlift form looked solid today. How did your back feel?"
+        why: "Specific feedback builds trust faster"
+      - dont: "My rate is R500/hour"
+        do: "The transformation package is R6,000 for 12 sessions"
+        why: "Packages communicate value, not time"
