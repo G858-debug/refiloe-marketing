@@ -2087,9 +2087,14 @@
             }
             else if (status === 'scheduled_on_facebook') {
                 buttons = `
-                    <p class="status-message">📅 Will be published automatically by Facebook at scheduled time</p>
+                    <p class="status-message">📅 Will be published automatically by Facebook at scheduled time (with hashtags)</p>
                     ${post.facebook_post_id ? `<p class="status-message" style="font-size: 12px; color: #6b7280;">Facebook Post ID: ${post.facebook_post_id}</p>` : ''}
                     <div class="post-actions">
+                        ${post.facebook_post_id ? `
+                            <a href="https://business.facebook.com/latest/content_calendar" target="_blank" class="btn btn-sm" style="background-color: #1877f2; color: white;" title="View in Facebook Business Suite">
+                                📅 View in Business Suite
+                            </a>
+                        ` : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
