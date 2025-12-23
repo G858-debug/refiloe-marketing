@@ -28,6 +28,10 @@ class VideoProcessor:
     AUDIO_CODEC = 'aac'
     PIXEL_FORMAT = 'yuv420p'
 
+    # Background music
+    BACKGROUND_MUSIC_URL = "https://mqemiteirxwscxtamdtj.supabase.co/storage/v1/object/public/media/background-music/deep-house-lounge-music-349539.mp3"
+    BACKGROUND_MUSIC_CACHE_PATH = "/tmp/background_music.mp3"
+
     def __init__(self, temp_dir: Optional[str] = None):
         """Initialize the video processor.
 
@@ -391,3 +395,194 @@ class VideoProcessor:
                     log_info(f"Cleaned up: {path}")
                 except Exception as e:
                     log_warning(f"Could not remove {path}: {e}")
+
+    def _download_music(self, music_url: str) -> str:
+        """Download music file if not already cached.
+
+        Args:
+            music_url: URL of the music file to download.
+
+        Returns:
+            Path to the local music file.
+        """
+        cache_path = self.BACKGROUND_MUSIC_CACHE_PATH
+
+        # Check if file is already cached
+        if os.path.exists(cache_path):
+            file_size = os.path.getsize(cache_path)
+            if file_size > 0:
+                log_info(f"Using cached music file: {cache_path} ({file_size / 1024 / 1024:.2f} MB)")
+                return cache_path
+
+        log_info(f"Downloading background music from: {music_url[:80]}...")
+
+        try:
+            response = requests.get(music_url, stream=True, timeout=120)
+            response.raise_for_status()
+
+            with open(cache_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            file_size = os.path.getsize(cache_path)
+            log_info(f"Downloaded music: {cache_path} ({file_size / 1024 / 1024:.2f} MB)")
+            return cache_path
+
+        except Exception as e:
+            log_error(f"Failed to download music: {e}")
+            raise VideoProcessingError(f"Failed to download background music: {e}")
+
+    def _get_audio_duration(self, audio_path: str) -> float:
+        """Get duration of an audio file using FFprobe.
+
+        Args:
+            audio_path: Path to the audio file.
+
+        Returns:
+            Duration in seconds.
+        """
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_format',
+            audio_path
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if result.returncode != 0:
+            log_warning(f"FFprobe failed for audio: {result.stderr}")
+            return 0.0
+
+        import json
+        data = json.loads(result.stdout)
+
+        if 'format' in data:
+            return float(data['format'].get('duration', 0))
+
+        return 0.0
+
+    def add_background_music(
+        self,
+        video_path: str,
+        music_url: Optional[str] = None,
+        output_path: Optional[str] = None,
+        volume: float = 0.2,
+        fade_duration: float = 2.0
+    ) -> str:
+        """Add background music to a video.
+
+        Args:
+            video_path: Path to the input video file
+            music_url: URL of the music file. Uses default if not provided.
+            output_path: Optional output path. Auto-generated if not provided.
+            volume: Volume of background music (0.0 to 1.0). Default 0.2 (20%)
+            fade_duration: Duration of fade out at end in seconds. Default 2.0
+
+        Returns:
+            Path to the video with background music added.
+        """
+        log_info(f"Adding background music to video: {video_path}")
+
+        # Use default music URL if not provided
+        if music_url is None:
+            music_url = self.BACKGROUND_MUSIC_URL
+            log_info("Using default background music URL")
+
+        # Download or get cached music
+        music_path = self._download_music(music_url)
+
+        # Get video properties
+        video_props = self.get_video_properties(video_path)
+        video_duration = video_props.get('duration', 0)
+        has_audio = video_props.get('has_audio', False)
+
+        if video_duration <= 0:
+            raise VideoProcessingError("Could not determine video duration")
+
+        log_info(f"Video duration: {video_duration:.2f}s, has_audio: {has_audio}")
+
+        # Get music duration
+        music_duration = self._get_audio_duration(music_path)
+        log_info(f"Music duration: {music_duration:.2f}s")
+
+        if music_duration <= 0:
+            raise VideoProcessingError("Could not determine music duration")
+
+        # Generate output path if not provided
+        if output_path is None:
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            output_path = os.path.join(self.temp_dir, f"{base_name}_with_music_{os.getpid()}.mp4")
+
+        # Calculate fade start time (fade_duration seconds before end)
+        fade_start = max(0, video_duration - fade_duration)
+
+        # Build the filter complex
+        # Strategy:
+        # - If video is longer than music: loop the music
+        # - Apply volume adjustment to music
+        # - Apply fade out at the end
+        # - Mix with original audio (if present) or just use the music
+
+        if video_duration > music_duration:
+            # Need to loop the music
+            loop_count = int(video_duration / music_duration) + 1
+            log_info(f"Video longer than music, looping {loop_count} times")
+
+            if has_audio:
+                # Mix looped music with original audio
+                filter_complex = (
+                    f"[1:a]aloop=loop={loop_count}:size={int(music_duration * 48000)},"
+                    f"atrim=0:{video_duration},"
+                    f"volume={volume},"
+                    f"afade=t=out:st={fade_start}:d={fade_duration}[music];"
+                    f"[0:a][music]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+                )
+            else:
+                # No original audio, just use the music
+                filter_complex = (
+                    f"[1:a]aloop=loop={loop_count}:size={int(music_duration * 48000)},"
+                    f"atrim=0:{video_duration},"
+                    f"volume={volume},"
+                    f"afade=t=out:st={fade_start}:d={fade_duration}[aout]"
+                )
+        else:
+            # Music is longer than or equal to video, trim and fade
+            log_info("Music longer than or equal to video, trimming with fade out")
+
+            if has_audio:
+                # Mix trimmed music with original audio
+                filter_complex = (
+                    f"[1:a]atrim=0:{video_duration},"
+                    f"volume={volume},"
+                    f"afade=t=out:st={fade_start}:d={fade_duration}[music];"
+                    f"[0:a][music]amix=inputs=2:duration=first:dropout_transition=0[aout]"
+                )
+            else:
+                # No original audio, just use the trimmed music
+                filter_complex = (
+                    f"[1:a]atrim=0:{video_duration},"
+                    f"volume={volume},"
+                    f"afade=t=out:st={fade_start}:d={fade_duration}[aout]"
+                )
+
+        # Build FFmpeg command
+        args = [
+            '-i', video_path,
+            '-i', music_path,
+            '-filter_complex', filter_complex,
+            '-map', '0:v',
+            '-map', '[aout]',
+            '-c:v', 'copy',
+            '-c:a', self.AUDIO_CODEC,
+            '-shortest',
+            output_path
+        ]
+
+        self._run_ffmpeg(args, "Adding background music")
+
+        output_size = os.path.getsize(output_path)
+        log_info(f"Video with music created: {output_path} ({output_size / 1024 / 1024:.2f} MB)")
+
+        return output_path
