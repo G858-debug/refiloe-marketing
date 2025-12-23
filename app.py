@@ -3848,6 +3848,13 @@ def api_dashboard_posts():
                 if post.get('status') in active_statuses
             ]
 
+            # Exclude posts that are already scheduled on Facebook (they're in Facebook's scheduler now)
+            pre_filter_count = len(active_posts)
+            active_posts = [post for post in active_posts if post.get('status') != 'scheduled_on_facebook']
+            facebook_scheduled_count = pre_filter_count - len(active_posts)
+            if facebook_scheduled_count > 0:
+                log_info(f"📅 Excluded {facebook_scheduled_count} posts already scheduled on Facebook")
+
             # Apply media type filter if not 'all'
             if media_type != 'all':
                 active_posts = [
