@@ -65,7 +65,59 @@ class FacebookPoster:
         except Exception as e:
             log_error(f"Failed to load config: {e}")
             return {}
-    
+
+    def _format_caption_with_hashtags(
+        self,
+        content_text: str,
+        hashtags: Optional[List[str]] = None
+    ) -> str:
+        """
+        Format caption text with hashtags appended.
+
+        Combines content text with hashtags, adding proper spacing and
+        ensuring hashtags are correctly formatted.
+
+        Args:
+            content_text: The main caption/post text
+            hashtags: Optional list of hashtags to append
+
+        Returns:
+            Formatted caption with hashtags appended (if provided)
+
+        Example:
+            >>> poster._format_caption_with_hashtags(
+            ...     "Your clients don't buy sessions. They buy transformation. 💪",
+            ...     ["personaltrainer", "fitnessbusiness", "#clientsuccess"]
+            ... )
+            'Your clients don't buy sessions. They buy transformation. 💪
+
+            #personaltrainer #fitnessbusiness #clientsuccess'
+        """
+        # Return content as-is if no hashtags provided
+        if not hashtags:
+            return content_text
+
+        # Limit to first 10 hashtags (Facebook best practice)
+        hashtags = hashtags[:10]
+
+        # Format hashtags - ensure each starts with #
+        formatted_hashtags = []
+        for tag in hashtags:
+            tag = tag.strip()
+            if not tag:
+                continue
+            if not tag.startswith('#'):
+                tag = f'#{tag}'
+            formatted_hashtags.append(tag)
+
+        # Return content as-is if no valid hashtags after formatting
+        if not formatted_hashtags:
+            return content_text
+
+        # Combine content with hashtags (blank line for spacing)
+        hashtag_string = ' '.join(formatted_hashtags)
+        return f"{content_text}\n\n{hashtag_string}"
+
     def post_to_page(self, post_data: Dict) -> Dict:
         """
         Post content to Facebook Page.
@@ -264,56 +316,6 @@ class FacebookPoster:
         except Exception as e:
             log_error(f"Failed to download image from {url}: {e}")
             raise e
-
-    def _format_caption_with_hashtags(
-        self,
-        content_text: str,
-        hashtags: Optional[List[str]] = None
-    ) -> str:
-        """
-        Format caption text with hashtags appended.
-
-        Combines content text with hashtags, adding proper spacing and
-        ensuring hashtags are correctly formatted.
-
-        Args:
-            content_text: The main caption/post text
-            hashtags: Optional list of hashtags to append
-
-        Returns:
-            Formatted caption with hashtags appended (if provided)
-
-        Example:
-            >>> poster._format_caption_with_hashtags(
-            ...     "Check out our new product!",
-            ...     ["marketing", "#sales", "business"]
-            ... )
-            'Check out our new product!\n\n#marketing #sales #business'
-        """
-        # Return content as-is if no hashtags provided
-        if not hashtags:
-            return content_text
-
-        # Limit to first 10 hashtags (Facebook best practice)
-        hashtags = hashtags[:10]
-
-        # Format hashtags - ensure each starts with #
-        formatted_hashtags = []
-        for tag in hashtags:
-            tag = tag.strip()
-            if not tag:
-                continue
-            if not tag.startswith('#'):
-                tag = f'#{tag}'
-            formatted_hashtags.append(tag)
-
-        # Return content as-is if no valid hashtags after formatting
-        if not formatted_hashtags:
-            return content_text
-
-        # Combine content with hashtags (blank line for spacing)
-        hashtag_string = ' '.join(formatted_hashtags)
-        return f"{content_text}\n\n{hashtag_string}"
 
     def _post_video(self, post_data: Dict) -> Dict:
         """
