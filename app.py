@@ -11,6 +11,7 @@ import atexit
 import uuid
 import json
 import traceback
+import yaml
 from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -6492,84 +6493,129 @@ def api_generate_weekly_content():
         generator = ContentGenerator(config_path, supabase_client)
         db = SocialMediaDatabase(supabase_client)
 
-        # Weekly themes rotation - cycles through expanded theme categories
-        weekly_themes = [
-            {"theme": "mindset_psychology", "post_type": "video", "description": "Monday Motivation"},
-            {"theme": "admin_hacks", "post_type": "video", "description": "Tips Tuesday"},
-            {"theme": "wellness_lifestyle", "post_type": "carousel", "description": "Wellness Wednesday"},
-            {"theme": "relatable_trainer_life", "post_type": "video", "description": "Throwback Thursday"},
-            {"theme": "content_creator_tips", "post_type": "image", "description": "Feature Friday"},
-            {"theme": "business_coaching", "post_type": "video", "description": "Strategy Saturday"},
-            {"theme": "engagement_questions", "post_type": "image", "description": "Sunday Engagement"},
+        # Load media type schedule from config
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'social_media', 'config.yaml')
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        media_type_schedule = config.get('media_type_schedule', {})
+        posting_times = ["08:00", "12:00", "16:00", "18:00", "20:00"]  # Default times
+
+        # Theme rotation for variety across days (maps to content themes)
+        theme_rotation = [
+            "admin_hacks",
+            "relatable_trainer_life",
+            "client_management_tips",
+            "wellness_lifestyle",
+            "business_coaching",
+            "content_creator_tips",
+            "mindset_psychology",
         ]
 
-        # Global hashtags to use
-        global_hashtags = [
-            "#PersonalTrainer", "#FitnessCoach", "#TrainerLife",
-            "#PTLife", "#FitnessBusiness", "#TrainerTips",
-            "#FitnessIndustry", "#OnlineTrainer"
-        ]
-
+        # Generate 7 days x 5 posts = 35 posts
         created_ids = []
 
-        for day_offset, theme_config in enumerate(weekly_themes):
-            scheduled_time = start_date + timedelta(days=day_offset)
+        for day_offset in range(7):
+            scheduled_date = start_date + timedelta(days=day_offset)
+            day_theme_base = theme_rotation[day_offset % len(theme_rotation)]
 
-            try:
-                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
+            for time_idx, post_time in enumerate(posting_times):
+                # Get media type for this time slot
+                time_config = media_type_schedule.get(post_time, {})
+                media_type = time_config.get('media_type', 'text_card')
 
-                # Generate content based on post type
-                if theme_config['post_type'] == 'video':
-                    content = generator.generate_video_script(
-                        theme=theme_config['theme'],
-                        duration=45,
-                        style='educational'
-                    )
-                    content_text = content.get('caption', content.get('script', ''))
-                    video_script = content.get('script', '')
-                    reel_title = content.get('reel_title', '')  # Capture reel_title from generated content
-                else:
-                    content = generator.generate_single_post(
-                        theme=theme_config['theme'],
-                        post_format='single_image_with_caption'
-                    )
-                    content_text = content.get('caption', '')
-                    video_script = None
-                    reel_title = content.get('title', '')  # Use title for non-video posts
-
-                metadata = {
-                    "day": day_offset + 1,
-                    "theme_description": theme_config['description'],
-                    "video_script": video_script,
-                    "weekly_content": True,
-                    "target_audience": "global",
-                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
+                # Map media type to post_type for database
+                post_type_mapping = {
+                    'text_card': 'text_card',
+                    'carousel': 'carousel',
+                    'static_image': 'image',
+                    'talking_head_video': 'video',
+                    'veo3_video': 'veo3_video'
                 }
+                post_type = post_type_mapping.get(media_type, 'text_card')
 
-                post_data = {
-                    'platform': 'facebook',
-                    'content_text': content_text,
-                    'post_type': theme_config['post_type'],
-                    'scheduled_time': scheduled_time.isoformat(),
-                    'content_theme': theme_config['theme'],
-                    'title': reel_title,  # Save reel_title as title field for backwards compatibility
-                    'reel_title': reel_title,  # Save reel_title to the reel_title database field
-                    'hashtags': global_hashtags,
-                    'generation_prompt': json.dumps(metadata),
-                    'status': 'pending_approval',
-                    'is_pinned': False,
-                    'image_prompt': generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
-                }
+                # Vary theme slightly for each post to avoid repetition
+                theme_index = (day_offset + time_idx) % len(theme_rotation)
+                theme = theme_rotation[theme_index]
 
-                post_id = db.save_post(post_data)
+                # Parse time and create scheduled datetime
+                hour, minute = map(int, post_time.split(':'))
+                scheduled_time = scheduled_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-                if post_id:
-                    created_ids.append(post_id)
-                    log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
+                try:
+                    log_info(f"📝 Generating Day {day_offset + 1}, {post_time}: {media_type} - Theme: {theme}")
 
-            except Exception as e:
-                log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
-                continue
+                    # Generate content based on media type
+                    if media_type == 'text_card':
+                        content = generator.generate_text_card_content()
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    elif media_type == 'carousel':
+                        content = generator.generate_carousel_content(theme=theme)
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    elif media_type == 'static_image':
+                        content = generator.generate_image_content(theme=theme)
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    elif media_type == 'talking_head_video':
+                        content = generator.generate_video_script_content(
+                            theme=theme,
+                            duration=45,
+                            style='educational'
+                        )
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    elif media_type == 'veo3_video':
+                        content = generator.generate_veo3_content(theme=theme)
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    else:
+                        # Fallback to text card
+                        content = generator.generate_text_card_content()
+                        caption = content.get('caption', '')
+                        hashtags = content.get('hashtags', [])
+                        generation_prompt = json.dumps(content)
+
+                    # Prepare post data
+                    post_data = {
+                        'content': caption,
+                        'caption': caption,
+                        'hashtags': hashtags,
+                        'post_type': post_type,
+                        'media_type': media_type,
+                        'content_theme': theme,
+                        'scheduled_time': scheduled_time.isoformat(),
+                        'platform': 'facebook',
+                        'status': 'pending_approval',
+                        'trainer_id': 'refiloe_ai',
+                        'generation_prompt': generation_prompt,
+                        'created_at': datetime.now(SA_TZ).isoformat(),
+                        'updated_at': datetime.now(SA_TZ).isoformat()
+                    }
+
+                    # Save to database
+                    post_id = db.save_post(post_data)
+
+                    if post_id:
+                        created_ids.append(post_id)
+                        log_info(f"✅ Created {media_type} post for {scheduled_time.strftime('%A %H:%M')}")
+                    else:
+                        log_error(f"Failed to save {media_type} post for {scheduled_time}")
+
+                except Exception as e:
+                    log_error(f"Error generating {media_type} content: {str(e)}")
+                    continue
 
         # Calculate date range for message
         end_date = start_date + timedelta(days=6)
@@ -6580,7 +6626,7 @@ def api_generate_weekly_content():
             'post_ids': created_ids,
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d'),
-            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (14:00 SAST daily)'
+            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (5 posts/day at 08:00, 12:00, 16:00, 18:00, 20:00 SAST)'
         })
 
     except Exception as e:

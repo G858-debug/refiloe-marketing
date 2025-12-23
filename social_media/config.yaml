@@ -1,29 +1,137 @@
 # Social Media Configuration for Aggressive Growth
 # Refiloe Marketing Platform
 
-# Posting Schedule Configuration
+# =============================================================================
+# POSTING SCHEDULE
+# =============================================================================
+# Defines when and how often Refiloe posts content
+# Times are in SAST (South African Standard Time)
+# 5 posts per day, each with a specific media type
 posting_schedule:
-  # All weeks: 1 quality post per day
+  # Default schedule for all weeks
+  default:
+    enabled: true
+    posts_per_day: 5
+    timezone: "SAST"
+    description: "5 posts daily - each time slot has a dedicated media type"
+
+    # Times mapped to media types (see media_type_schedule below)
+    times:
+      - "08:00"  # Carousel - morning educational content
+      - "12:00"  # Veo3 video - midday cinematic/atmospheric
+      - "16:00"  # Text card - afternoon quick value
+      - "18:00"  # Talking head video - evening engagement
+      - "20:00"  # Static image - night scroll content
+
+  # Week-specific overrides (optional, uses default if not specified)
   week_1:
     enabled: true
-    posts_per_day: 1
-    times: ["12:00"]
+    posts_per_day: 5
+    times: ["08:00", "12:00", "16:00", "18:00", "20:00"]
     timezone: "SAST"
-    description: "Launch phase - 1 quality post daily at noon"
+    description: "Launch phase - full content mix"
 
   week_2_to_4:
     enabled: true
-    posts_per_day: 1
-    times: ["12:00"]
+    posts_per_day: 5
+    times: ["08:00", "12:00", "16:00", "18:00", "20:00"]
     timezone: "SAST"
-    description: "Growth phase - consistent daily posting"
+    description: "Growth phase - consistent 5x daily"
 
   week_5_plus:
     enabled: true
-    posts_per_day: 1
-    times: ["12:00"]
+    posts_per_day: 5
+    times: ["08:00", "12:00", "16:00", "18:00", "20:00"]
     timezone: "SAST"
-    description: "Sustained phase - quality over quantity"
+    description: "Sustained phase - optimized content mix"
+
+# =============================================================================
+# MEDIA TYPE SCHEDULE
+# =============================================================================
+# Maps posting times to specific media types
+# This ensures content variety and optimal engagement for each time slot
+media_type_schedule:
+  "08:00":
+    media_type: "carousel"
+    description: "Morning educational content - high save rate"
+    content_focus:
+      - "Step-by-step tutorials"
+      - "Tips listicles"
+      - "How-to guides"
+      - "Educational series"
+    rationale: "Morning audiences have more time to swipe through multi-slide content"
+
+  "12:00":
+    media_type: "veo3_video"
+    description: "Midday cinematic/atmospheric video with voiceover"
+    content_focus:
+      - "Motivational atmosphere"
+      - "Lifestyle visualization"
+      - "Concept videos"
+      - "Inspirational stories"
+    rationale: "Lunch break viewing - cinematic content stands out in feed"
+
+  "16:00":
+    media_type: "text_card"
+    description: "Afternoon quick-value text content"
+    content_focus:
+      - "Quotes"
+      - "Tips"
+      - "Bold statements"
+      - "Do this/not that comparisons"
+      - "Educational lists"
+    rationale: "Quick consumption during afternoon break - high shareability"
+
+  "18:00":
+    media_type: "talking_head_video"
+    description: "Evening talking head video with Refiloe avatar"
+    content_focus:
+      - "Personal stories"
+      - "Direct advice"
+      - "Engagement hooks"
+      - "Conversational content"
+    rationale: "Peak engagement time - personal connection through avatar"
+
+  "20:00":
+    media_type: "static_image"
+    description: "Night scroll content - single image posts"
+    content_focus:
+      - "Memes and relatable content"
+      - "Quote overlays"
+      - "Data/stat graphics"
+      - "Lifestyle imagery"
+    rationale: "Evening scroll time - quick, visually appealing content"
+
+# Media type definitions for reference
+media_types:
+  text_card:
+    formats: ["quote", "tip", "educational", "motivation", "comparison"]
+    generation: "text_card_generator"
+    aspect_ratio: "4:5"
+
+  carousel:
+    formats: ["educational", "tips_listicle", "transformation", "myth_vs_reality"]
+    generation: "carousel_template_generator"
+    slides: "5-10"
+    aspect_ratio: "1:1"
+
+  static_image:
+    formats: ["meme", "quote_overlay", "stat_graphic", "lifestyle"]
+    generation: "leonardo_ai"
+    aspect_ratio: "4:5"
+
+  talking_head_video:
+    formats: ["story", "tips", "educational", "motivational"]
+    generation: "heygen_avatar"
+    duration: "30-45 seconds"
+    aspect_ratio: "9:16"
+
+  veo3_video:
+    formats: ["atmospheric", "concept", "lifestyle", "motivational"]
+    generation: "veo3_generator"
+    duration: "8-15 seconds"
+    voiceover: "elevenlabs"
+    aspect_ratio: "16:9"
 
 # Stories Configuration
 stories:
