@@ -148,9 +148,15 @@ class FacebookPoster:
                 log_info("Detected video URL, posting as video")
                 return self._post_video(post_data)
 
+            # Get hashtags from post_data
+            hashtags = post_data.get('hashtags', [])
+
+            # Format caption with hashtags
+            formatted_caption = self._format_caption_with_hashtags(post_data['content_text'], hashtags)
+
             # Prepare post parameters for text/image post
             post_params = {
-                'message': post_data['content_text'],
+                'message': formatted_caption,
                 'access_token': self.page_access_token
             }
 
