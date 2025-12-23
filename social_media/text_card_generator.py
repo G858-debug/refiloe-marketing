@@ -89,7 +89,8 @@ class TextCardGenerator:
                 - tip: {'header': str, 'tip': str, 'subtitle': str}
                 - educational: {'title': str, 'points': List[str]}
                 - motivation: {'statement': str}
-            content_type: One of 'quote', 'tip', 'educational', 'motivation'
+                - comparison: {'topic': str, 'dont': str, 'do': str, 'why': str}
+            content_type: One of 'quote', 'tip', 'educational', 'motivation', 'comparison'
 
         Returns:
             str: Path to generated image file
@@ -100,7 +101,7 @@ class TextCardGenerator:
 
         try:
             # Validate content type
-            valid_types = ['quote', 'tip', 'educational', 'motivation']
+            valid_types = ['quote', 'tip', 'educational', 'motivation', 'comparison']
             if content_type not in valid_types:
                 log_error(f"Unknown content type: {content_type}")
                 raise ValueError(f"Unknown content type: {content_type}. Must be one of: {', '.join(valid_types)}")
@@ -145,6 +146,10 @@ class TextCardGenerator:
         elif content_type == 'motivation':
             main_text = content.get('statement', '')
             subtitle_text = None
+        elif content_type == 'comparison':
+            # Comparison uses custom layout, return empty for standard flow
+            main_text = ''
+            subtitle_text = None
         else:
             main_text = ''
             subtitle_text = None
@@ -162,6 +167,11 @@ class TextCardGenerator:
             content_type: Type of content (for special handling like educational)
             content: Full content dict (for educational points)
         """
+        # Handle comparison type with custom layout
+        if content_type == 'comparison':
+            self._draw_comparison_layout(draw, content, content_area)
+            return
+
         # Load fonts
         main_font = self._load_font(bold=True, size=self.CONTENT_FONT_SIZE)
         subtitle_font = self._load_font(bold=False, size=self.ATTRIBUTION_FONT_SIZE)
@@ -259,6 +269,162 @@ class TextCardGenerator:
                     current_y += bullet_line_height
 
                 current_y += 20  # Space between bullets
+
+    def _draw_comparison_layout(
+        self,
+        draw: ImageDraw.Draw,
+        content: Dict[str, Any],
+        content_area: Dict[str, int]
+    ) -> None:
+        """Draw comparison (Do This, Not That) layout.
+
+        Layout structure (within 880x770 content area):
+        - Topic header (small, top)
+        - DON'T section with ❌ icon
+        - DO section with ✅ icon
+        - WHY section at bottom
+
+        Args:
+            draw: ImageDraw object
+            content: Content dict with 'topic', 'dont', 'do', 'why' keys
+            content_area: Dict with layout boundaries
+        """
+        # Extract content
+        topic = content.get('topic', 'COMPARISON')
+        dont_text = content.get('dont', '')
+        do_text = content.get('do', '')
+        why_text = content.get('why', '')
+
+        # Layout constants - designed to fit comfortably in content area
+        center_x = content_area['center_x']
+        content_left = content_area['left'] + 40  # Extra padding for comfort
+        content_right = content_area['right'] - 40
+        max_text_width = content_right - content_left - 80  # 700px for text
+
+        # Font sizes - slightly smaller to ensure fit
+        topic_font_size = 28
+        label_font_size = 32
+        content_font_size = 36
+        why_font_size = 28
+
+        # Load fonts
+        topic_font = self._load_font(bold=True, size=topic_font_size)
+        label_font = self._load_font(bold=True, size=label_font_size)
+        content_font = self._load_font(bold=False, size=content_font_size)
+        why_label_font = self._load_font(bold=True, size=why_font_size)
+        why_font = self._load_font(bold=False, size=why_font_size)
+
+        # Colors
+        white = (255, 255, 255)
+        red_tint = (255, 120, 120)  # Soft red for DON'T
+        green_tint = (120, 255, 150)  # Soft green for DO
+        muted_white = (200, 200, 200)  # For WHY section
+
+        # Calculate line heights
+        topic_line_height = int(topic_font_size * 1.3)
+        label_line_height = int(label_font_size * 1.4)
+        content_line_height = int(content_font_size * 1.35)
+        why_line_height = int(why_font_size * 1.3)
+
+        # Calculate vertical spacing
+        section_gap = 45  # Gap between DON'T and DO sections
+        why_gap = 40  # Gap before WHY section
+
+        # Wrap text for each section
+        wrapped_dont = self._wrap_text(dont_text, content_font, max_text_width)
+        wrapped_do = self._wrap_text(do_text, content_font, max_text_width)
+        wrapped_why = self._wrap_text(why_text, why_font, max_text_width)
+
+        # Limit lines to prevent overflow
+        wrapped_dont = wrapped_dont[:3]  # Max 3 lines for DON'T
+        wrapped_do = wrapped_do[:3]  # Max 3 lines for DO
+        wrapped_why = wrapped_why[:2]  # Max 2 lines for WHY
+
+        # Calculate total height needed
+        topic_height = topic_line_height + 25  # Topic + gap
+        dont_height = label_line_height + (len(wrapped_dont) * content_line_height) + 15
+        do_height = label_line_height + (len(wrapped_do) * content_line_height) + 15
+        why_height = why_line_height + (len(wrapped_why) * why_line_height)
+
+        total_height = topic_height + dont_height + section_gap + do_height + why_gap + why_height
+
+        # Calculate starting Y to center vertically
+        available_height = content_area['bottom'] - content_area['top']
+        start_y = content_area['top'] + (available_height - total_height) // 2
+        current_y = start_y
+
+        # Draw topic header (small, centered, uppercase)
+        topic_upper = topic.upper()
+        bbox = draw.textbbox((0, 0), topic_upper, font=topic_font)
+        topic_width = bbox[2] - bbox[0]
+        topic_x = center_x - (topic_width // 2)
+        draw.text((topic_x, current_y), topic_upper, font=topic_font, fill=muted_white)
+        current_y += topic_height
+
+        # Draw DON'T section
+        # Label with emoji
+        dont_label = "❌  DON'T"
+        bbox = draw.textbbox((0, 0), dont_label, font=label_font)
+        label_width = bbox[2] - bbox[0]
+        label_x = center_x - (label_width // 2)
+        draw.text((label_x, current_y), dont_label, font=label_font, fill=red_tint)
+        current_y += label_line_height
+
+        # DON'T content text (centered)
+        for line in wrapped_dont:
+            bbox = draw.textbbox((0, 0), line, font=content_font)
+            line_width = bbox[2] - bbox[0]
+            text_x = center_x - (line_width // 2)
+            draw.text((text_x, current_y), line, font=content_font, fill=white)
+            current_y += content_line_height
+
+        current_y += section_gap
+
+        # Draw DO section
+        # Label with emoji
+        do_label = "✅  DO"
+        bbox = draw.textbbox((0, 0), do_label, font=label_font)
+        label_width = bbox[2] - bbox[0]
+        label_x = center_x - (label_width // 2)
+        draw.text((label_x, current_y), do_label, font=label_font, fill=green_tint)
+        current_y += label_line_height
+
+        # DO content text (centered)
+        for line in wrapped_do:
+            bbox = draw.textbbox((0, 0), line, font=content_font)
+            line_width = bbox[2] - bbox[0]
+            text_x = center_x - (line_width // 2)
+            draw.text((text_x, current_y), line, font=content_font, fill=white)
+            current_y += content_line_height
+
+        current_y += why_gap
+
+        # Draw WHY section
+        # Draw horizontal divider line
+        divider_width = 200
+        divider_y = current_y - 15
+        draw.line(
+            [(center_x - divider_width // 2, divider_y),
+             (center_x + divider_width // 2, divider_y)],
+            fill=muted_white,
+            width=1
+        )
+
+        # WHY label
+        why_label_text = "WHY"
+        bbox = draw.textbbox((0, 0), why_label_text, font=why_label_font)
+        label_width = bbox[2] - bbox[0]
+        label_x = center_x - (label_width // 2)
+        draw.text((label_x, current_y), why_label_text, font=why_label_font, fill=muted_white)
+        current_y += why_line_height
+
+        # WHY content (centered, muted)
+        for line in wrapped_why:
+            bbox = draw.textbbox((0, 0), line, font=why_font)
+            line_width = bbox[2] - bbox[0]
+            text_x = center_x - (line_width // 2)
+            draw.text((text_x, current_y), line, font=why_font, fill=muted_white)
+            current_y += why_line_height
 
     def _create_unified_layout(self, content_type: str, content: Dict[str, Any]) -> Image.Image:
         """Create text card using pre-designed template.
