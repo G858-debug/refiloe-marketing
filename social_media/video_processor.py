@@ -354,26 +354,36 @@ class VideoProcessor:
             )
 
             # Step 4: Concatenate with matching sample_rate
-            if output_path is None:
-                output_path = os.path.join(self.temp_dir, f"final_{os.getpid()}.mp4")
-
             combined_path = self.concatenate_videos(
                 title_card_path,
                 main_video_path,
-                output_path,
                 sample_rate=sample_rate
             )
+
+            # Step 5: Add background music
+            log_info("Step 5: Adding background music...")
+            if output_path is None:
+                output_path = os.path.join(self.temp_dir, f"final_{os.getpid()}.mp4")
+
+            video_with_music_path = self.add_background_music(
+                video_path=combined_path,
+                output_path=output_path,
+                volume=0.2,
+                fade_duration=2.0
+            )
+            log_info("Background music added successfully")
 
             # Clean up intermediate files
             try:
                 os.remove(main_video_path)
                 os.remove(title_card_path)
+                os.remove(combined_path)
             except Exception as e:
                 log_warning(f"Could not clean up intermediate files: {e}")
 
             return {
                 'success': True,
-                'output_path': combined_path,
+                'output_path': video_with_music_path,
                 'title_card_duration': title_card_duration
             }
 
