@@ -454,21 +454,196 @@ viral_ctas:
     - "Duet this with your version"
     - "POV: Show me your [THING]"
 
-# Content Themes Configuration
+# =============================================================================
+# CONTENT THEMES (EXPANDED)
+# =============================================================================
+# 12 themes for variety - percentages must total 100%
+# Mix of SA personality with global relevance
 content_themes:
-  gym_culture_humor:
+  admin_hacks:
     percentage: 15
-    description: "Relatable gym moments and trainer humor"
+    description: "Time-saving tips and admin shortcuts for trainers worldwide"
     examples:
-      - "That one client who..."
-      - "Gym equipment struggles"
-      - "Trainer vs client expectations"
-      - "The internal monologue moments"
+      - "Client check-in templates that work across time zones"
+      - "Automated reminder systems for busy trainers"
+      - "Billing hacks that save 5+ hours weekly"
+      - "Social media content batching strategies"
+      - "How top US trainers manage 50+ clients solo"
+      - "The spreadsheet system Australian PTs swear by"
+      - "WhatsApp Business automations for client comms"
+      - "Calendar blocking techniques from 6-figure trainers"
+      - "Invoice automation that chases payments for you"
+      - "The Monday morning routine that organizes your week"
 
-  myth_busting:
+  relatable_trainer_life:
     percentage: 10
-    description: "Challenge common fitness industry beliefs"
+    description: "Universal trainer experiences that resonate globally"
     examples:
-      - "Why this popular advice is wrong"
-      - "The truth about common practices"
-      - "What the fitness industry gets wrong"
+      - "When your 5am client texts 'running late' at 4:58am"
+      - "The face you make when a client says 'I ate clean' but..."
+      - "Trainer vs Client: What 'I'll try harder' actually means"
+      - "That moment when gym WiFi dies mid-session"
+      - "When clients ask 'can we skip legs today?'"
+      - "The internal scream when equipment is being hogged"
+      - "Explaining to family that training IS a real job"
+      - "When your client PRs and you're prouder than them"
+      - "The post-last-client energy crash we all know"
+      - "Spotting bad form across the gym like a hawk"
+
+  client_management_tips:
+    percentage: 10
+    description: "Professional client relationship strategies"
+    examples:
+      - "Setting boundaries without losing clients"
+      - "The onboarding process that reduces dropoffs by 60%"
+      - "How to handle the 'I want results faster' conversation"
+      - "Re-engaging clients who've gone quiet"
+      - "Pricing conversations that don't feel awkward"
+      - "Managing expectations from day one"
+      - "The check-in system top trainers use"
+      - "Handling cancellations professionally"
+      - "When to fire a client (and how to do it)"
+      - "Building referral systems that work passively"
+
+  engagement_questions:
+    percentage: 8
+    description: "Interactive content that sparks global conversations"
+    examples:
+      - "Morning or evening sessions - which builds your business better?"
+      - "What's the worst fitness advice you've ever heard?"
+      - "Rate your current work-life balance: 1-10"
+      - "Favourite exercise your clients hate but need?"
+      - "What would you tell yourself when you started training?"
+      - "Gym playlist: Pump-up beats or focus music?"
+      - "Online training vs in-person - where's your business going?"
+      - "Biggest lesson from your worst client ever?"
+      - "What's your non-negotiable business boundary?"
+      - "Coffee or pre-workout? The eternal debate"
+
+  wellness_lifestyle:
+    percentage: 12
+    description: "Holistic health beyond just workouts - sleep, stress, recovery"
+    examples:
+      - "Why your clients' sleep matters more than their program"
+      - "Stress management techniques to teach clients"
+      - "Recovery protocols that get overlooked"
+      - "The burnout signs every trainer should watch for"
+      - "How trainers can practice what they preach"
+      - "Nutrition basics every PT should understand"
+      - "Mental health conversations with clients"
+      - "Work-life balance when fitness IS your life"
+      - "Self-care routines for trainers who give all day"
+      - "Helping clients with lifestyle, not just lifting"
+      - "The connection between hydration and performance"
+      - "Why rest days are part of the program"
+
+  business_coaching:
+    percentage: 12
+    description: "Entrepreneurship and business growth for fitness professionals"
+    examples:
+      - "Pricing strategies that value your expertise"
+      - "From side hustle to full-time: The transition guide"
+      - "Building multiple income streams as a trainer"
+      - "The numbers every PT should track monthly"
+      - "Scaling without burning out"
+      - "When to raise your rates (and how)"
+      - "Creating passive income from your expertise"
+      - "Business lessons from trainers earning 6 figures"
+      - "Tax tips for self-employed fitness pros"
+      - "Building a brand that attracts premium clients"
+      - "The difference between busy and profitable"
+      - "Exit strategies: Building a sellable business"
+
+  content_creator_tips:
+    percentage: 10
+    description: "Social media growth and personal branding for fitness influencers"
+    examples:
+      - "Content batching: Create a week's posts in 2 hours"
+      - "The hook formula that stops the scroll"
+      - "Growing on Instagram vs TikTok vs YouTube"
+      - "Turning followers into paying clients"
+      - "Video content that doesn't need fancy equipment"
+      - "Finding your unique voice in a crowded market"
+      - "Engagement strategies that build real community"
+      - "Monetizing your fitness content beyond training"
+      - "The posting schedule that actually grows followers"
+      - "Dealing with haters and negative comments"
+      - "Repurposing one video into 10 pieces of content"
+      - "Analytics that matter vs vanity metrics"
+
+  health_professional_crossover:
+    percentage: 8
+    description: "Content for physios, chiros, and health pros who train clients"
+    examples:
+      - "When to refer out: Knowing your scope"
+      - "Building relationships with local physios"
+      - "Red flags every trainer should recognize"
+      - "Working with clients post-rehab"
+      - "The handoff between physio and PT"
+      - "Understanding basic injury prevention"
+      - "When a client needs more than training"
+      - "Collaborating with dietitians and nutritionists"
+      - "Medical clearance: When and why to ask"
+      - "Building a referral network that sends clients back"
+
+  global_trainer_perspectives:
+    percentage: 8
+    description: "International insights with SA personality"
+    examples:
+      - "How trainers in Dubai build luxury client bases"
+      - "What American PT culture gets right (and wrong)"
+      - "UK fitness trends making their way worldwide"
+      - "The Australian outdoor training movement"
+      - "Why Brazilian trainers dominate group fitness"
+      - "Lessons from the German efficiency approach"
+      - "How Scandinavian trainers prioritize wellness"
+      - "The rise of online training across Africa"
+      - "Cultural differences in client expectations"
+      - "Building an international client base remotely"
+      - "Time zone management for global trainers"
+      - "What SA trainers can teach the world"
+
+  industry_trends:
+    percentage: 5
+    description: "Fitness industry news and future predictions"
+    examples:
+      - "AI in fitness: Threat or opportunity for trainers?"
+      - "The hybrid training model taking over"
+      - "Wearable tech: Using client data effectively"
+      - "Post-pandemic shifts that are here to stay"
+      - "The rise of specialization in training"
+      - "Corporate wellness: An untapped market"
+      - "Gen Z clients: What they expect differently"
+      - "Sustainability in the fitness industry"
+      - "The future of gym vs home training"
+      - "Trends that are just hype vs real shifts"
+
+  mindset_psychology:
+    percentage: 5
+    description: "Mental game and psychology for trainers and clients"
+    examples:
+      - "Imposter syndrome: Every trainer's secret battle"
+      - "Motivating clients who've lost their why"
+      - "The psychology of habit formation"
+      - "Dealing with comparison in the fitness industry"
+      - "Building mental resilience as a business owner"
+      - "Understanding client self-sabotage"
+      - "The mindset shift from trainer to CEO"
+      - "Celebrating small wins with clients"
+      - "Handling rejection and client losses"
+      - "Growth mindset in your own fitness journey"
+
+  tech_tools_reviews:
+    percentage: 5
+    description: "Apps, software, and tools for modern trainers"
+    examples:
+      - "Best free apps for client programming"
+      - "Scheduling tools that sync your life"
+      - "Video analysis apps for form checks"
+      - "Payment platforms compared for trainers"
+      - "CRM systems worth the investment"
+      - "Nutrition tracking apps to recommend"
+      - "The tech stack of successful online trainers"
+      - "Free vs paid tools: Where to invest"
+      - "Automation tools that save real time"
+      - "Apps your clients will actually use"
