@@ -208,7 +208,8 @@ class FacebookPoster:
         self,
         content_text: str,
         scheduled_timestamp: int,
-        image_ids: Optional[List[str]] = None
+        image_ids: Optional[List[str]] = None,
+        hashtags: Optional[List[str]] = None
     ) -> Dict:
         """
         Create a scheduled post on Facebook Page.
@@ -217,6 +218,7 @@ class FacebookPoster:
             content_text: The text content to post
             scheduled_timestamp: Unix timestamp for when to publish the post
             image_ids: Optional list of Facebook media IDs for multi-photo posts
+            hashtags: Optional list of hashtags to append to the post
 
         Returns:
             Dictionary with success status, post_id, and error message
@@ -224,9 +226,12 @@ class FacebookPoster:
         try:
             log_info(f"Creating scheduled post for page {self.page_id} at timestamp {scheduled_timestamp}")
 
+            # Format caption with hashtags
+            formatted_caption = self._format_caption_with_hashtags(content_text, hashtags)
+
             # Prepare post parameters
             post_params = {
-                'message': content_text,
+                'message': formatted_caption,
                 'published': 'false',
                 'scheduled_publish_time': scheduled_timestamp,
                 'access_token': self.page_access_token
