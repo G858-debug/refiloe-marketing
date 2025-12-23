@@ -1024,7 +1024,7 @@ def approve_post(post_id: str):
             }
             _update_post_fields(db, post_id, update_fields)
 
-            log_info(f"Image post uploaded and scheduled on Facebook: {facebook_post_id}")
+            log_info(f"Image post uploaded and scheduled on Facebook: {facebook_post_id} (hashtags added to caption)")
 
             return jsonify({
                 'success': True,
