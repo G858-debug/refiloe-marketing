@@ -517,14 +517,54 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
         # Prepare post_data dict with content, hashtags, and scheduled_time
+        # Extract hashtags with fallback logic if None
+        hashtags = post.get('hashtags')
+        if hashtags is None:
+            # Fallback 1: Try generation_prompt -> hashtags
+            generation_prompt = post.get('generation_prompt')
+            if generation_prompt:
+                if isinstance(generation_prompt, str):
+                    try:
+                        import json
+                        generation_prompt = json.loads(generation_prompt)
+                    except (json.JSONDecodeError, ValueError):
+                        generation_prompt = None
+                if isinstance(generation_prompt, dict) and generation_prompt.get('hashtags'):
+                    hashtags = generation_prompt['hashtags']
+
+            # Fallback 2: Try metadata -> hashtags
+            if hashtags is None:
+                metadata = post.get('metadata')
+                if metadata:
+                    if isinstance(metadata, str):
+                        try:
+                            import json
+                            metadata = json.loads(metadata)
+                        except (json.JSONDecodeError, ValueError):
+                            metadata = None
+                    if isinstance(metadata, dict) and metadata.get('hashtags'):
+                        hashtags = metadata['hashtags']
+
+            # Fallback 3: Extract from content_text using regex
+            if hashtags is None:
+                content_text = post.get('content_text', '')
+                if content_text:
+                    import re
+                    hashtag_matches = re.findall(r'#\w+', content_text)
+                    if hashtag_matches:
+                        hashtags = hashtag_matches
+
+            # Fallback 4: Default to empty list
+            if hashtags is None:
+                hashtags = []
+
         post_data = {
             'content_text': post.get('content_text', ''),
-            'hashtags': post.get('hashtags', []),
+            'hashtags': hashtags,
             'scheduled_time': schedule_timestamp
         }
 
-        hashtags = post_data['hashtags']
-        log_info(f"Post data prepared with {len(hashtags)} hashtags: {hashtags[:5] if hashtags else []}")
+        log_info(f"Post data prepared with {len(hashtags) if hashtags else 0} hashtags: {hashtags[:5] if hashtags else []}")
 
         # Format content with hashtags using FacebookPoster's method
         formatted_content = poster._format_caption_with_hashtags(
