@@ -532,6 +532,11 @@
             color: #0C5460;
         }
 
+        .status-badge.scheduled-facebook {
+            background: #1877f2;
+            color: white;
+        }
+
         .post-type {
             padding: 4px 10px;
             border-radius: 12px;
@@ -1552,7 +1557,7 @@
                     approved: data.posts.filter(p => p.status === 'approved'),
                     generating: data.posts.filter(p => p.status === 'generating'),
                     pending_media_approval: data.posts.filter(p => p.status === 'pending_media_approval'),
-                    scheduled: data.posts.filter(p => p.status === 'scheduled')
+                    scheduled: data.posts.filter(p => p.status === 'scheduled' || p.status === 'scheduled_on_facebook')
                 };
 
                 console.log('📊 Posts by status:', {
@@ -1674,8 +1679,11 @@
             // Media preview section (shown inline if media exists)
             const mediaPreview = getMediaPreview(post);
 
+            // Use actual post status for badge and buttons (handles grouped statuses like scheduled_on_facebook)
+            const actualStatus = post.status || status;
+
             // Status badge
-            const statusBadge = getStatusBadge(status);
+            const statusBadge = getStatusBadge(actualStatus);
 
             // Caption text
             const captionText = post.content_text || 'No caption';
@@ -1703,7 +1711,7 @@
                     <span class="scheduled-time">📅 ${scheduledDate}</span>
                 </div>
 
-                ${getActionButtons(post, status)}
+                ${getActionButtons(post, actualStatus)}
             `;
 
             return card;
@@ -1868,6 +1876,7 @@
                 generating: '<span class="status-badge generating">⏳ Generating...</span>',
                 pending_media_approval: '<span class="status-badge pending-media">🎬 Review Media</span>',
                 scheduled: '<span class="status-badge scheduled">📅 Scheduled</span>',
+                scheduled_on_facebook: '<span class="status-badge scheduled-facebook">📅 Scheduled on Facebook</span>',
                 awaiting_music: '<span class="status-badge" style="background-color: #9333ea; color: white;">🎵 Add Music & Publish</span>'
             };
             return badges[status] || '<span class="status-badge">Unknown</span>';
@@ -2076,6 +2085,20 @@
                     </div>
                 `;
             }
+            else if (status === 'scheduled_on_facebook') {
+                buttons = `
+                    <p class="status-message">📅 Will be published automatically by Facebook at scheduled time</p>
+                    ${post.facebook_post_id ? `<p class="status-message" style="font-size: 12px; color: #6b7280;">Facebook Post ID: ${post.facebook_post_id}</p>` : ''}
+                    <div class="post-actions">
+                        ${post.post_type === 'text_card' ? `
+                            <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
+                        ` : `
+                            <button class="btn btn-secondary btn-sm" onclick="openEditModal('${post.id}')">✏️ Edit</button>
+                        `}
+                        <button onclick="rejectPost('${post.id}')" class="btn btn-danger">❌ Reject</button>
+                    </div>
+                `;
+            }
             else if (status === 'published') {
                 // Published posts cannot be rejected
                 buttons = `
@@ -2121,7 +2144,7 @@
 
         function updateStats(posts) {
             const pending = posts.filter(p => ['pending_approval', 'approved', 'generating', 'pending_media_approval'].includes(p.status)).length;
-            const scheduled = posts.filter(p => p.status === 'scheduled').length;
+            const scheduled = posts.filter(p => p.status === 'scheduled' || p.status === 'scheduled_on_facebook').length;
             const published = posts.filter(p => p.status === 'published').length;
 
             document.getElementById('stat-pending').textContent = pending;
