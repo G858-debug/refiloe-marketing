@@ -452,6 +452,7 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
         post: Post record dictionary containing:
             - scheduled_time: ISO timestamp for scheduling
             - content_text: The post caption/text
+            - hashtags: Optional list of hashtags to include
             - image_url: URL for single image post
             - carousel_image_urls: List of URLs for carousel post
             - id: Post UUID
@@ -463,8 +464,6 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             - error: str with error message (or None on success)
     """
     import time as time_module
-    import requests
-    import json as json_module
 
     log_info("=" * 60)
     log_info("FACEBOOK IMAGE SCHEDULER - Starting")
@@ -481,7 +480,7 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
         return {'success': False, 'facebook_post_id': None, 'error': 'Facebook credentials missing'}
 
     try:
-        # Calculate the scheduled timestamp
+        # Extract scheduled_time and convert to Unix timestamp (minimum 10 minutes in future)
         scheduled_time = post.get('scheduled_time')
         schedule_timestamp = None
 
@@ -513,12 +512,28 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             log_info("No scheduled_time on post, defaulting to 10 mins from now")
             schedule_timestamp = int(time_module.time()) + 600
 
-        # Initialize FacebookPoster
+        # Initialize FacebookPoster instance
         log_info("Initializing FacebookPoster...")
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
-        # Get post content
-        content_text = post.get('content_text', '')
+        # Prepare post_data dict with content, hashtags, and scheduled_time
+        post_data = {
+            'content_text': post.get('content_text', ''),
+            'hashtags': post.get('hashtags', []),
+            'scheduled_time': schedule_timestamp
+        }
+
+        hashtags = post_data['hashtags']
+        log_info(f"Post data prepared with {len(hashtags)} hashtags: {hashtags[:5] if hashtags else []}")
+
+        # Format content with hashtags using FacebookPoster's method
+        formatted_content = poster._format_caption_with_hashtags(
+            post_data['content_text'],
+            post_data['hashtags']
+        )
+        log_info(f"Formatted content length: {len(formatted_content)} chars")
+
+        # Get image URLs
         image_url = post.get('image_url')
         carousel_image_urls = post.get('carousel_image_urls', [])
         post_type = post.get('post_type', '')
@@ -528,57 +543,38 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             # CAROUSEL POST - Multiple images
             log_info(f"Processing carousel post with {len(carousel_image_urls)} images")
 
-            uploaded_ids = []
+            image_ids = []
             for idx, img_url in enumerate(carousel_image_urls):
                 try:
                     log_info(f"Uploading carousel image {idx + 1}/{len(carousel_image_urls)}: {img_url[:80]}...")
                     fb_image_id = poster.upload_image(img_url)
-                    uploaded_ids.append({'media_fbid': fb_image_id})
+                    image_ids.append(fb_image_id)
                     log_info(f"✓ Carousel image {idx + 1} uploaded: {fb_image_id}")
                 except Exception as img_error:
                     log_warning(f"Failed to upload carousel image {idx + 1} ({img_url}): {img_error}")
 
-            if not uploaded_ids:
+            if not image_ids:
                 log_error("No carousel images could be uploaded")
                 return {'success': False, 'facebook_post_id': None, 'error': 'Failed to upload any carousel images'}
 
-            log_info(f"Successfully uploaded {len(uploaded_ids)}/{len(carousel_image_urls)} carousel images")
+            log_info(f"Successfully uploaded {len(image_ids)}/{len(carousel_image_urls)} carousel images")
 
-            # Create scheduled carousel post via Facebook Graph API
+            # Create scheduled carousel post using poster method
             log_info("Creating scheduled carousel post...")
-            base_url = "https://graph.facebook.com/v18.0"
-            post_params = {
-                'message': content_text,
-                'access_token': page_access_token,
-                'published': 'false',
-                'scheduled_publish_time': schedule_timestamp
-            }
+            result = poster.create_scheduled_post(
+                content_text=formatted_content,
+                scheduled_timestamp=schedule_timestamp,
+                image_ids=image_ids
+            )
 
-            # Add attached_media with indexed parameters
-            for idx, media_item in enumerate(uploaded_ids):
-                post_params[f'attached_media[{idx}]'] = json_module.dumps(media_item)
-
-            url = f"{base_url}/{page_id}/feed"
-            response = requests.post(url, data=post_params, timeout=60)
-
-            if response.ok:
-                result = response.json()
-                if result.get('id'):
-                    fb_post_id = result['id']
-                    log_info(f"✓ Carousel post scheduled successfully: {fb_post_id}")
-                    log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
-                    return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
-                else:
-                    error_msg = result.get('error', {}).get('message', 'Unknown error creating carousel post')
-                    log_error(f"Failed to create carousel post: {error_msg}")
-                    return {'success': False, 'facebook_post_id': None, 'error': error_msg}
+            if result.get('success'):
+                fb_post_id = result.get('post_id')
+                log_info(f"✓ Carousel post scheduled successfully: {fb_post_id}")
+                log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
+                return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
             else:
-                try:
-                    error_detail = response.json()
-                    error_msg = error_detail.get('error', {}).get('message', response.text)
-                except:
-                    error_msg = response.text
-                log_error(f"Facebook API error: {error_msg}")
+                error_msg = result.get('error', 'Unknown error creating carousel post')
+                log_error(f"Failed to create carousel post: {error_msg}")
                 return {'success': False, 'facebook_post_id': None, 'error': error_msg}
 
         elif image_url:
@@ -586,43 +582,27 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             log_info(f"Processing single image post: {image_url[:80]}...")
 
             try:
-                # Upload the image first
+                # Upload the image first using poster.upload_image()
                 log_info("Uploading image to Facebook...")
                 fb_image_id = poster.upload_image(image_url)
                 log_info(f"✓ Image uploaded: {fb_image_id}")
 
-                # Create scheduled post with the uploaded image
+                # Create scheduled post with the uploaded image using poster.create_scheduled_post()
                 log_info("Creating scheduled image post...")
-                base_url = "https://graph.facebook.com/v18.0"
-                post_params = {
-                    'message': content_text,
-                    'access_token': page_access_token,
-                    'published': 'false',
-                    'scheduled_publish_time': schedule_timestamp,
-                    'attached_media[0]': json_module.dumps({'media_fbid': fb_image_id})
-                }
+                result = poster.create_scheduled_post(
+                    content_text=formatted_content,
+                    scheduled_timestamp=schedule_timestamp,
+                    image_ids=[fb_image_id]
+                )
 
-                url = f"{base_url}/{page_id}/feed"
-                response = requests.post(url, data=post_params, timeout=60)
-
-                if response.ok:
-                    result = response.json()
-                    if result.get('id'):
-                        fb_post_id = result['id']
-                        log_info(f"✓ Image post scheduled successfully: {fb_post_id}")
-                        log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
-                        return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
-                    else:
-                        error_msg = result.get('error', {}).get('message', 'Unknown error creating image post')
-                        log_error(f"Failed to create image post: {error_msg}")
-                        return {'success': False, 'facebook_post_id': None, 'error': error_msg}
+                if result.get('success'):
+                    fb_post_id = result.get('post_id')
+                    log_info(f"✓ Image post scheduled successfully: {fb_post_id}")
+                    log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
+                    return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
                 else:
-                    try:
-                        error_detail = response.json()
-                        error_msg = error_detail.get('error', {}).get('message', response.text)
-                    except:
-                        error_msg = response.text
-                    log_error(f"Facebook API error: {error_msg}")
+                    error_msg = result.get('error', 'Unknown error creating image post')
+                    log_error(f"Failed to create image post: {error_msg}")
                     return {'success': False, 'facebook_post_id': None, 'error': error_msg}
 
             except Exception as img_error:
@@ -635,41 +615,26 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             # TEXT-ONLY POST
             log_info("Processing text-only post (no images)")
 
-            if not content_text:
+            if not post_data['content_text']:
                 log_error("No content_text provided for text-only post")
                 return {'success': False, 'facebook_post_id': None, 'error': 'No content text provided'}
 
-            # Create scheduled text post
+            # Create scheduled text post (no images)
             log_info("Creating scheduled text post...")
-            base_url = "https://graph.facebook.com/v18.0"
-            post_params = {
-                'message': content_text,
-                'access_token': page_access_token,
-                'published': 'false',
-                'scheduled_publish_time': schedule_timestamp
-            }
+            result = poster.create_scheduled_post(
+                content_text=formatted_content,
+                scheduled_timestamp=schedule_timestamp,
+                image_ids=None
+            )
 
-            url = f"{base_url}/{page_id}/feed"
-            response = requests.post(url, data=post_params, timeout=60)
-
-            if response.ok:
-                result = response.json()
-                if result.get('id'):
-                    fb_post_id = result['id']
-                    log_info(f"✓ Text post scheduled successfully: {fb_post_id}")
-                    log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
-                    return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
-                else:
-                    error_msg = result.get('error', {}).get('message', 'Unknown error creating text post')
-                    log_error(f"Failed to create text post: {error_msg}")
-                    return {'success': False, 'facebook_post_id': None, 'error': error_msg}
+            if result.get('success'):
+                fb_post_id = result.get('post_id')
+                log_info(f"✓ Text post scheduled successfully: {fb_post_id}")
+                log_info(f"Scheduled for Unix timestamp: {schedule_timestamp}")
+                return {'success': True, 'facebook_post_id': fb_post_id, 'error': None}
             else:
-                try:
-                    error_detail = response.json()
-                    error_msg = error_detail.get('error', {}).get('message', response.text)
-                except:
-                    error_msg = response.text
-                log_error(f"Facebook API error: {error_msg}")
+                error_msg = result.get('error', 'Unknown error creating text post')
+                log_error(f"Failed to create text post: {error_msg}")
                 return {'success': False, 'facebook_post_id': None, 'error': error_msg}
 
     except Exception as e:
