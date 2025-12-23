@@ -505,6 +505,7 @@ class FacebookPoster:
 
             # Extract parameters with defaults
             description = post_data.get('content_text', '')
+            hashtags = post_data.get('hashtags', [])
             title = post_data.get('title', '')
             video_state = post_data.get('video_state', 'SCHEDULED')
             scheduled_publish_time = post_data.get('scheduled_publish_time')
@@ -624,12 +625,16 @@ class FacebookPoster:
             # STEP 3: Publish or schedule the reel
             log_info(f"Step 3: Publishing/scheduling reel (state: {video_state})")
             finish_url = f"https://graph.facebook.com/v19.0/{self.page_id}/video_reels"
+
+            # Format description with hashtags
+            formatted_description = self._format_caption_with_hashtags(description, hashtags)
+
             finish_params = {
                 'access_token': self.page_access_token,
                 'upload_phase': 'finish',
                 'video_id': video_id,
                 'video_state': video_state,
-                'description': description,
+                'description': formatted_description,
                 'thumb_offset': post_data.get('thumb_offset', 2000)  # Default to 2 seconds, or 0 for title cards
             }
 
