@@ -648,36 +648,47 @@ Generate the carousel content now:"""
         """Generate content for a single-slide text card post.
 
         Args:
-            content_type: One of 'quote', 'tip', 'educational', 'motivation'
-                         If None, randomly selects one.
+            content_type: One of 'quote', 'tip', 'educational', 'motivation', 'comparison'
+                         If None, randomly selects one with weighted probability.
 
         Returns:
             Dict with structure based on content_type:
             - quote: {
                 'type': 'quote',
-                'quote': str (the quote, max 150 chars),
-                'attribution': str (who said it or 'Refiloe'),
-                'caption': str (Facebook caption),
+                'quote': str (the quote, 80-150 chars),
+                'attribution': str ('Refiloe' for original quotes),
+                'style': str ('contrarian', 'relatable_truth', or 'wisdom_drop'),
+                'caption': str (Facebook caption, 50-80 words),
                 'hashtags': List[str]
               }
             - tip: {
                 'type': 'tip',
-                'header': str (e.g., "TRAINER TIP", "TIME SAVER", max 20 chars),
-                'tip': str (the main tip, max 200 chars),
-                'subtitle': str (optional additional context, max 80 chars),
+                'header': str (e.g., "TIME SAVER", "PRICING HACK", max 20 chars),
+                'tip': str (the main tip, 100-200 chars),
+                'subtitle': str (optional context/proof, max 80 chars),
                 'caption': str,
                 'hashtags': List[str]
               }
             - educational: {
                 'type': 'educational',
-                'title': str (max 50 chars),
+                'title': str (max 50 chars, includes number),
                 'points': List[str] (3-5 points, each max 60 chars),
                 'caption': str,
                 'hashtags': List[str]
               }
             - motivation: {
                 'type': 'motivation',
-                'statement': str (bold motivational statement, max 100 chars),
+                'statement': str (bold statement, 80-120 chars),
+                'style': str ('identity', 'permission', or 'challenge'),
+                'caption': str,
+                'hashtags': List[str]
+              }
+            - comparison: {
+                'type': 'comparison',
+                'topic': str (brief topic label, max 50 chars),
+                'dont': str (common mistake, max 80 chars),
+                'do': str (better approach, max 80 chars),
+                'why': str (one sentence explanation, max 150 chars),
                 'caption': str,
                 'hashtags': List[str]
               }
@@ -686,12 +697,14 @@ Generate the carousel content now:"""
         import random
         import re
 
-        # Define valid content types
-        valid_types = ['quote', 'tip', 'educational', 'motivation']
+        # Define valid content types with weights for random selection
+        valid_types = ['quote', 'tip', 'educational', 'motivation', 'comparison']
+        # Weights: quote=25%, tip=25%, educational=20%, motivation=15%, comparison=15%
+        type_weights = [25, 25, 20, 15, 15]
 
-        # Randomly select content type if not provided
+        # Randomly select content type if not provided (weighted selection)
         if content_type is None:
-            content_type = random.choice(valid_types)
+            content_type = random.choices(valid_types, weights=type_weights, k=1)[0]
 
         # Validate content type
         if content_type not in valid_types:
@@ -776,84 +789,134 @@ Generate the carousel content now:"""
         # Define content type specific prompts
         type_prompts = {
             'quote': f"""
-CONTENT TYPE: Quote
+CONTENT TYPE: Quote Card
 
-Generate an inspiring or educational quote relevant to personal trainers.
+Generate a powerful quote for personal trainers that stops the scroll and gets shared.
+
+QUOTE STYLES (rotate between these):
+1. CONTRARIAN: Challenge a common belief in the fitness industry
+2. RELATABLE TRUTH: Say what every trainer thinks but doesn't say out loud
+3. WISDOM DROP: Share insight that comes from real experience
 
 REQUIREMENTS:
-- Quote text: Maximum 150 characters
-- Attribution: Who said it (can be 'Refiloe' for original quotes, or famous trainers/athletes)
-- Topics: admin automation, client management, business growth, fitness insights, work-life balance
-- Must resonate with personal trainers in South Africa
-- Should be motivational, educational, or thought-provoking
+- Quote: 80-150 characters (punchy, memorable, quotable)
+- Must resonate with personal trainers globally
+- Should feel authentic, not generic motivation-poster style
+- Can be slightly provocative or challenging
+- Attribution: "Refiloe" for original quotes
+
+AVOID:
+- Generic motivation clichés ("believe in yourself", "never give up")
+- Overly long or complex sentences
+- Industry jargon that limits shareability
+
+EXAMPLES OF GREAT QUOTES:
+- "Your clients don't pay for workouts. They pay for the transformation you help them believe is possible."
+- "The best trainers aren't the fittest. They're the ones who make clients feel seen."
+- "Some days the hardest rep is just showing up to coach."
+- "Three years in, I learned: systems beat motivation every single time."
 
 OUTPUT FORMAT (JSON):
-{{
+{{{{
     "type": "quote",
-    "quote": "The quote text here (max 150 chars)",
-    "attribution": "Person who said it or 'Refiloe'",
-    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
-    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-}}
-
-EXAMPLE:
-{{
-    "type": "quote",
-    "quote": "Your clients don't buy training sessions. They buy the transformation you help them achieve.",
+    "quote": "The quote text here (80-150 chars)",
     "attribution": "Refiloe",
-    "caption": "This mindset shift changed how I approach every client conversation. What transformation are you selling? 💪",
-    "hashtags": ["#personaltrainer", "#fitnessbusiness", "#clientsuccess", "#trainerlife", "#southafricanfitness"]
-}}
+    "style": "contrarian|relatable_truth|wisdom_drop",
+    "caption": "Engaging Facebook caption that adds context (50-80 words)",
+    "hashtags": ["#personaltrainer", "#trainerlife", "#fitnessbusiness", "#coachlife", "#fitpro"]
+}}}}
 """,
             'tip': f"""
-CONTENT TYPE: Tip
+CONTENT TYPE: Tip Card
 
-Generate a practical, actionable tip for personal trainers.
+Generate a specific, actionable tip that trainers can implement TODAY.
+
+TIP CATEGORIES (use one):
+- TIME SAVER: Saves time on admin/scheduling/communication
+- PRICING HACK: Improves revenue or pricing strategy
+- CLIENT WIN: Improves client results or satisfaction
+- RETENTION HACK: Keeps clients longer
+- BOOKING TIP: Gets more bookings or reduces no-shows
+- ADMIN SHORTCUT: Streamlines business operations
 
 REQUIREMENTS:
-- Header: Short category (e.g., "TRAINER TIP", "TIME SAVER", "PRO MOVE"), max 20 characters
-- Tip: The main tip text, maximum 200 characters
-- Subtitle: Optional additional context or benefit, max 80 characters (can be empty string)
-- Topics: admin automation, client management, business growth, fitness insights, work-life balance
-- Must be immediately actionable
-- Should save time or improve business/training
+- Header: 2-3 words, ALL CAPS (category label)
+- Tip: 100-200 characters, specific and immediately actionable
+- Subtitle: Optional context, proof, or tool mention (max 80 chars)
+- Include specific numbers where possible (percentages, time saved, etc.)
+- Must be implementable without special software
+
+EXAMPLES:
+- Header: "TIME SAVER"
+  Tip: "Send session reminders 24 hours before. Cuts no-shows by 70%."
+  Subtitle: "Works with any scheduling app"
+
+- Header: "RETENTION HACK"
+  Tip: "Send a voice note instead of a text for check-ins. Takes the same time. Feels 10x more personal."
+  Subtitle: "Try it this week"
+
+- Header: "PRICING HACK"
+  Tip: "Stop charging per session. Package 12 sessions minimum. Your income stabilizes, their commitment increases."
+  Subtitle: "Tested with 50+ trainers"
 
 OUTPUT FORMAT (JSON):
-{{
+{{{{
     "type": "tip",
     "header": "CATEGORY (max 20 chars)",
-    "tip": "The main tip here (max 200 chars)",
-    "subtitle": "Additional context or benefit (max 80 chars, or empty)",
-    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
-    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-}}
-
-EXAMPLE:
-{{
-    "type": "tip",
-    "header": "TIME SAVER",
-    "tip": "Send automated session reminders 24 hours before each client appointment. This cuts no-shows by 70% and saves you hours of rescheduling admin.",
-    "subtitle": "Works with WhatsApp Business or any scheduling tool",
-    "caption": "This one automation gave me back 5+ hours every week. What's your biggest time drain? Comment below! 👇",
-    "hashtags": ["#trainertools", "#adminautomation", "#personaltrainertips", "#fitnessadmin", "#southafricanfitness", "#trainerhacks"]
-}}
+    "tip": "The actionable tip (100-200 chars)",
+    "subtitle": "Context or proof (max 80 chars, can be empty)",
+    "caption": "Engaging caption asking readers to share their experience (50-80 words)",
+    "hashtags": ["#trainertools", "#fitnesstips", "#ptbusiness", "#trainerhacks", "#fitnesscoach"]
+}}}}
 """,
             'educational': f"""
-CONTENT TYPE: Educational
+CONTENT TYPE: Educational List Card
 
-Generate educational content with multiple key points for personal trainers.
+Generate a numbered list that provides genuine value to personal trainers.
+
+LIST TITLE PATTERNS (use one):
+- "[Number] Signs That [Outcome]"
+- "[Number] Mistakes [Audience] Make With [Topic]"
+- "[Number] Things [Successful People] Do Differently"
+- "[Number] Red Flags in [Context]"
+- "[Number] Green Flags of [Positive Thing]"
+- "The [Number] Rules of [Topic]"
+
+TOPICS TO COVER:
+- Client behavior patterns (red flags, green flags, signs)
+- Business mistakes to avoid
+- Success habits of top trainers
+- Communication strategies
+- Pricing and packaging insights
+- Time management secrets
 
 REQUIREMENTS:
-- Title: Clear, engaging title, max 50 characters
-- Points: 3-5 bullet points, each max 60 characters
-- Topics: admin automation, client management, business growth, fitness insights, work-life balance
-- Must be informative and actionable
-- Should teach something valuable
+- Title: Max 50 characters, must include number (use 3-7)
+- Points: Each point max 60 characters
+- Points should start with "They..." or action verb
+- Be specific, not vague
+- Each point should be immediately recognizable/relatable
+
+EXAMPLES:
+Title: "5 Signs a Client Will Ghost You"
+Points:
+- "They reschedule twice in the first week"
+- "They ask about refunds before starting"
+- "They're vague about their actual goals"
+- "They compare your rates to big box gyms"
+- "They don't respond to check-in messages"
+
+Title: "4 Green Flags of a Dream Client"
+Points:
+- "They show up 5 minutes early"
+- "They ask questions about form"
+- "They tell friends about you unprompted"
+- "They trust your programming"
 
 OUTPUT FORMAT (JSON):
-{{
+{{{{
     "type": "educational",
-    "title": "Title here (max 50 chars)",
+    "title": "Title with number (max 50 chars)",
     "points": [
         "Point 1 (max 60 chars)",
         "Point 2 (max 60 chars)",
@@ -861,52 +924,100 @@ OUTPUT FORMAT (JSON):
         "Point 4 (max 60 chars)",
         "Point 5 (max 60 chars)"
     ],
-    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
-    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-}}
-
-EXAMPLE:
-{{
-    "type": "educational",
-    "title": "5 Signs a Client Will Ghost You",
-    "points": [
-        "They reschedule more than once in the first week",
-        "They ask about refund policies before starting",
-        "They don't respond to form check videos",
-        "They're vague about their actual goals",
-        "They compare your rates to big gym chains"
-    ],
-    "caption": "Learned this the hard way after 3 years of training. Now I spot these red flags early and adjust my approach. Which one have you experienced? 🎯",
-    "hashtags": ["#personaltrainer", "#clientmanagement", "#trainerlife", "#fitnesstips", "#businessgrowth", "#southafricanfitness"]
-}}
+    "caption": "Caption inviting engagement - which one resonates most? (50-80 words)",
+    "hashtags": ["#personaltrainer", "#clientmanagement", "#trainerlife", "#fitnesstips", "#businessgrowth"]
+}}}}
 """,
             'motivation': f"""
-CONTENT TYPE: Motivation
+CONTENT TYPE: Bold Statement Card
 
-Generate a bold, motivational statement for personal trainers.
+Generate a powerful, declarative statement that resonates with trainers' identity and aspirations.
+
+STATEMENT STYLES (use one):
+1. IDENTITY: Elevate what it means to be a trainer
+   - "You're not just a trainer. You're..."
+   - "They hired a coach. You became..."
+
+2. PERMISSION: Give trainers permission to do what they hesitate to do
+   - "You're allowed to..."
+   - "It's okay to..."
+
+3. CHALLENGE: Push trainers to level up (not harsh, but direct)
+   - "If your business depends on..."
+   - "Stop [common mistake]. Start [better approach]."
 
 REQUIREMENTS:
-- Statement: Powerful, concise motivational text, max 100 characters
-- Topics: mindset, perseverance, business growth, work-life balance, trainer life
-- Must energize and inspire
-- Should feel empowering and bold
-- Can be about business, training, or personal development
+- Statement: 80-120 characters (bold, declarative)
+- Must feel empowering, not preachy
+- Should make trainers want to share it
+- No attribution needed (speaks as Refiloe brand voice)
+
+AVOID:
+- Toxic positivity
+- Shaming language
+- Generic motivation clichés
+
+EXAMPLES:
+- "You're not just a trainer. You're building an empire, one rep at a time."
+- "You're allowed to fire clients who drain your energy."
+- "Stop competing on price. Start competing on results."
+- "If your business depends on you showing up sick, you don't have a business. You have a job."
 
 OUTPUT FORMAT (JSON):
-{{
+{{{{
     "type": "motivation",
-    "statement": "Bold motivational statement here (max 100 chars)",
-    "caption": "Engaging 1-2 sentence Facebook caption (50-100 words)",
-    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
-}}
+    "statement": "Bold statement (80-120 chars)",
+    "style": "identity|permission|challenge",
+    "caption": "Brief caption that reinforces the message (30-50 words)",
+    "hashtags": ["#trainermindset", "#fitnessbusiness", "#coachlife", "#entrepreneurmindset", "#fitpro"]
+}}}}
+""",
+            'comparison': f"""
+CONTENT TYPE: Do This, Not That Card
 
-EXAMPLE:
-{{
-    "type": "motivation",
-    "statement": "You're not just training bodies. You're building empires, one rep at a time.",
-    "caption": "Every session you run is building your business and changing lives. Keep going. 💪🔥",
-    "hashtags": ["#trainermotivation", "#fitnessmindset", "#personaltrainer", "#businessgrowth", "#trainerlife"]
-}}
+Generate a comparison that shows the wrong way vs. the right way to handle a common trainer situation.
+
+TOPICS:
+- Client communication
+- Pricing conversations
+- Social media posting
+- Session management
+- Handling objections
+- Building relationships
+- Business systems
+
+REQUIREMENTS:
+- DON'T: Common mistake trainers make (specific, recognizable)
+- DO: Better alternative (specific, actionable)
+- WHY: Brief explanation of the difference (1 sentence)
+- Both options should be realistic things trainers actually say/do
+
+EXAMPLES:
+1. Client Communication:
+   - DON'T: "How was your workout?"
+   - DO: "That deadlift form looked solid today. How did your back feel?"
+   - WHY: Specific feedback builds trust faster
+
+2. Pricing:
+   - DON'T: "My rate is R500/hour"
+   - DO: "The transformation package is R6,000 for 12 sessions"
+   - WHY: Packages communicate value, not time
+
+3. Social Media:
+   - DON'T: Posting workout videos with no context
+   - DO: Lead with the problem your client had, then show the solution
+   - WHY: Problems create connection, solutions create authority
+
+OUTPUT FORMAT (JSON):
+{{{{
+    "type": "comparison",
+    "topic": "Brief topic label",
+    "dont": "The common mistake (max 80 chars)",
+    "do": "The better approach (max 80 chars)",
+    "why": "One sentence explanation",
+    "caption": "Caption asking which mistake they've made (40-60 words)",
+    "hashtags": ["#trainerlife", "#fitnesstips", "#coachtips", "#businesstips", "#personaltrainer"]
+}}}}
 """
         }
 
@@ -985,6 +1096,11 @@ Generate the text card content now:"""
                 attribution = str(data.get("attribution", "Refiloe"))
                 validated["attribution"] = filter_banned_words(attribution[:50])
 
+                # Optional style field for quote
+                style = str(data.get("style", ""))
+                if style:
+                    validated["style"] = style
+
             elif content_type == "tip":
                 header = str(data.get("header", "TRAINER TIP"))
                 validated["header"] = filter_banned_words(header[:20])
@@ -1026,7 +1142,37 @@ Generate the text card content now:"""
                 if not statement:
                     log_warning("Missing statement in motivation content")
                     return {}
-                validated["statement"] = filter_banned_words(statement[:100])
+                validated["statement"] = filter_banned_words(statement[:120])
+
+                # Optional style field for motivation
+                style = str(data.get("style", ""))
+                if style:
+                    validated["style"] = style
+
+            elif content_type == "comparison":
+                topic = str(data.get("topic", ""))
+                if not topic:
+                    log_warning("Missing topic in comparison content")
+                    return {}
+                validated["topic"] = filter_banned_words(topic[:50])
+
+                dont = str(data.get("dont", ""))
+                if not dont:
+                    log_warning("Missing 'dont' in comparison content")
+                    return {}
+                validated["dont"] = filter_banned_words(dont[:80])
+
+                do = str(data.get("do", ""))
+                if not do:
+                    log_warning("Missing 'do' in comparison content")
+                    return {}
+                validated["do"] = filter_banned_words(do[:80])
+
+                why = str(data.get("why", ""))
+                if not why:
+                    log_warning("Missing 'why' in comparison content")
+                    return {}
+                validated["why"] = filter_banned_words(why[:150])
 
             else:
                 log_warning(f"Unknown content type: {content_type}")
