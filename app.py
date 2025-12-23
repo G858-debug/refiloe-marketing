@@ -6492,15 +6492,15 @@ def api_generate_weekly_content():
         generator = ContentGenerator(config_path, supabase_client)
         db = SocialMediaDatabase(supabase_client)
 
-        # Content themes to rotate through the week (universal themes)
+        # Weekly themes rotation - cycles through expanded theme categories
         weekly_themes = [
-            {"theme": "motivation", "post_type": "video", "description": "Monday Motivation"},
+            {"theme": "mindset_psychology", "post_type": "video", "description": "Monday Motivation"},
             {"theme": "admin_hacks", "post_type": "video", "description": "Tips Tuesday"},
-            {"theme": "client_management", "post_type": "carousel", "description": "Wisdom Wednesday"},
+            {"theme": "wellness_lifestyle", "post_type": "carousel", "description": "Wellness Wednesday"},
             {"theme": "relatable_trainer_life", "post_type": "video", "description": "Throwback Thursday"},
-            {"theme": "relatable_trainer_life", "post_type": "image", "description": "Fun Friday"},
-            {"theme": "growth_mindset", "post_type": "video", "description": "Saturday Strategy"},
-            {"theme": "community_engagement", "post_type": "image", "description": "Sunday Engagement"},
+            {"theme": "content_creator_tips", "post_type": "image", "description": "Feature Friday"},
+            {"theme": "business_coaching", "post_type": "video", "description": "Strategy Saturday"},
+            {"theme": "engagement_questions", "post_type": "image", "description": "Sunday Engagement"},
         ]
 
         # Global hashtags to use
