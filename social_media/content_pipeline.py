@@ -108,6 +108,7 @@ class ContentPipeline:
         self.config = self._load_config(self.config_path)
 
         self.db = SocialMediaDatabase(supabase_client)
+        self.supabase_client = supabase_client
 
         self.content_generator = content_generator or self._init_content_generator(
             self.config_path, supabase_client
@@ -118,7 +119,7 @@ class ContentPipeline:
         self.video_generator = video_generator or self._init_video_generator(
             self.config_path, supabase_client
         )
-        self.carousel_generator = self._init_carousel_generator(self.config_path)
+        self.carousel_generator = self._init_carousel_generator(self.config_path, supabase_client)
         self.thumbnail_generator = self._init_thumbnail_generator()
 
         self.cost_tracker = self._initialise_cost_tracker()
@@ -1566,10 +1567,10 @@ class ContentPipeline:
             return None
 
     def _init_carousel_generator(
-        self, config_path: str
+        self, config_path: str, supabase_client=None
     ) -> Optional[CarouselTemplateGenerator]:
         try:
-            return CarouselTemplateGenerator(config_path)
+            return CarouselTemplateGenerator(config_path, supabase_client=supabase_client)
         except Exception as exc:
             log_warning(f"CarouselTemplateGenerator unavailable: {exc}")
             return None

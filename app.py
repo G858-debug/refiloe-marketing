@@ -5011,7 +5011,7 @@ def api_generate_media(post_id):
             try:
                 from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
 
-                leonardo = LeonardoGenerator()
+                leonardo = LeonardoGenerator(supabase_client=supabase_client)
 
                 # Determine if this should be a quote graphic or character image
                 from social_media.leonardo_generator import CONTENT_TYPE_PROMPTS
@@ -5173,7 +5173,7 @@ def api_generate_media(post_id):
 
                     log_info(f"✅ Config file exists, file size: {os.path.getsize(config_path)} bytes")
 
-                    carousel_generator = CarouselTemplateGenerator(config_path)
+                    carousel_generator = CarouselTemplateGenerator(config_path, supabase_client=supabase_client)
                     log_info("✅ CarouselTemplateGenerator initialized successfully")
 
                 except ImportError as import_error:
@@ -5375,7 +5375,7 @@ def regenerate_carousel_cover(post_id):
         log_info(f"📝 Generating new cover for title: '{title[:50]}...'")
 
         # Generate new cover with Leonardo
-        leonardo = LeonardoGenerator()
+        leonardo = LeonardoGenerator(supabase_client=supabase_client)
         result = leonardo.generate_carousel_cover(
             title=title,
             content_type=content_type,
@@ -5397,7 +5397,8 @@ def regenerate_carousel_cover(post_id):
         image = image.resize((1080, 1350), Image.Resampling.LANCZOS)
 
         # Initialize carousel generator just for the overlay
-        carousel_gen = CarouselTemplateGenerator()
+        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+        carousel_gen = CarouselTemplateGenerator(config_path, supabase_client=supabase_client)
 
         # Add brand overlay (accent bar, slide number)
         total_slides = len(carousel_urls)
@@ -5642,7 +5643,7 @@ def change_carousel_look(post_id):
         if not os.path.exists(config_path):
             return jsonify({'success': False, 'error': 'Config file not found'}), 500
 
-        carousel_generator = CarouselTemplateGenerator(config_path)
+        carousel_generator = CarouselTemplateGenerator(config_path, supabase_client=supabase_client)
 
         # Generate the cover slide
         slide_paths = carousel_generator.create_carousel(cover_carousel_data)
@@ -6505,7 +6506,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
     if leonardo_api_key:
         try:
             from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
-            leonardo = LeonardoGenerator()
+            leonardo = LeonardoGenerator(supabase_client=supabase_client_ref)
             log_info("🎨 Leonardo AI initialized for automatic image generation")
         except Exception as e:
             log_warning(f"⚠️ Failed to initialize Leonardo AI: {e}. Images will need to be generated manually.")
@@ -7588,7 +7589,7 @@ def api_generate_missing_images():
 
         # Initialize Leonardo
         from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
-        leonardo = LeonardoGenerator()
+        leonardo = LeonardoGenerator(supabase_client=supabase_client)
 
         updated_count = 0
         failed_count = 0
