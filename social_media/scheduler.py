@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 import pytz
+import yaml
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -57,6 +58,14 @@ class SocialMediaScheduler:
         self.text_card_generator = TextCardGenerator('social_media/config.yaml')
         self.content_generator = ContentGenerator('social_media/config.yaml', supabase_client)
         self.default_trainer_id = "refiloe_ai"
+
+        # Load config for content type posting times
+        try:
+            with open('social_media/config.yaml', 'r') as f:
+                self.config = yaml.safe_load(f) or {}
+        except Exception:
+            self.config = {}
+        self.content_posting_times = self.config.get('content_type_posting_times', {})
 
     # --------------------------------------------------------------------- #
     # Lifecycle management
@@ -1546,9 +1555,9 @@ Your video has been uploaded to Facebook as a DRAFT.
             log_error(f"Error in weekly manual video reminder job: {exc}\n{traceback.format_exc()}")
 
     def run_text_card_generation(self) -> Dict[str, Any]:
-        """Generate daily text card post for 4pm SAST posting.
+        """Generate daily text card post using configured posting time (default 18:00 SAST).
 
-        Only generates if no text_card is already scheduled for today's 4pm slot.
+        Only generates if no text_card is already scheduled for today's posting slot.
         Creates a single-slide text image (quote/tip/educational/motivation)
         and saves to database with pending_approval status.
 
@@ -1560,13 +1569,16 @@ Your video has been uploaded to Facebook as a DRAFT.
             return {"success": False, "error": "Supabase client unavailable"}
 
         try:
-            # Check if text_card post already exists for today at 4pm SAST
+            # Check if text_card post already exists for today's posting slot
             now_sa = datetime.now(SA_TIMEZONE)
-            today_4pm = now_sa.replace(hour=16, minute=0, second=0, microsecond=0)
+            # Get posting time from config (default 18:00)
+            text_card_time = self.content_posting_times.get('text_card', '18:00')
+            hour, minute = map(int, text_card_time.split(':'))
+            today_posting_time = now_sa.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-            # Query for text_card posts scheduled between 3:30pm and 4:30pm today
-            start_time = today_4pm.replace(hour=15, minute=30)
-            end_time = today_4pm.replace(hour=16, minute=30)
+            # Query for text_card posts scheduled within 30 min window of posting time
+            start_time = today_posting_time - timedelta(minutes=30)
+            end_time = today_posting_time + timedelta(minutes=30)
 
             response = (
                 self.supabase_client.table("social_posts")
@@ -1580,7 +1592,7 @@ Your video has been uploaded to Facebook as a DRAFT.
             existing_posts = response.data if response.data else []
 
             if existing_posts:
-                log_info(f"Text card already scheduled for today at 4pm, skipping generation")
+                log_info(f"Text card already scheduled for today at {text_card_time}, skipping generation")
                 return {
                     "success": True,
                     "skipped": True,
@@ -1657,7 +1669,7 @@ Your video has been uploaded to Facebook as a DRAFT.
                 "post_type": "text_card",
                 "platform": "facebook",
                 "content_text": content.get('caption', ''),
-                "scheduled_time": today_4pm.isoformat(),
+                "scheduled_time": today_posting_time.isoformat(),
                 "image_url": public_url,
                 "metadata": {
                     "content_type": "text_card",
