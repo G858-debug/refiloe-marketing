@@ -143,21 +143,36 @@ class LeonardoReferenceManager:
             # Step 1: Get presigned upload URL from Leonardo
             init_response = self.session.post(
                 f"{self.LEONARDO_API_BASE}/init-image",
-                json={"extension": "png"},
+                json={"extension": "jpg"},
                 timeout=30
             )
             init_response.raise_for_status()
             init_data = init_response.json()
 
-            upload_url = init_data.get("uploadInitImage", {}).get("url")
-            image_id = init_data.get("uploadInitImage", {}).get("id")
-            fields = init_data.get("uploadInitImage", {}).get("fields", {})
+            log_info(f"Leonardo init-image response: {init_data}")
+
+            # Handle nested response structure
+            upload_info = init_data.get("uploadInitImage", init_data)
+
+            upload_url = upload_info.get("url")
+            image_id = upload_info.get("id")
+            fields = upload_info.get("fields", {})
+
+            # Handle case where fields is a JSON string
+            if isinstance(fields, str):
+                import json
+                try:
+                    fields = json.loads(fields)
+                except json.JSONDecodeError:
+                    log_error(f"Could not parse fields as JSON: {fields}")
+                    fields = {}
 
             if not upload_url or not image_id:
                 log_error(f"Failed to get upload URL from Leonardo: {init_data}")
                 return None
 
             log_info(f"Got Leonardo upload URL, image ID will be: {image_id}")
+            log_info(f"Fields type: {type(fields)}, value: {fields}")
 
             # Step 2: Download image from Supabase
             log_info(f"Downloading image from: {image_url}")
@@ -165,25 +180,39 @@ class LeonardoReferenceManager:
             img_response.raise_for_status()
             image_data = img_response.content
 
+            log_info(f"Downloaded {len(image_data)} bytes")
+
             # Step 3: Upload to Leonardo's presigned URL
             log_info("Uploading to Leonardo...")
 
-            # Prepare multipart form data
-            upload_data = {**fields}
-            files = {'file': ('image.png', image_data, 'image/png')}
+            # Prepare multipart form data - fields should be a dict
+            if isinstance(fields, dict) and fields:
+                upload_data = {**fields}
+                files = {'file': ('image.jpg', image_data, 'image/jpeg')}
 
-            upload_response = requests.post(
-                upload_url,
-                data=upload_data,
-                files=files,
-                timeout=120
-            )
+                upload_response = requests.post(
+                    upload_url,
+                    data=upload_data,
+                    files=files,
+                    timeout=120
+                )
+            else:
+                # If no fields, try direct PUT upload
+                log_info("No fields provided, trying direct PUT upload...")
+                upload_response = requests.put(
+                    upload_url,
+                    data=image_data,
+                    headers={'Content-Type': 'image/jpeg'},
+                    timeout=120
+                )
+
+            log_info(f"Upload response status: {upload_response.status_code}")
 
             if upload_response.status_code in [200, 201, 204]:
-                log_info(f"Successfully uploaded to Leonardo: {image_id}")
+                log_info(f"✅ Successfully uploaded to Leonardo: {image_id}")
                 return image_id
             else:
-                log_error(f"Leonardo upload failed: {upload_response.status_code} - {upload_response.text}")
+                log_error(f"Leonardo upload failed: {upload_response.status_code} - {upload_response.text[:500]}")
                 return None
 
         except Exception as e:
