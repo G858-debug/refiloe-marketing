@@ -122,6 +122,20 @@ MOTION_PROMPTS = [
 ]
 
 
+def get_posting_time_for_content_type(config, content_type):
+    """Get posting time from config based on content type.
+
+    Args:
+        config: Loaded config dictionary
+        content_type: One of 'video', 'carousel', 'image', 'text_card', 'veo3'
+
+    Returns:
+        str: Time string like '13:30' or '14:00'
+    """
+    content_posting_times = config.get('content_type_posting_times', {})
+    return content_posting_times.get(content_type, content_posting_times.get('default', '14:00'))
+
+
 def init_supabase():
     """Initialize Supabase client with connection verification"""
     global supabase_client
@@ -6519,8 +6533,15 @@ def api_generate_weekly_content():
 
         created_ids = []
 
+        # Get posting time based on content type from config
+        from social_media.config_loader import load_config
+        config = load_config('social_media/config.yaml')
+
         for day_offset, theme_config in enumerate(weekly_themes):
-            scheduled_time = start_date + timedelta(days=day_offset)
+            post_type = theme_config.get('post_type', 'video')
+            posting_time = get_posting_time_for_content_type(config, post_type)
+            hour, minute = map(int, posting_time.split(':'))
+            scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
 
             try:
                 log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
@@ -6587,7 +6608,7 @@ def api_generate_weekly_content():
             'post_ids': created_ids,
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d'),
-            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (14:00 SAST daily)'
+            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} ({posting_time} SAST daily)'
         })
 
     except Exception as e:
@@ -6753,6 +6774,11 @@ def api_generate_weekly_text_cards():
 
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
+        from social_media.config_loader import load_config
+        config = load_config('social_media/config.yaml')
+        text_card_time = get_posting_time_for_content_type(config, 'text_card')
+        hour, minute = map(int, text_card_time.split(':'))
+
         # Step 1: Find the latest scheduled text_card post
         log_info("📅 Finding latest scheduled text_card...")
 
@@ -6781,14 +6807,14 @@ def api_generate_weekly_text_cards():
                 else:
                     latest_date = latest_scheduled
                 # Start from the day after the latest scheduled text_card
-                start_date = latest_date.replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                start_date = latest_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=1)
                 log_info(f"📅 Latest text_card: {latest_date.date()}. Starting from: {start_date.date()}")
             except Exception as e:
                 log_warning(f"⚠️ Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
-                start_date = datetime.now(SA_TZ).replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                start_date = datetime.now(SA_TZ).replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=1)
         else:
             # No existing text_card posts, start from tomorrow
-            start_date = datetime.now(SA_TZ).replace(hour=16, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            start_date = datetime.now(SA_TZ).replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=1)
             log_info(f"📅 No existing text_card posts. Starting from: {start_date.date()}")
 
         # Step 2: Initialize generators
