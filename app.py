@@ -6532,6 +6532,8 @@ def api_generate_weekly_content():
         ]
 
         created_ids = []
+        successful_posts = []
+        failed_posts = []
 
         # Get posting time based on content type from config
         from social_media.config_loader import load_config
@@ -6593,23 +6595,88 @@ def api_generate_weekly_content():
 
                 if post_id:
                     created_ids.append(post_id)
+                    successful_posts.append({
+                        'day': day_offset + 1,
+                        'theme': theme_config['theme'],
+                        'description': theme_config['description'],
+                        'date': scheduled_time.strftime('%Y-%m-%d'),
+                        'post_id': post_id
+                    })
                     log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
+                else:
+                    failed_posts.append({
+                        'day': day_offset + 1,
+                        'theme': theme_config['theme'],
+                        'description': theme_config['description'],
+                        'date': scheduled_time.strftime('%Y-%m-%d'),
+                        'error': 'Failed to save post to database (no post_id returned)'
+                    })
+                    log_error(f"❌ Failed to save Day {day_offset + 1}: No post_id returned")
 
             except Exception as e:
+                error_message = str(e)
+                failed_posts.append({
+                    'day': day_offset + 1,
+                    'theme': theme_config['theme'],
+                    'description': theme_config['description'],
+                    'date': scheduled_time.strftime('%Y-%m-%d') if 'scheduled_time' in locals() else 'unknown',
+                    'error': error_message
+                })
                 log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
                 continue
 
         # Calculate date range for message
         end_date = start_date + timedelta(days=6)
 
-        return jsonify({
-            'success': True,
-            'created_count': len(created_ids),
-            'post_ids': created_ids,
-            'start_date': start_date.strftime('%Y-%m-%d'),
-            'end_date': end_date.strftime('%Y-%m-%d'),
-            'message': f'✅ Added {len(created_ids)} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} ({posting_time} SAST daily)'
-        })
+        # Determine response based on results
+        total_attempted = len(weekly_themes)
+        success_count = len(successful_posts)
+        failure_count = len(failed_posts)
+
+        # Build response based on outcome
+        if failure_count == 0 and success_count == total_attempted:
+            # All 7 posts succeeded
+            return jsonify({
+                'success': True,
+                'generated': success_count,
+                'failed': 0,
+                'post_ids': created_ids,
+                'successful_posts': successful_posts,
+                'failed_posts': [],
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'message': f'✅ Successfully generated all {success_count} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}'
+            })
+        elif success_count > 0 and failure_count > 0:
+            # Partial success - some posts succeeded, some failed
+            failed_days = [f"Day {p['day']} ({p['description']})" for p in failed_posts]
+            return jsonify({
+                'success': True,
+                'generated': success_count,
+                'failed': failure_count,
+                'post_ids': created_ids,
+                'successful_posts': successful_posts,
+                'failed_posts': failed_posts,
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'message': f'⚠️ Partial success: Generated {success_count} of {total_attempted} posts. Failed: {", ".join(failed_days)}'
+            })
+        else:
+            # All posts failed
+            error_summary = "; ".join([f"Day {p['day']}: {p['error']}" for p in failed_posts[:3]])
+            if len(failed_posts) > 3:
+                error_summary += f" (and {len(failed_posts) - 3} more errors)"
+            return jsonify({
+                'success': False,
+                'generated': 0,
+                'failed': failure_count,
+                'post_ids': [],
+                'successful_posts': [],
+                'failed_posts': failed_posts,
+                'start_date': start_date.strftime('%Y-%m-%d'),
+                'end_date': end_date.strftime('%Y-%m-%d'),
+                'message': f'❌ Failed to generate weekly content. Errors: {error_summary}'
+            }), 500
 
     except Exception as e:
         log_error(f"❌ Generate weekly content failed: {e}")
