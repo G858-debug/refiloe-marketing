@@ -923,10 +923,7 @@
             <button class="btn btn-secondary" onclick="backfillImagePrompts()">
                 🖼️ Backfill Image Prompts
             </button>
-            <button class="btn" onclick="generateMissingImages()" style="background-color: #10b981; border-color: #10b981; color: white;">
-                🖼️ Generate Missing Images
-            </button>
-            <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
+                        <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
                 📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
             </a>
             <a href="/upload-video" class="btn btn-info">
@@ -1951,6 +1948,11 @@
                                 🎬 Regenerate
                             </button>
                         ` : ''}
+                        ${post.post_type === 'image' && !post.image_url ? `
+                            <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
+                                🎨 Generate Image
+                            </button>
+                        ` : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
@@ -1968,6 +1970,11 @@
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
+                            </button>
+                        ` : ''}
+                        ${post.post_type === 'image' && !post.image_url ? `
+                            <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
+                                🎨 Generate Image
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -2076,6 +2083,11 @@
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
+                            </button>
+                        ` : ''}
+                        ${post.post_type === 'image' && !post.image_url ? `
+                            <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
+                                🎨 Generate Image
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -3641,33 +3653,37 @@
             }
         }
 
-        async function generateMissingImages() {
-            showModal(
-                'Generate Missing Images',
-                'This will generate Leonardo AI images for all image posts that are missing images. This may take several minutes (30-60 seconds per image). Continue?',
-                async () => {
-                    try {
-                        showToast('Generating missing images... This may take a few minutes.', 'info');
+        // Generate image for a single post
+        async function generateImageForPost(postId) {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Generating...';
+            btn.disabled = true;
 
-                        const response = await fetch(`${API_BASE}/api/dashboard/generate-missing-images`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
+            showToast('Generating image... This may take 30-60 seconds.', 'info');
 
-                        const data = await response.json();
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-image/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
 
-                        if (data.success) {
-                            showToast(`✅ ${data.message}`, 'success');
-                            await loadPosts();
-                        } else {
-                            showToast('❌ ' + (data.error || 'Failed to generate images'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showToast('❌ Error: ' + error.message, 'error');
-                    }
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Image generated successfully!', 'success');
+                    await loadPosts();
+                } else {
+                    showToast('❌ ' + (data.error || 'Failed to generate image'), 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
-            );
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('❌ Error: ' + error.message, 'error');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
 
         // ========== FILTER FUNCTIONALITY ==========
