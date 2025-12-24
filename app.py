@@ -6477,8 +6477,22 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
     import json
     from datetime import timedelta
     import pytz
+    import time
 
     SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+    # Initialize Leonardo generator for auto image generation
+    leonardo = None
+    leonardo_api_key = os.environ.get('LEONARDO_API_KEY')
+    if leonardo_api_key:
+        try:
+            from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
+            leonardo = LeonardoGenerator()
+            log_info("🎨 Leonardo AI initialized for automatic image generation")
+        except Exception as e:
+            log_warning(f"⚠️ Failed to initialize Leonardo AI: {e}. Images will need to be generated manually.")
+    else:
+        log_warning("⚠️ LEONARDO_API_KEY not set. Images will need to be generated manually.")
 
     # Initialize existing_dates if not provided
     if existing_dates is None:
@@ -6515,6 +6529,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
 
             try:
                 log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_date}")
+                generation_status['current_action'] = f"Generating Day {day_offset + 1}: {theme_config['description']}"
 
                 # Generate content based on post type
                 if post_type == 'video':
@@ -6599,14 +6614,58 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                 post_id = db.save_post(post_data)
 
                 if post_id:
-                    generation_status['successful'].append({
+                    post_info = {
                         'day': day_offset + 1,
                         'theme': theme_config['theme'],
                         'description': theme_config['description'],
                         'date': scheduled_time.strftime('%Y-%m-%d'),
-                        'post_id': post_id
-                    })
+                        'post_id': post_id,
+                        'image_generated': False
+                    }
                     log_info(f"✅ [Background] Saved Day {day_offset + 1} post: {post_id}")
+
+                    # Auto-generate Leonardo AI image for image posts
+                    if post_type == 'image' and leonardo is not None:
+                        image_prompt = post_data.get('image_prompt', '')
+                        if image_prompt:
+                            try:
+                                log_info(f"🎨 [Background] Generating Leonardo image for post {post_id}...")
+                                generation_status['current_action'] = f"Generating image for Day {day_offset + 1}"
+
+                                # Get content_type from the theme for proper styling
+                                content_type = theme_config.get('content_type', 'motivational')
+
+                                # Generate the image
+                                result = leonardo.generate_image(
+                                    prompt=image_prompt,
+                                    content_type=content_type,
+                                )
+
+                                image_url = result.get('image_url')
+
+                                if image_url:
+                                    # Update the post with the generated image URL
+                                    db.update_post(post_id, {'image_url': image_url})
+                                    post_info['image_generated'] = True
+                                    post_info['image_url'] = image_url
+                                    log_info(f"✅ [Background] Leonardo image generated for post {post_id}: {image_url}")
+                                else:
+                                    log_warning(f"⚠️ [Background] Leonardo returned no image URL for post {post_id}")
+
+                                # Add delay between Leonardo API calls to avoid rate limiting
+                                time.sleep(2)
+
+                            except Exception as e:
+                                # Import LeonardoGenerationError if not already imported
+                                from social_media.leonardo_generator import LeonardoGenerationError
+                                if isinstance(e, LeonardoGenerationError):
+                                    log_warning(f"⚠️ [Background] Leonardo image generation failed for post {post_id}: {e}")
+                                else:
+                                    log_error(f"❌ [Background] Unexpected error generating image for post {post_id}: {e}")
+                                # Post still created, just without image - user can retry manually
+                                post_info['image_error'] = str(e)
+
+                    generation_status['successful'].append(post_info)
                 else:
                     generation_status['failed'].append({
                         'day': day_offset + 1,
@@ -6629,12 +6688,14 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                 log_error(f"❌ [Background] Failed to generate Day {day_offset + 1}: {e}")
                 continue
 
+        generation_status['current_action'] = 'Complete'
         log_info(f"✅ [Background] Weekly content generation complete. Success: {len(generation_status['successful'])}, Skipped: {len(generation_status.get('skipped', []))}, Failed: {len(generation_status['failed'])}")
 
     except Exception as e:
         log_error(f"❌ [Background] Generate weekly content failed: {e}")
         import traceback
         log_error(traceback.format_exc())
+        generation_status['current_action'] = f'Error: {str(e)}'
     finally:
         generation_status['is_running'] = False
 
@@ -6750,6 +6811,12 @@ def api_generate_weekly_content():
         # Calculate how many posts will be generated vs skipped
         days_to_fill = 7 - len(existing_dates)
 
+        # Determine if images will be generated (affects timing message)
+        # Check if LEONARDO_API_KEY is available and if we're generating image posts
+        import os
+        leonardo_available = bool(os.environ.get('LEONARDO_API_KEY'))
+        will_generate_images = leonardo_available and (media_type == 'image' or media_type == 'all')
+
         # Initialize generation status
         generation_status['is_running'] = True
         generation_status['successful'] = []
@@ -6759,6 +6826,8 @@ def api_generate_weekly_content():
         generation_status['start_date'] = start_date.strftime('%Y-%m-%d')
         generation_status['end_date'] = end_date.strftime('%Y-%m-%d')
         generation_status['existing_dates'] = [d.isoformat() for d in sorted(existing_dates)]
+        generation_status['current_action'] = 'Starting content generation...'
+        generation_status['generating_images'] = will_generate_images
 
         # Start background thread with existing_dates
         thread = threading.Thread(
@@ -6770,14 +6839,21 @@ def api_generate_weekly_content():
 
         log_info(f"🚀 Started background generation for {start_date.date()} - {end_date.date()} (filling {days_to_fill} gaps, skipping {len(existing_dates)} existing)")
 
+        # Build response message with appropriate timing estimate
+        if will_generate_images:
+            message = f'Generating weekly content with images... This may take 5-7 minutes. Filling {days_to_fill} gaps from {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}.'
+        else:
+            message = f'Generation started for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}. Filling {days_to_fill} gaps, skipping {len(existing_dates)} existing posts.'
+
         return jsonify({
             'success': True,
-            'message': f'Generation started for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}. Filling {days_to_fill} gaps, skipping {len(existing_dates)} existing posts.',
+            'message': message,
             'status': 'processing',
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d'),
             'days_to_generate': days_to_fill,
             'existing_dates': [d.isoformat() for d in sorted(existing_dates)],
+            'generating_images': will_generate_images,
             'check_status_url': '/api/dashboard/generation-status'
         })
 
@@ -6805,6 +6881,8 @@ def api_generation_status():
         'start_date': generation_status['start_date'],
         'end_date': generation_status['end_date'],
         'existing_dates': generation_status.get('existing_dates', []),
+        'current_action': generation_status.get('current_action', ''),
+        'generating_images': generation_status.get('generating_images', False),
         'details': {
             'successful_posts': generation_status['successful'],
             'skipped_posts': generation_status.get('skipped', []),
