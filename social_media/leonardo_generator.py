@@ -330,7 +330,40 @@ class LeonardoGenerator:
         log_info(f"Generation started: {generation_id}")
 
         # Poll for completion
-        image_url = self._poll_for_completion(generation_id)
+        try:
+            image_url = self._poll_for_completion(generation_id)
+        except LeonardoGenerationError as e:
+            # Check if we used references and should retry without them
+            if use_reference and "guidances" in payload.get("parameters", {}):
+                log_warning(f"⚠️ Generation failed with reference images: {e}")
+                log_warning("⚠️ Retrying WITHOUT reference images...")
+
+                # Remove guidances and retry
+                del payload["parameters"]["guidances"]
+
+                try:
+                    retry_response = self.session.post(
+                        f"{LEONARDO_API_BASE}/generations",
+                        json=payload,
+                        timeout=30,
+                    )
+                    retry_response.raise_for_status()
+                    retry_data = retry_response.json()
+
+                    retry_generation_id = retry_data.get("generate", {}).get("generationId")
+                    if not retry_generation_id:
+                        raise LeonardoGenerationError("Retry failed - no generation ID")
+
+                    log_info(f"Retry generation started: {retry_generation_id}")
+                    image_url = self._poll_for_completion(retry_generation_id)
+                    log_info(f"✅ Retry successful (without references): {image_url}")
+
+                except Exception as retry_error:
+                    log_error(f"❌ Retry without references also failed: {retry_error}")
+                    raise LeonardoGenerationError(f"Generation failed even without references: {retry_error}")
+            else:
+                # No references were used, just re-raise the original error
+                raise
 
         return {
             "image_url": image_url,
@@ -535,7 +568,20 @@ class LeonardoGenerator:
                     raise LeonardoGenerationError("Generation complete but no images returned")
 
             elif status == "FAILED":
-                raise LeonardoGenerationError(f"Generation failed: {data}")
+                # Extract more details about why it failed
+                gen_data = data.get("generations_by_pk", {})
+                prompt_mods = gen_data.get("prompt_moderations", [])
+
+                failure_info = {
+                    "status": status,
+                    "model": gen_data.get("sdVersion"),
+                    "prompt_moderations": prompt_mods,
+                }
+
+                if prompt_mods:
+                    log_error(f"Content moderation triggered: {prompt_mods}")
+
+                raise LeonardoGenerationError(f"Generation FAILED: {failure_info}")
 
             log_debug(f"Generation status: {status}, waiting...")
             time.sleep(self.poll_interval)
