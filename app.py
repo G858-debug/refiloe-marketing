@@ -7540,6 +7540,128 @@ def api_backfill_image_prompts():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/generate-missing-images', methods=['POST'])
+def api_generate_missing_images():
+    """Generate Leonardo AI images for all image posts that have image_url = None.
+
+    This backfills images for posts that were created before auto-generation was enabled.
+    """
+    log_info("=" * 60)
+    log_info("GENERATE MISSING IMAGES - ENDPOINT CALLED")
+    log_info("=" * 60)
+
+    try:
+        # Find all image posts without images
+        result = supabase_client.table('social_posts').select('*').eq(
+            'post_type', 'image'
+        ).is_(
+            'image_url', 'null'
+        ).in_(
+            'status', ['pending_approval', 'approved', 'scheduled']
+        ).execute()
+
+        posts_without_images = result.data if result.data else []
+
+        log_info(f"📊 Found {len(posts_without_images)} image posts without images")
+
+        if not posts_without_images:
+            return jsonify({
+                'success': True,
+                'message': 'All image posts already have images!',
+                'posts_updated': 0
+            })
+
+        # Check Leonardo API key
+        leonardo_api_key = os.getenv('LEONARDO_API_KEY')
+        if not leonardo_api_key:
+            log_error("❌ LEONARDO_API_KEY not set!")
+            return jsonify({
+                'success': False,
+                'error': 'Leonardo API key not configured'
+            }), 500
+
+        # Initialize Leonardo
+        from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
+        leonardo = LeonardoGenerator()
+
+        updated_count = 0
+        failed_count = 0
+
+        for post in posts_without_images:
+            post_id = post.get('id')
+            image_prompt = post.get('image_prompt', '')
+
+            # Get content_type from generation_prompt metadata
+            content_type = 'motivational'  # default
+            try:
+                gen_prompt = post.get('generation_prompt')
+                if gen_prompt:
+                    if isinstance(gen_prompt, str):
+                        gen_data = json.loads(gen_prompt)
+                    else:
+                        gen_data = gen_prompt
+                    content_type = gen_data.get('content_type', 'motivational')
+            except:
+                pass
+
+            log_info(f"🎨 Generating image for post {post_id}...")
+            log_info(f"   Content type: {content_type}")
+            log_info(f"   Prompt: {image_prompt[:80]}..." if image_prompt else "   No prompt - using default")
+
+            try:
+                # Use image_prompt if available, otherwise generate from caption
+                prompt = image_prompt or post.get('content_text', '')[:200]
+
+                result = leonardo.generate_image(
+                    prompt=prompt,
+                    content_type=content_type,
+                )
+
+                image_url = result.get('image_url')
+
+                if image_url:
+                    # Update post with image URL
+                    supabase_client.table('social_posts').update({
+                        'image_url': image_url,
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', post_id).execute()
+
+                    log_info(f"✅ Image generated for post {post_id}: {image_url}")
+                    updated_count += 1
+                else:
+                    log_error(f"❌ No image URL returned for post {post_id}")
+                    failed_count += 1
+
+            except LeonardoGenerationError as e:
+                log_error(f"❌ Leonardo error for post {post_id}: {e}")
+                failed_count += 1
+            except Exception as e:
+                log_error(f"❌ Unexpected error for post {post_id}: {e}")
+                failed_count += 1
+
+            # Small delay to avoid rate limiting
+            import time
+            time.sleep(2)
+
+        log_info("=" * 60)
+        log_info("GENERATE MISSING IMAGES - COMPLETE")
+        log_info(f"Updated: {updated_count}, Failed: {failed_count}")
+        log_info("=" * 60)
+
+        return jsonify({
+            'success': True,
+            'message': f'Generated images for {updated_count} posts ({failed_count} failed)',
+            'posts_updated': updated_count,
+            'posts_failed': failed_count
+        })
+
+    except Exception as e:
+        log_error(f"❌ Generate missing images failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""

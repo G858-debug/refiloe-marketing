@@ -923,6 +923,9 @@
             <button class="btn btn-secondary" onclick="backfillImagePrompts()">
                 🖼️ Backfill Image Prompts
             </button>
+            <button class="btn" onclick="generateMissingImages()" style="background-color: #10b981; border-color: #10b981; color: white;">
+                🖼️ Generate Missing Images
+            </button>
             <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
                 📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
             </a>
@@ -3636,6 +3639,35 @@
                 console.error('Error backfilling prompts:', error);
                 showToast('Failed to backfill image prompts', 'error');
             }
+        }
+
+        async function generateMissingImages() {
+            showModal(
+                'Generate Missing Images',
+                'This will generate Leonardo AI images for all image posts that are missing images. This may take several minutes (30-60 seconds per image). Continue?',
+                async () => {
+                    try {
+                        showToast('Generating missing images... This may take a few minutes.', 'info');
+
+                        const response = await fetch(`${API_BASE}/api/dashboard/generate-missing-images`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            showToast(`✅ ${data.message}`, 'success');
+                            await loadPosts();
+                        } else {
+                            showToast('❌ ' + (data.error || 'Failed to generate images'), 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showToast('❌ Error: ' + error.message, 'error');
+                    }
+                }
+            );
         }
 
         // ========== FILTER FUNCTIONALITY ==========
