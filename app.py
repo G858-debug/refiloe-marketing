@@ -6583,14 +6583,32 @@ def api_generate_weekly_content():
                         content_text = '\n\n'.join(caption_parts)
                     else:
                         content_text = str(video_script)  # Fallback
+                elif theme_config['post_type'] == 'carousel':
+                    # Carousel posts use carousel_style format
+                    content = generator.generate_single_post(
+                        theme=theme_config['theme'],
+                        format_type='carousel_style'
+                    )
+                    # Extract the actual content text - 'content' is primary, 'caption' is fallback
+                    content_text = content.get('content', '') or content.get('caption', '')
+                    if not content_text:
+                        log_warning(f"No content generated for carousel {theme_config['theme']}")
+                        content_text = ''
+                    video_script = None
+                    reel_title = content.get('title', '')  # Use title for carousel posts
                 else:
+                    # Image posts use single_image_with_caption format
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
                         format_type='single_image_with_caption'
                     )
-                    content_text = content.get('caption', '')
+                    # Extract the actual content text - 'content' is primary, 'caption' is fallback
+                    content_text = content.get('content', '') or content.get('caption', '')
+                    if not content_text:
+                        log_warning(f"No content generated for image {theme_config['theme']}")
+                        content_text = ''
                     video_script = None
-                    reel_title = content.get('title', '')  # Use title for non-video posts
+                    reel_title = content.get('title', '')  # Use title for image posts
 
                 metadata = {
                     "day": day_offset + 1,
