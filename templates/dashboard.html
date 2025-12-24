@@ -2269,13 +2269,19 @@
 
             let endpoint = `${API_BASE}/api/dashboard/generate-weekly-content`;
             let title = 'Generate Weekly Content';
+            // Posting times by content type (from config.yaml):
+            // - Carousels: 12:00 SAST
+            // - Videos: 13:30 SAST
+            // - Images: 14:00 SAST
+            // - Text cards: 18:00 SAST
+            // - Veo3: 19:30 SAST
             let message = 'This will ADD 7 new posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
 
             // Customize based on filter
             if (filter === 'text_card') {
                 endpoint = `${API_BASE}/api/dashboard/generate-weekly-text-cards`;
                 title = 'Generate Weekly Text Cards';
-                message = 'This will ADD 7 new text card posts to your content queue (1 per day at 16:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?';
+                message = 'This will ADD 7 new text card posts to your content queue (1 per day at 18:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?';
             } else if (filter === 'video') {
                 title = 'Generate Weekly Videos';
                 message = 'This will ADD 7 new video posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
