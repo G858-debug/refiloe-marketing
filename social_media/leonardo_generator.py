@@ -105,7 +105,7 @@ Style: Editorial lifestyle photography, warm color grading, Instagram-ready comp
 # NOTE: This description focuses on CONSISTENCY with the reference image,
 # NOT on defining physical characteristics (those come from the reference image itself)
 REFILOE_CHARACTER_DESCRIPTION = """
-If the character is wearing a sports top, it will have the word REFILOE in small font, just the same as image 1
+If the character is wearing a sports top, it will have the word REFILOE in small white font, just the same as image 1
 Face Consistency: Keep the person's facial features and braided hair exactly the same as Image 1, but
 - very very large breasts
 - very large butt
