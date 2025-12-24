@@ -25,6 +25,27 @@ posting_schedule:
     timezone: "SAST"
     description: "Sustained phase - quality over quantity"
 
+# =============================================================================
+# CONTENT TYPE POSTING TIMES (SAST)
+# =============================================================================
+# Based on CONTENT_GUIDELINES.md Section 7: Optimal Post Times
+# - Primary engagement window: 12:00-14:00 (lunch browsing, high saves)
+# - Secondary engagement window: 18:00-20:00 (evening scroll, casual consumption)
+#
+# Strategy: Different content types perform better at different times
+# - Carousels: Lunch time when users save educational content
+# - Videos: Peak lunch engagement for storytelling
+# - Images: Primary window for quick visual consumption
+# - Text cards: Evening for digestible, shareable quotes/tips
+# - Veo3 videos: Prime evening time for cinematic, inspirational content
+
+content_type_posting_times:
+  carousel: "12:00"      # Educational content during lunch browsing
+  video: "13:30"         # Storytelling at peak engagement
+  image: "14:00"         # Quick visual posts in primary window
+  text_card: "18:00"     # Evening scroll - quotes, tips, motivation
+  veo3: "19:30"          # Cinematic content for evening inspiration
+
 # Stories Configuration
 stories:
   enabled: true
