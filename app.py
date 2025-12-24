@@ -6548,7 +6548,7 @@ def api_generate_weekly_content():
 
                 # Generate content based on post type
                 if theme_config['post_type'] == 'video':
-                    content = generator.generate_video_script(
+                    content = generator.create_video_script(
                         theme=theme_config['theme'],
                         duration=45,
                         style='educational'
@@ -6559,7 +6559,7 @@ def api_generate_weekly_content():
                 else:
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
-                        post_format='single_image_with_caption'
+                        format_type='single_image_with_caption'
                     )
                     content_text = content.get('caption', '')
                     video_script = None
