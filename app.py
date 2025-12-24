@@ -6698,7 +6698,7 @@ def api_generate_text_card():
             'post_type': 'text_card',
             'scheduled_time': scheduled_time.isoformat(),
             'image_url': image_url,
-            'hashtags': content.get('hashtags', []),
+            'hashtags': json.dumps(content.get('hashtags', [])) if content.get('hashtags') else None,
             'generation_prompt': json.dumps(metadata),
             'status': 'pending_approval',
             'is_pinned': False
@@ -6880,7 +6880,7 @@ def api_generate_weekly_text_cards():
                     'post_type': 'text_card',
                     'scheduled_time': scheduled_time.isoformat(),
                     'image_url': image_url,
-                    'hashtags': content.get('hashtags', []),
+                    'hashtags': json.dumps(content.get('hashtags', [])) if content.get('hashtags') else None,
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
                     'is_pinned': False
