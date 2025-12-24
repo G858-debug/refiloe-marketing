@@ -70,17 +70,10 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
 
 # Base character description - appended to all Refiloe generations
 REFILOE_BASE_DESCRIPTION = """
+- use face of the character in the reference image
 - very large breasts
 - very large butt
-"""
-
-# Character description for Refiloe (used when no reference image available)
-REFILOE_CHARACTER_DESCRIPTION = """
-A confident South African woman in her early 30s with deep brown skin and warm undertones.
-She has a tightly coiled natural afro at medium length with a side part and subtle copper highlights.
-Dark brown almond-shaped eyes with subtle gold flecks, full well-defined eyebrows with a natural arch.
-Warm, expressive smile showing upper teeth. She wears gold hoop earrings and a minimalist wrist cuff.
-Upright, confident posture with relaxed shoulders.
+- confident
 """
 
 # Content type to prompt style mapping
