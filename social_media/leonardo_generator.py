@@ -73,6 +73,7 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
 
 # Refiloe character description for consistent image generation
 REFILOE_CHARACTER_DESCRIPTION = """
+If the character is wearing a sports top, it will have the word REFILOE in small font, just the same as image 1
 Face Consistency: Keep the person's facial features and braided hair exactly the same as Image 1, but
 - very very large breasts
 - very large butt
