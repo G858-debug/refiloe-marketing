@@ -7566,13 +7566,18 @@ def api_generate_image_for_post(post_id):
         if post.get('post_type') != 'image':
             return jsonify({'success': False, 'error': 'Post is not an image type'}), 400
 
-        # Check if it already has an image
-        if post.get('image_url'):
+        # Check if it already has an image (unless regenerate is requested)
+        regenerate = request.args.get('regenerate', 'false').lower() == 'true'
+
+        if post.get('image_url') and not regenerate:
             return jsonify({
                 'success': True,
                 'message': 'Post already has an image',
                 'image_url': post.get('image_url')
             })
+
+        if regenerate:
+            log_info(f"🔄 Regenerating image for post {post_id} (replacing existing)")
 
         # Get image prompt and content type
         image_prompt = post.get('image_prompt', '')
