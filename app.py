@@ -11,6 +11,7 @@ import atexit
 import uuid
 import json
 import traceback
+import threading
 from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -45,6 +46,16 @@ app.config.from_object(config[env])
 scheduler = None
 supabase_client = None
 _scheduler_initialized = False
+
+# Background generation status tracker
+generation_status = {
+    'is_running': False,
+    'successful': [],
+    'failed': [],
+    'start_time': None,
+    'start_date': None,
+    'end_date': None
+}
 
 heygen_avatar_status = {
     "checked": False,
@@ -6446,22 +6457,178 @@ If that resonates, hit follow. This is just the beginning.
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def generate_weekly_content_in_background(start_date, weekly_themes, global_hashtags, config, supabase_client_ref):
+    """Background worker function to generate weekly content without blocking the request."""
+    global generation_status
+    from social_media.content_generator import ContentGenerator
+    from database import SocialMediaDatabase
+    import os
+    import json
+    from datetime import timedelta
+    import pytz
+
+    SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
+        generator = ContentGenerator(config_path, supabase_client_ref)
+        db = SocialMediaDatabase(supabase_client_ref)
+
+        for day_offset, theme_config in enumerate(weekly_themes):
+            post_type = theme_config.get('post_type', 'video')
+            posting_time = get_posting_time_for_content_type(config, post_type)
+            hour, minute = map(int, posting_time.split(':'))
+            scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
+
+            try:
+                log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
+
+                # Generate content based on post type
+                if theme_config['post_type'] == 'video':
+                    script_data = generator.create_video_script(
+                        theme=theme_config['theme'],
+                        duration=45,
+                        style='educational'
+                    )
+
+                    # Extract the script array for generation_prompt
+                    video_script = script_data.get('script', [])
+                    reel_title = script_data.get('reel_title', '')
+
+                    # Generate a readable caption from the script for content_text
+                    if video_script and isinstance(video_script, list):
+                        caption_parts = []
+                        if reel_title:
+                            caption_parts.append(reel_title)
+                            caption_parts.append('')
+
+                        for segment in video_script[:3]:
+                            if isinstance(segment, dict) and segment.get('text'):
+                                caption_parts.append(segment['text'])
+
+                        hashtags = script_data.get('hashtags', [])
+                        if hashtags:
+                            caption_parts.append('')
+                            caption_parts.append(' '.join(hashtags))
+
+                        content_text = '\n\n'.join(caption_parts)
+                    else:
+                        content_text = str(video_script)
+                elif theme_config['post_type'] == 'carousel':
+                    content = generator.generate_single_post(
+                        theme=theme_config['theme'],
+                        format_type='carousel_style'
+                    )
+                    content_text = content.get('content', '') or content.get('caption', '')
+                    if not content_text:
+                        log_warning(f"No content generated for carousel {theme_config['theme']}")
+                        content_text = ''
+                    video_script = None
+                    reel_title = content.get('title', '')
+                else:
+                    content = generator.generate_single_post(
+                        theme=theme_config['theme'],
+                        format_type='single_image_with_caption'
+                    )
+                    content_text = content.get('content', '') or content.get('caption', '')
+                    if not content_text:
+                        log_warning(f"No content generated for image {theme_config['theme']}")
+                        content_text = ''
+                    video_script = None
+                    reel_title = content.get('title', '')
+
+                metadata = {
+                    "day": day_offset + 1,
+                    "theme_description": theme_config['description'],
+                    "video_script": video_script,
+                    "weekly_content": True,
+                    "target_audience": "global",
+                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
+                }
+
+                post_data = {
+                    'platform': 'facebook',
+                    'caption_text': content_text,
+                    'content_text': content_text,
+                    'post_type': theme_config['post_type'],
+                    'media_type': theme_config['post_type'],
+                    'scheduled_time': scheduled_time.isoformat(),
+                    'content_theme': theme_config['theme'],
+                    'title': reel_title,
+                    'reel_title': reel_title,
+                    'hashtags': global_hashtags,
+                    'generation_prompt': json.dumps(metadata),
+                    'status': 'pending_approval',
+                    'is_pinned': False,
+                    'image_prompt': generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
+                }
+
+                post_id = db.save_post(post_data)
+
+                if post_id:
+                    generation_status['successful'].append({
+                        'day': day_offset + 1,
+                        'theme': theme_config['theme'],
+                        'description': theme_config['description'],
+                        'date': scheduled_time.strftime('%Y-%m-%d'),
+                        'post_id': post_id
+                    })
+                    log_info(f"✅ [Background] Saved Day {day_offset + 1} post: {post_id}")
+                else:
+                    generation_status['failed'].append({
+                        'day': day_offset + 1,
+                        'theme': theme_config['theme'],
+                        'description': theme_config['description'],
+                        'date': scheduled_time.strftime('%Y-%m-%d'),
+                        'error': 'Failed to save post to database (no post_id returned)'
+                    })
+                    log_error(f"❌ [Background] Failed to save Day {day_offset + 1}: No post_id returned")
+
+            except Exception as e:
+                error_message = str(e)
+                generation_status['failed'].append({
+                    'day': day_offset + 1,
+                    'theme': theme_config['theme'],
+                    'description': theme_config['description'],
+                    'date': scheduled_time.strftime('%Y-%m-%d') if scheduled_time else 'unknown',
+                    'error': error_message
+                })
+                log_error(f"❌ [Background] Failed to generate Day {day_offset + 1}: {e}")
+                continue
+
+        log_info(f"✅ [Background] Weekly content generation complete. Success: {len(generation_status['successful'])}, Failed: {len(generation_status['failed'])}")
+
+    except Exception as e:
+        log_error(f"❌ [Background] Generate weekly content failed: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+    finally:
+        generation_status['is_running'] = False
+
+
 @app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
 def api_generate_weekly_content():
     """Generate 7 posts for the upcoming week (1 post per day) for global audience.
 
     This is ADDITIVE - it finds the latest scheduled post and adds 7 more days after it.
+    Runs in background to avoid timeout - check /api/dashboard/generation-status for progress.
     """
+    global generation_status
+
     log_info("📥 Request: /api/dashboard/generate-weekly-content")
+
+    # Check if generation is already running
+    if generation_status['is_running']:
+        return jsonify({
+            'success': False,
+            'message': 'Generation already in progress. Check /api/dashboard/generation-status for progress.',
+            'status': 'already_running'
+        }), 409
 
     if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
         return jsonify({'success': False, 'error': 'Database not connected'}), 503
 
     try:
-        from social_media.content_generator import ContentGenerator
-        from database import SocialMediaDatabase
-        import os
-        import json
         from datetime import datetime, timedelta
         import pytz
 
@@ -6506,13 +6673,6 @@ def api_generate_weekly_content():
             start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
             log_info(f"📅 No existing scheduled posts. Starting from: {start_date.date()}")
 
-        # Step 2: Generate 7 posts starting from start_date
-        log_info(f"📅 Generating weekly content (7 posts) starting {start_date.date()}...")
-
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
-        generator = ContentGenerator(config_path, supabase_client)
-        db = SocialMediaDatabase(supabase_client)
-
         # Weekly themes rotation - cycles through expanded theme categories
         weekly_themes = [
             {"theme": "mindset_psychology", "post_type": "video", "description": "Monday Motivation"},
@@ -6531,203 +6691,67 @@ def api_generate_weekly_content():
             "#FitnessIndustry", "#OnlineTrainer"
         ]
 
-        created_ids = []
-        successful_posts = []
-        failed_posts = []
-
-        # Get posting time based on content type from config
+        # Get posting time config
         from social_media.config_loader import load_config
         config = load_config('social_media/config.yaml')
 
-        for day_offset, theme_config in enumerate(weekly_themes):
-            post_type = theme_config.get('post_type', 'video')
-            posting_time = get_posting_time_for_content_type(config, post_type)
-            hour, minute = map(int, posting_time.split(':'))
-            scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
-
-            try:
-                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
-
-                # Generate content based on post type
-                if theme_config['post_type'] == 'video':
-                    script_data = generator.create_video_script(
-                        theme=theme_config['theme'],
-                        duration=45,
-                        style='educational'
-                    )
-
-                    # Extract the script array for generation_prompt
-                    video_script = script_data.get('script', [])
-                    reel_title = script_data.get('reel_title', '')
-
-                    # Generate a readable caption from the script for content_text
-                    # Extract text from each segment and join with line breaks
-                    if video_script and isinstance(video_script, list):
-                        caption_parts = []
-                        # Add the reel title as the hook
-                        if reel_title:
-                            caption_parts.append(reel_title)
-                            caption_parts.append('')  # blank line
-
-                        # Add the script text (first few segments for brevity)
-                        for segment in video_script[:3]:  # First 3 segments only
-                            if isinstance(segment, dict) and segment.get('text'):
-                                caption_parts.append(segment['text'])
-
-                        # Add hashtags from script_data
-                        hashtags = script_data.get('hashtags', [])
-                        if hashtags:
-                            caption_parts.append('')
-                            caption_parts.append(' '.join(hashtags))
-
-                        content_text = '\n\n'.join(caption_parts)
-                    else:
-                        content_text = str(video_script)  # Fallback
-                elif theme_config['post_type'] == 'carousel':
-                    # Carousel posts use carousel_style format
-                    content = generator.generate_single_post(
-                        theme=theme_config['theme'],
-                        format_type='carousel_style'
-                    )
-                    # Extract the actual content text - 'content' is primary, 'caption' is fallback
-                    content_text = content.get('content', '') or content.get('caption', '')
-                    if not content_text:
-                        log_warning(f"No content generated for carousel {theme_config['theme']}")
-                        content_text = ''
-                    video_script = None
-                    reel_title = content.get('title', '')  # Use title for carousel posts
-                else:
-                    # Image posts use single_image_with_caption format
-                    content = generator.generate_single_post(
-                        theme=theme_config['theme'],
-                        format_type='single_image_with_caption'
-                    )
-                    # Extract the actual content text - 'content' is primary, 'caption' is fallback
-                    content_text = content.get('content', '') or content.get('caption', '')
-                    if not content_text:
-                        log_warning(f"No content generated for image {theme_config['theme']}")
-                        content_text = ''
-                    video_script = None
-                    reel_title = content.get('title', '')  # Use title for image posts
-
-                metadata = {
-                    "day": day_offset + 1,
-                    "theme_description": theme_config['description'],
-                    "video_script": video_script,
-                    "weekly_content": True,
-                    "target_audience": "global",
-                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
-                }
-
-                post_data = {
-                    'platform': 'facebook',
-                    'caption_text': content_text,  # Primary field (what DB expects)
-                    'content_text': content_text,  # Compatibility field
-                    'post_type': theme_config['post_type'],
-                    'media_type': theme_config['post_type'],
-                    'scheduled_time': scheduled_time.isoformat(),
-                    'content_theme': theme_config['theme'],
-                    'title': reel_title,  # Save reel_title as title field for backwards compatibility
-                    'reel_title': reel_title,  # Save reel_title to the reel_title database field
-                    'hashtags': global_hashtags,
-                    'generation_prompt': json.dumps(metadata),
-                    'status': 'pending_approval',
-                    'is_pinned': False,
-                    'image_prompt': generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
-                }
-
-                post_id = db.save_post(post_data)
-
-                if post_id:
-                    created_ids.append(post_id)
-                    successful_posts.append({
-                        'day': day_offset + 1,
-                        'theme': theme_config['theme'],
-                        'description': theme_config['description'],
-                        'date': scheduled_time.strftime('%Y-%m-%d'),
-                        'post_id': post_id
-                    })
-                    log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
-                else:
-                    failed_posts.append({
-                        'day': day_offset + 1,
-                        'theme': theme_config['theme'],
-                        'description': theme_config['description'],
-                        'date': scheduled_time.strftime('%Y-%m-%d'),
-                        'error': 'Failed to save post to database (no post_id returned)'
-                    })
-                    log_error(f"❌ Failed to save Day {day_offset + 1}: No post_id returned")
-
-            except Exception as e:
-                error_message = str(e)
-                failed_posts.append({
-                    'day': day_offset + 1,
-                    'theme': theme_config['theme'],
-                    'description': theme_config['description'],
-                    'date': scheduled_time.strftime('%Y-%m-%d') if 'scheduled_time' in locals() else 'unknown',
-                    'error': error_message
-                })
-                log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
-                continue
-
-        # Calculate date range for message
+        # Calculate end date for response
         end_date = start_date + timedelta(days=6)
 
-        # Determine response based on results
-        total_attempted = len(weekly_themes)
-        success_count = len(successful_posts)
-        failure_count = len(failed_posts)
+        # Initialize generation status
+        generation_status['is_running'] = True
+        generation_status['successful'] = []
+        generation_status['failed'] = []
+        generation_status['start_time'] = datetime.now(SA_TZ).isoformat()
+        generation_status['start_date'] = start_date.strftime('%Y-%m-%d')
+        generation_status['end_date'] = end_date.strftime('%Y-%m-%d')
 
-        # Build response based on outcome
-        if failure_count == 0 and success_count == total_attempted:
-            # All 7 posts succeeded
-            return jsonify({
-                'success': True,
-                'generated': success_count,
-                'failed': 0,
-                'post_ids': created_ids,
-                'successful_posts': successful_posts,
-                'failed_posts': [],
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'✅ Successfully generated all {success_count} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}'
-            })
-        elif success_count > 0 and failure_count > 0:
-            # Partial success - some posts succeeded, some failed
-            failed_days = [f"Day {p['day']} ({p['description']})" for p in failed_posts]
-            return jsonify({
-                'success': True,
-                'generated': success_count,
-                'failed': failure_count,
-                'post_ids': created_ids,
-                'successful_posts': successful_posts,
-                'failed_posts': failed_posts,
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'⚠️ Partial success: Generated {success_count} of {total_attempted} posts. Failed: {", ".join(failed_days)}'
-            })
-        else:
-            # All posts failed
-            error_summary = "; ".join([f"Day {p['day']}: {p['error']}" for p in failed_posts[:3]])
-            if len(failed_posts) > 3:
-                error_summary += f" (and {len(failed_posts) - 3} more errors)"
-            return jsonify({
-                'success': False,
-                'generated': 0,
-                'failed': failure_count,
-                'post_ids': [],
-                'successful_posts': [],
-                'failed_posts': failed_posts,
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'❌ Failed to generate weekly content. Errors: {error_summary}'
-            }), 500
+        # Start background thread
+        thread = threading.Thread(
+            target=generate_weekly_content_in_background,
+            args=(start_date, weekly_themes, global_hashtags, config, supabase_client)
+        )
+        thread.daemon = True
+        thread.start()
+
+        log_info(f"🚀 Started background generation for {start_date.date()} - {end_date.date()}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Generation started in background for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}. Check status in 2-3 minutes.',
+            'status': 'processing',
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
+            'check_status_url': '/api/dashboard/generation-status'
+        })
 
     except Exception as e:
         log_error(f"❌ Generate weekly content failed: {e}")
         import traceback
         log_error(traceback.format_exc())
+        generation_status['is_running'] = False
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/generation-status', methods=['GET'])
+def api_generation_status():
+    """Get the status of background weekly content generation.
+
+    Returns:
+        JSON with is_running, successful count, failed count, and details
+    """
+    return jsonify({
+        'is_running': generation_status['is_running'],
+        'successful': len(generation_status['successful']),
+        'failed': len(generation_status['failed']),
+        'start_time': generation_status['start_time'],
+        'start_date': generation_status['start_date'],
+        'end_date': generation_status['end_date'],
+        'details': {
+            'successful_posts': generation_status['successful'],
+            'failed_posts': generation_status['failed']
+        }
+    })
 
 
 @app.route('/api/dashboard/generate-text-card', methods=['POST'])
