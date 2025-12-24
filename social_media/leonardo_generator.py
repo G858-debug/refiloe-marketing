@@ -68,6 +68,12 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
     return valid_width, valid_height
 
 
+# Base character description - appended to all Refiloe generations
+REFILOE_BASE_DESCRIPTION = """
+- very large breasts
+- very large butt
+"""
+
 # Character description for Refiloe (used when no reference image available)
 REFILOE_CHARACTER_DESCRIPTION = """
 A confident South African woman in her early 30s with deep brown skin and warm undertones.
@@ -458,6 +464,7 @@ class LeonardoGenerator:
             Professional social media carousel cover image.
 
             {REFILOE_CHARACTER_DESCRIPTION}
+            {REFILOE_BASE_DESCRIPTION}
 
             Setting: {config.get('setting', 'modern professional space')}.
             Outfit: {config.get('outfit', 'professional attire')}.
@@ -523,6 +530,7 @@ class LeonardoGenerator:
             Professional social media photo featuring Refiloe.
 
             {REFILOE_CHARACTER_DESCRIPTION}
+            {REFILOE_BASE_DESCRIPTION}
 
             Setting: {config.get('setting', 'professional setting')}.
             Outfit: {config.get('outfit', 'professional attire')}.
