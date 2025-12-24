@@ -6558,7 +6558,11 @@ def api_generate_weekly_content():
 
                     # Extract the script array for generation_prompt
                     video_script = script_data.get('script', [])
-                    reel_title = script_data.get('reel_title', '')
+                    reel_title = script_data.get('reel_title', '') or script_data.get('title', '')
+
+                    # Truncate title to 95 characters (leaving room for VARCHAR(100) limit)
+                    if len(reel_title) > 95:
+                        reel_title = reel_title[:92] + '...'
 
                     # Generate a readable caption from the script for content_text
                     # Extract text from each segment and join with line breaks
@@ -6590,7 +6594,11 @@ def api_generate_weekly_content():
                     )
                     content_text = content.get('caption', '')
                     video_script = None
-                    reel_title = content.get('title', '')  # Use title for non-video posts
+                    reel_title = content.get('title', '') or content.get('reel_title', '')  # Use title for non-video posts
+
+                    # Truncate title to 95 characters (leaving room for VARCHAR(100) limit)
+                    if len(reel_title) > 95:
+                        reel_title = reel_title[:92] + '...'
 
                 metadata = {
                     "day": day_offset + 1,
