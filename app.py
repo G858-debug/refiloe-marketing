@@ -7541,6 +7541,100 @@ def api_backfill_image_prompts():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/generate-image/<post_id>', methods=['POST'])
+def api_generate_image_for_post(post_id):
+    """Generate a Leonardo AI image for a specific post.
+
+    This endpoint:
+    1. Fetches the post from database
+    2. Generates image using Leonardo AI
+    3. Updates the post with the new image_url
+    4. Returns success/failure
+    """
+    log_info(f"🎨 Generate image requested for post: {post_id}")
+
+    try:
+        # Fetch the post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Verify it's an image post
+        if post.get('post_type') != 'image':
+            return jsonify({'success': False, 'error': 'Post is not an image type'}), 400
+
+        # Check if it already has an image
+        if post.get('image_url'):
+            return jsonify({
+                'success': True,
+                'message': 'Post already has an image',
+                'image_url': post.get('image_url')
+            })
+
+        # Get image prompt and content type
+        image_prompt = post.get('image_prompt', '')
+        content_type = 'motivational'  # default
+
+        try:
+            gen_prompt = post.get('generation_prompt')
+            if gen_prompt:
+                if isinstance(gen_prompt, str):
+                    gen_data = json.loads(gen_prompt)
+                else:
+                    gen_data = gen_prompt
+                content_type = gen_data.get('content_type', 'motivational')
+        except:
+            pass
+
+        # Use caption as prompt if no image_prompt
+        if not image_prompt:
+            image_prompt = post.get('content_text', '')[:500]
+
+        log_info(f"   Content type: {content_type}")
+        log_info(f"   Prompt: {image_prompt[:80]}...")
+
+        # Generate image
+        from social_media.leonardo_generator import LeonardoGenerator, LeonardoGenerationError
+
+        leonardo = LeonardoGenerator(supabase_client=supabase_client)
+
+        result = leonardo.generate_image(
+            prompt=image_prompt,
+            content_type=content_type,
+        )
+
+        image_url = result.get('image_url')
+
+        if not image_url:
+            return jsonify({'success': False, 'error': 'No image URL returned from Leonardo'}), 500
+
+        # Update post with image URL
+        supabase_client.table('social_posts').update({
+            'image_url': image_url,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', post_id).execute()
+
+        log_info(f"✅ Image generated for post {post_id}: {image_url}")
+
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'message': 'Image generated successfully'
+        })
+
+    except LeonardoGenerationError as e:
+        log_error(f"❌ Leonardo error for post {post_id}: {e}")
+        return jsonify({'success': False, 'error': f'Leonardo AI error: {str(e)}'}), 500
+    except Exception as e:
+        log_error(f"❌ Error generating image for post {post_id}: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/generate-missing-images', methods=['POST'])
 def api_generate_missing_images():
     """Generate Leonardo AI images for all image posts that have image_url = None.
