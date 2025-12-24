@@ -43,13 +43,15 @@ class CarouselTemplateGenerator:
     AVATAR_SIZE = (400, 400)
     ICON_SIZE = (200, 200)
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, supabase_client=None):
         """Initialize with config path and load branding from config.yaml
 
         Args:
             config_path: Path to config.yaml file
+            supabase_client: Optional Supabase client for reference image management
         """
         self.config = self._load_config(config_path)
+        self.supabase_client = supabase_client
         self.output_dir = Path("/tmp/carousel_slides")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -610,7 +612,7 @@ class CarouselTemplateGenerator:
         log_info(f"🎨 Generating Leonardo carousel cover for title: '{title[:50]}...' (content_type: {content_type})")
 
         try:
-            leonardo = LeonardoGenerator()
+            leonardo = LeonardoGenerator(supabase_client=self.supabase_client)
             result = leonardo.generate_carousel_cover(
                 title=title,
                 content_type=content_type,

@@ -18,7 +18,6 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
 
 from utils.logger import log_info, log_error, log_warning, log_debug
-from social_media.refiloe_reference_ids import REFILOE_REFERENCE_IDS
 
 
 LEONARDO_API_BASE = "https://cloud.leonardo.ai/api/rest/v2"
@@ -184,17 +183,27 @@ class LeonardoGenerator:
     def __init__(
         self,
         api_key: Optional[str] = None,
+        supabase_client = None,
     ):
         """Initialize Leonardo AI generator.
 
         Args:
             api_key: Leonardo AI API key. Defaults to LEONARDO_API_KEY env var.
+            supabase_client: Optional Supabase client for reference image management.
         """
         self.api_key = api_key or os.getenv("LEONARDO_API_KEY")
         if not self.api_key:
             raise ValueError("LEONARDO_API_KEY environment variable required")
 
         self.model_id = os.getenv("LEONARDO_MODEL_ID", DEFAULT_MODEL_ID)
+        self.supabase_client = supabase_client
+
+        # Initialize reference manager if supabase client provided
+        self.reference_manager = None
+        if supabase_client:
+            from social_media.leonardo_reference_manager import LeonardoReferenceManager
+            self.reference_manager = LeonardoReferenceManager(supabase_client, self.api_key)
+            log_info("Leonardo reference manager initialized")
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -207,8 +216,7 @@ class LeonardoGenerator:
         self.poll_interval = 5  # seconds
         self.poll_timeout = 120  # seconds
 
-        log_info(f"LeonardoGenerator initialized with Nano Banana Pro model: {self.model_id}")
-        log_info(f"Using {len(REFILOE_REFERENCE_IDS)} Refiloe reference images for character consistency")
+        log_info(f"LeonardoGenerator initialized with model: {self.model_id}")
 
     def generate_image(
         self,
@@ -266,23 +274,29 @@ class LeonardoGenerator:
             "public": False
         }
 
-        # Add reference image guidances for character consistency
-        # Only add if use_reference=True and content features Refiloe
+        # Add reference image for character consistency
         config = CONTENT_TYPE_PROMPTS.get(content_type, {})
         if use_reference and config.get("features_refiloe", True):
-            payload["parameters"]["guidances"] = {
-                "image_reference": [
-                    {
-                        "image": {
-                            "id": image_id,
-                            "type": "UPLOADED"
-                        },
-                        "strength": "MID"
-                    }
-                    for image_id in REFILOE_REFERENCE_IDS
-                ]
-            }
-            log_info(f"Using {len(REFILOE_REFERENCE_IDS)} Refiloe reference images with MID strength")
+            reference_id = None
+
+            if self.reference_manager:
+                reference_id = self.reference_manager.get_leonardo_id()
+
+            if reference_id:
+                payload["parameters"]["guidances"] = {
+                    "image_reference": [
+                        {
+                            "image": {
+                                "id": reference_id,
+                                "type": "UPLOADED"
+                            },
+                            "strength": "MID"
+                        }
+                    ]
+                }
+                log_info(f"Using reference image: {reference_id}")
+            else:
+                log_warning("No reference image available - generating without character reference")
 
         # Create generation
         try:
@@ -337,6 +351,10 @@ class LeonardoGenerator:
             if use_reference and "guidances" in payload.get("parameters", {}):
                 log_warning(f"⚠️ Generation failed with reference images: {e}")
                 log_warning("⚠️ Retrying WITHOUT reference images...")
+
+                # Invalidate the cached reference ID since it might be bad
+                if self.reference_manager:
+                    self.reference_manager.invalidate_cached_id()
 
                 # Remove guidances and retry
                 del payload["parameters"]["guidances"]
