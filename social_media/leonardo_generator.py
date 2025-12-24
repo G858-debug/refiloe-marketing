@@ -44,6 +44,12 @@ DEFAULT_NUM_IMAGES = 1
 # Fixed seed for consistent image generation
 LEONARDO_FIXED_SEED = 2114384218
 
+# Leonardo style preset - Portrait Cinematic
+LEONARDO_STYLE_PORTRAIT_CINEMATIC = "4edb03c9-8a26-4041-9d01-f85b5d4abd71"
+
+# Prompt enhancement setting
+LEONARDO_PROMPT_ENHANCE = "ON"  # Options: "OFF", "ON"
+
 
 def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
     """Adjust dimensions to Nano Banana Pro supported values.
@@ -270,7 +276,7 @@ class LeonardoGenerator:
             log_info(f"Adjusted dimensions from {width}x{height} to {valid_width}x{valid_height} for Leonardo compatibility")
 
         # Build V2 API payload for Nano Banana Pro
-        log_info(f"Using fixed seed: {LEONARDO_FIXED_SEED}")
+        log_info(f"Using fixed seed: {LEONARDO_FIXED_SEED}, style: Portrait Cinematic, prompt_enhance: {LEONARDO_PROMPT_ENHANCE}")
         payload = {
             "model": self.model_id,
             "parameters": {
@@ -278,8 +284,9 @@ class LeonardoGenerator:
                 "height": valid_height,
                 "prompt": enhanced_prompt,
                 "quantity": num_images,
-                "prompt_enhance": "OFF",
+                "prompt_enhance": LEONARDO_PROMPT_ENHANCE,
                 "seed": LEONARDO_FIXED_SEED,
+                "style_ids": [LEONARDO_STYLE_PORTRAIT_CINEMATIC],
             },
             "public": False
         }
