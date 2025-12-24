@@ -2275,7 +2275,7 @@
             // - Images: 14:00 SAST
             // - Text cards: 18:00 SAST
             // - Veo3: 19:30 SAST
-            let message = 'This will ADD 7 new posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+            let message = 'This will ADD 7 new posts to your content queue (1 per day at varied times based on content type (12:00-19:30 SAST)). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
 
             // Customize based on filter
             if (filter === 'text_card') {
@@ -2284,13 +2284,13 @@
                 message = 'This will ADD 7 new text card posts to your content queue (1 per day at 18:00 SAST). Posts are added after your latest scheduled text card date. This takes about 2 minutes. Continue?';
             } else if (filter === 'video') {
                 title = 'Generate Weekly Videos';
-                message = 'This will ADD 7 new video posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+                message = 'This will ADD 7 new video posts to your content queue (1 per day at 13:30 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
             } else if (filter === 'image') {
                 title = 'Generate Weekly Images';
                 message = 'This will ADD 7 new image posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
             } else if (filter === 'carousel') {
                 title = 'Generate Weekly Carousels';
-                message = 'This will ADD 7 new carousel posts to your content queue (1 per day at 14:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
+                message = 'This will ADD 7 new carousel posts to your content queue (1 per day at 12:00 SAST). Posts are added after your latest scheduled date. This takes about 2 minutes. Continue?';
             }
 
             // Show the modal with appropriate title and message
