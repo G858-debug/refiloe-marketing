@@ -1948,11 +1948,17 @@
                                 🎬 Regenerate
                             </button>
                         ` : ''}
-                        ${post.post_type === 'image' && !post.image_url ? `
-                            <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
-                                🎨 Generate Image
-                            </button>
-                        ` : ''}
+                        ${post.post_type === 'image' ? (
+                            !post.image_url ? `
+                                <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
+                                    🎨 Generate Image
+                                </button>
+                            ` : `
+                                <button class="btn btn-sm" onclick="regenerateImageForPost('${post.id}')" style="background-color: #8b5cf6; border-color: #8b5cf6; color: white;" title="Regenerate image using Leonardo AI">
+                                    🔄 Regenerate Image
+                                </button>
+                            `
+                        ) : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
@@ -1972,11 +1978,17 @@
                                 🎬 Regenerate
                             </button>
                         ` : ''}
-                        ${post.post_type === 'image' && !post.image_url ? `
-                            <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
-                                🎨 Generate Image
-                            </button>
-                        ` : ''}
+                        ${post.post_type === 'image' ? (
+                            !post.image_url ? `
+                                <button class="btn btn-success btn-sm" onclick="generateImageForPost('${post.id}')" title="Generate image using Leonardo AI">
+                                    🎨 Generate Image
+                                </button>
+                            ` : `
+                                <button class="btn btn-sm" onclick="regenerateImageForPost('${post.id}')" style="background-color: #8b5cf6; border-color: #8b5cf6; color: white;" title="Regenerate image using Leonardo AI">
+                                    🔄 Regenerate Image
+                                </button>
+                            `
+                        ) : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
@@ -3675,6 +3687,43 @@
                     await loadPosts();
                 } else {
                     showToast('❌ ' + (data.error || 'Failed to generate image'), 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('❌ Error: ' + error.message, 'error');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Regenerate image for a post that already has one
+        async function regenerateImageForPost(postId) {
+            if (!confirm('This will replace the existing image. Continue?')) {
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Regenerating...';
+            btn.disabled = true;
+
+            showToast('Regenerating image... This may take 30-60 seconds.', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/generate-image/${postId}?regenerate=true`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('✅ Image regenerated successfully!', 'success');
+                    await loadPosts();
+                } else {
+                    showToast('❌ ' + (data.error || 'Failed to regenerate image'), 'error');
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 }
