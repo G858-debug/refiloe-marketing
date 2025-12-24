@@ -6457,8 +6457,13 @@ If that resonates, hit follow. This is just the beginning.
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def generate_weekly_content_in_background(start_date, weekly_themes, global_hashtags, config, supabase_client_ref):
-    """Background worker function to generate weekly content without blocking the request."""
+def generate_weekly_content_in_background(start_date, weekly_themes, global_hashtags, config, supabase_client_ref, media_type='all'):
+    """Background worker function to generate weekly content without blocking the request.
+
+    Args:
+        media_type: Filter for post types. When not 'all', forces all posts to use this type.
+                   Options: 'all', 'image', 'video', 'carousel', 'text_card'
+    """
     global generation_status
     from social_media.content_generator import ContentGenerator
     from database import SocialMediaDatabase
@@ -6476,6 +6481,11 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
 
         for day_offset, theme_config in enumerate(weekly_themes):
             post_type = theme_config.get('post_type', 'video')
+
+            # Override post_type if media_type filter is specified
+            if media_type and media_type != 'all':
+                post_type = media_type
+
             posting_time = get_posting_time_for_content_type(config, post_type)
             hour, minute = map(int, posting_time.split(':'))
             scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
@@ -6484,7 +6494,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                 log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
 
                 # Generate content based on post type
-                if theme_config['post_type'] == 'video':
+                if post_type == 'video':
                     script_data = generator.create_video_script(
                         theme=theme_config['theme'],
                         duration=45,
@@ -6514,7 +6524,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         content_text = '\n\n'.join(caption_parts)
                     else:
                         content_text = str(video_script)
-                elif theme_config['post_type'] == 'carousel':
+                elif post_type == 'carousel':
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
                         format_type='carousel_style'
@@ -6543,15 +6553,15 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     "video_script": video_script,
                     "weekly_content": True,
                     "target_audience": "global",
-                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, theme_config['post_type'])
+                    "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, post_type)
                 }
 
                 post_data = {
                     'platform': 'facebook',
                     'caption_text': content_text,
                     'content_text': content_text,
-                    'post_type': theme_config['post_type'],
-                    'media_type': theme_config['post_type'],
+                    'post_type': post_type,
+                    'media_type': post_type,
                     'scheduled_time': scheduled_time.isoformat(),
                     'content_theme': theme_config['theme'],
                     'title': reel_title,
@@ -6634,6 +6644,10 @@ def api_generate_weekly_content():
 
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
+        # Extract media_type filter from request
+        data = request.get_json() or {}
+        media_type = data.get('media_type', 'all')
+
         # Step 1: Find the latest scheduled post date (don't delete anything!)
         log_info("📅 Finding latest scheduled post date...")
 
@@ -6709,7 +6723,7 @@ def api_generate_weekly_content():
         # Start background thread
         thread = threading.Thread(
             target=generate_weekly_content_in_background,
-            args=(start_date, weekly_themes, global_hashtags, config, supabase_client)
+            args=(start_date, weekly_themes, global_hashtags, config, supabase_client, media_type)
         )
         thread.daemon = True
         thread.start()
