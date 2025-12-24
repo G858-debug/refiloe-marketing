@@ -6550,14 +6550,39 @@ def api_generate_weekly_content():
 
                 # Generate content based on post type
                 if theme_config['post_type'] == 'video':
-                    content = generator.create_video_script(
+                    script_data = generator.create_video_script(
                         theme=theme_config['theme'],
                         duration=45,
                         style='educational'
                     )
-                    content_text = content.get('caption', content.get('script', ''))
-                    video_script = content.get('script', '')
-                    reel_title = content.get('reel_title', '')  # Capture reel_title from generated content
+
+                    # Extract the script array for generation_prompt
+                    video_script = script_data.get('script', [])
+                    reel_title = script_data.get('reel_title', '')
+
+                    # Generate a readable caption from the script for content_text
+                    # Extract text from each segment and join with line breaks
+                    if video_script and isinstance(video_script, list):
+                        caption_parts = []
+                        # Add the reel title as the hook
+                        if reel_title:
+                            caption_parts.append(reel_title)
+                            caption_parts.append('')  # blank line
+
+                        # Add the script text (first few segments for brevity)
+                        for segment in video_script[:3]:  # First 3 segments only
+                            if isinstance(segment, dict) and segment.get('text'):
+                                caption_parts.append(segment['text'])
+
+                        # Add hashtags from script_data
+                        hashtags = script_data.get('hashtags', [])
+                        if hashtags:
+                            caption_parts.append('')
+                            caption_parts.append(' '.join(hashtags))
+
+                        content_text = '\n\n'.join(caption_parts)
+                    else:
+                        content_text = str(video_script)  # Fallback
                 else:
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
@@ -6578,7 +6603,8 @@ def api_generate_weekly_content():
 
                 post_data = {
                     'platform': 'facebook',
-                    'content_text': content_text,
+                    'caption_text': content_text,  # Primary field (what DB expects)
+                    'content_text': content_text,  # Compatibility field
                     'post_type': theme_config['post_type'],
                     'scheduled_time': scheduled_time.isoformat(),
                     'content_theme': theme_config['theme'],
