@@ -547,3 +547,268 @@ def debug_seed_looks():
         import traceback
         log_error(traceback.format_exc())
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# =============================================================================
+# Leonardo Reference Images Management
+# =============================================================================
+
+@admin_bp.route("/api/init-reference-table", methods=["POST"])
+def init_reference_table():
+    """Initialize the leonardo_reference_images table.
+
+    Checks if the table exists and returns the SQL to create it if not.
+    """
+    client = _get_supabase_client()
+    if not client:
+        return jsonify({"success": False, "error": "Database not connected"}), 503
+
+    try:
+        log_info("Leonardo reference images table initialization requested")
+
+        # Check if table exists by trying to query it
+        try:
+            result = client.table('leonardo_reference_images').select('id').limit(1).execute()
+            return jsonify({
+                'success': True,
+                'message': 'Table already exists',
+                'has_data': len(result.data) > 0 if result.data else False
+            })
+        except Exception as e:
+            error_str = str(e).lower()
+            if "relation" in error_str and "does not exist" in error_str:
+                return jsonify({
+                    'success': False,
+                    'message': 'Table does not exist. Please create it manually in Supabase dashboard.',
+                    'sql': '''
+CREATE TABLE leonardo_reference_images (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    supabase_storage_url TEXT NOT NULL,
+    leonardo_image_id VARCHAR(100),
+    leonardo_upload_status VARCHAR(20) DEFAULT 'pending',
+    last_leonardo_upload TIMESTAMPTZ,
+    last_used TIMESTAMPTZ,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_leonardo_reference_images_name ON leonardo_reference_images(name);
+CREATE INDEX IF NOT EXISTS idx_leonardo_reference_images_is_active ON leonardo_reference_images(is_active);
+'''
+                })
+            # Re-raise if it's a different error
+            raise
+
+    except Exception as e:
+        log_error(f"Error initializing reference table: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route("/api/upload-reference-image", methods=["POST"])
+def upload_reference_image():
+    """Upload a reference image to Supabase Storage and register it in the database.
+
+    Expects multipart form data with:
+    - file: The image file
+    - name: Name for the reference image (e.g., "refiloe_main")
+    - description: Optional description
+    """
+    import tempfile
+    import os as os_module
+
+    client = _get_supabase_client()
+    if not client:
+        return jsonify({"success": False, "error": "Database not connected"}), 503
+
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        name = request.form.get('name', 'refiloe_reference')
+        description = request.form.get('description', '')
+
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        # Validate file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid file type. Allowed: {", ".join(allowed_extensions)}'
+            }), 400
+
+        # Save file temporarily
+        temp_path = os_module.path.join(tempfile.gettempdir(), file.filename)
+        file.save(temp_path)
+
+        try:
+            # Upload to Supabase Storage
+            from utils.supabase_storage import get_storage_client
+            storage = get_storage_client()
+
+            if not storage:
+                return jsonify({
+                    'success': False,
+                    'error': 'Storage client not available'
+                }), 503
+
+            # Generate unique storage path
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+            storage_path = f"reference_images/{name}_{timestamp}.{file_ext}"
+
+            # Determine content type
+            content_type = 'image/png' if file_ext == 'png' else 'image/jpeg'
+            if file_ext == 'webp':
+                content_type = 'image/webp'
+
+            success, public_url, error = storage.upload_file(
+                bucket='media',
+                file_path=temp_path,
+                destination_path=storage_path,
+                content_type=content_type
+            )
+
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': f'Storage upload failed: {error}'
+                }), 500
+
+            # Insert record into database
+            now = datetime.now(timezone.utc).isoformat()
+            record = {
+                'name': name,
+                'description': description,
+                'supabase_storage_url': public_url,
+                'leonardo_image_id': None,
+                'leonardo_upload_status': 'pending',
+                'is_active': True,
+                'created_at': now,
+                'updated_at': now
+            }
+
+            result = client.table('leonardo_reference_images').insert(record).execute()
+
+            if result.data:
+                log_info(f"Reference image uploaded: {name} -> {public_url}")
+                return jsonify({
+                    'success': True,
+                    'message': 'Reference image uploaded successfully',
+                    'record': result.data[0],
+                    'storage_url': public_url
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save record to database'
+                }), 500
+
+        finally:
+            # Clean up temp file
+            if os_module.path.exists(temp_path):
+                os_module.remove(temp_path)
+
+    except Exception as e:
+        log_error(f"Error uploading reference image: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route("/api/reference-images", methods=["GET"])
+def get_reference_images():
+    """API: Get all reference images."""
+    client = _get_supabase_client()
+    if not client:
+        return jsonify({"success": False, "error": "Database not connected"}), 503
+
+    try:
+        result = client.table("leonardo_reference_images").select("*").order("created_at", desc=True).execute()
+        images = result.data if result.data else []
+
+        log_info(f"Retrieved {len(images)} reference images")
+        return jsonify({
+            "success": True,
+            "images": images,
+            "count": len(images),
+        })
+
+    except Exception as e:
+        log_error(f"Error fetching reference images: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@admin_bp.route("/api/reference-images/<image_id>", methods=["DELETE"])
+def delete_reference_image(image_id: str):
+    """API: Delete a reference image."""
+    client = _get_supabase_client()
+    if not client:
+        return jsonify({"success": False, "error": "Database not connected"}), 503
+
+    try:
+        # Get the record first to find the storage URL
+        check = client.table("leonardo_reference_images").select("*").eq("id", image_id).single().execute()
+
+        if not check.data:
+            return jsonify({"success": False, "error": "Image not found"}), 404
+
+        # Delete from database
+        result = client.table("leonardo_reference_images").delete().eq("id", image_id).execute()
+
+        log_info(f"Deleted reference image: {image_id}")
+
+        # Note: We don't delete from storage to keep backups
+        return jsonify({
+            "success": True,
+            "message": "Reference image deleted successfully",
+            "note": "Storage file retained for backup purposes"
+        })
+
+    except Exception as e:
+        log_error(f"Error deleting reference image {image_id}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@admin_bp.route("/api/reference-images/<image_id>/toggle-active", methods=["POST"])
+def toggle_reference_image_active(image_id: str):
+    """API: Toggle the active status of a reference image."""
+    client = _get_supabase_client()
+    if not client:
+        return jsonify({"success": False, "error": "Database not connected"}), 503
+
+    try:
+        # Get current status
+        check = client.table("leonardo_reference_images").select("is_active").eq("id", image_id).single().execute()
+
+        if not check.data:
+            return jsonify({"success": False, "error": "Image not found"}), 404
+
+        new_status = not check.data.get("is_active", True)
+        now = datetime.now(timezone.utc).isoformat()
+
+        result = client.table("leonardo_reference_images").update({
+            "is_active": new_status,
+            "updated_at": now,
+        }).eq("id", image_id).execute()
+
+        if result.data:
+            status_text = "activated" if new_status else "deactivated"
+            log_info(f"Reference image {image_id} {status_text}")
+            return jsonify({
+                "success": True,
+                "image": result.data[0],
+                "message": f"Reference image {status_text}",
+            })
+        else:
+            return jsonify({"success": False, "error": "Failed to update"}), 500
+
+    except Exception as e:
+        log_error(f"Error toggling reference image status: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
