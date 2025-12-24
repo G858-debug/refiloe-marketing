@@ -70,6 +70,7 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
 
 # Refiloe character description for consistent image generation
 REFILOE_CHARACTER_DESCRIPTION = """
+Face Consistency: Keep the person's facial features and braided hair exactly the same as Image 1, but
 She wears gold hoop earrings and a minimalist wrist cuff.
 Upright, confident posture with relaxed shoulders.
 """
@@ -77,9 +78,9 @@ Upright, confident posture with relaxed shoulders.
 # Base character description - appended to all Refiloe generations
 REFILOE_BASE_DESCRIPTION = """
 - use face of the character in the reference image
-- very large breasts
+- very very large breasts
 - very large butt
-- confident
+- thick thighs
 """
 
 # Content type to prompt style mapping
