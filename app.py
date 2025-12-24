@@ -6457,12 +6457,18 @@ If that resonates, hit follow. This is just the beginning.
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def generate_weekly_content_in_background(start_date, weekly_themes, global_hashtags, config, supabase_client_ref, media_type='all'):
+def generate_weekly_content_in_background(start_date, weekly_themes, global_hashtags, config, supabase_client_ref, media_type='all', existing_dates=None):
     """Background worker function to generate weekly content without blocking the request.
 
     Args:
+        start_date: The starting date (today) for content generation
+        weekly_themes: List of theme configurations for each day
+        global_hashtags: Hashtags to include in posts
+        config: Configuration dictionary
+        supabase_client_ref: Supabase client reference
         media_type: Filter for post types. When not 'all', forces all posts to use this type.
                    Options: 'all', 'image', 'video', 'carousel', 'text_card'
+        existing_dates: Set of dates that already have posts of the specified type (to skip)
     """
     global generation_status
     from social_media.content_generator import ContentGenerator
@@ -6473,6 +6479,10 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
     import pytz
 
     SA_TZ = pytz.timezone('Africa/Johannesburg')
+
+    # Initialize existing_dates if not provided
+    if existing_dates is None:
+        existing_dates = set()
 
     try:
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
@@ -6490,8 +6500,21 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
             hour, minute = map(int, posting_time.split(':'))
             scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
 
+            # Check if this date already has a post of the specified type - skip if so
+            scheduled_date = scheduled_time.date()
+            if scheduled_date in existing_dates:
+                log_info(f"⏭️ [Background] Skipping Day {day_offset + 1} ({scheduled_date}): Already has {post_type} post scheduled")
+                generation_status['skipped'].append({
+                    'day': day_offset + 1,
+                    'theme': theme_config['theme'],
+                    'description': theme_config['description'],
+                    'date': scheduled_date.isoformat(),
+                    'reason': f'Already has {post_type} post scheduled'
+                })
+                continue
+
             try:
-                log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
+                log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_date}")
 
                 # Generate content based on post type
                 if post_type == 'video':
@@ -6606,7 +6629,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                 log_error(f"❌ [Background] Failed to generate Day {day_offset + 1}: {e}")
                 continue
 
-        log_info(f"✅ [Background] Weekly content generation complete. Success: {len(generation_status['successful'])}, Failed: {len(generation_status['failed'])}")
+        log_info(f"✅ [Background] Weekly content generation complete. Success: {len(generation_status['successful'])}, Skipped: {len(generation_status.get('skipped', []))}, Failed: {len(generation_status['failed'])}")
 
     except Exception as e:
         log_error(f"❌ [Background] Generate weekly content failed: {e}")
@@ -6618,9 +6641,12 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
 
 @app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
 def api_generate_weekly_content():
-    """Generate 7 posts for the upcoming week (1 post per day) for global audience.
+    """Generate posts for the next 7 days, filling gaps where posts are missing.
 
-    This is ADDITIVE - it finds the latest scheduled post and adds 7 more days after it.
+    This is GAP-FILLING - it starts from today and only generates posts for days
+    that don't already have a post of the specified type (media_type) scheduled.
+    Days with existing posts are skipped.
+
     Runs in background to avoid timeout - check /api/dashboard/generation-status for progress.
     """
     global generation_status
@@ -6648,44 +6674,53 @@ def api_generate_weekly_content():
         data = request.get_json() or {}
         media_type = data.get('media_type', 'all')
 
-        # Step 1: Find the latest scheduled post date (don't delete anything!)
-        log_info("📅 Finding latest scheduled post date...")
+        # Step 1: Start from TODAY and find existing posts for the next 7 days
+        today = datetime.now(SA_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = today
+        end_date_range = today + timedelta(days=7)
 
-        # Fetch all posts (SupabaseRestClient doesn't support .in_() filtering)
-        result = supabase_client.table('social_posts').select('scheduled_time, status').order(
-            'scheduled_time', desc=True
+        log_info(f"📅 Checking existing posts from {today.date()} to {end_date_range.date()} for post_type='{media_type}'")
+
+        # Fetch posts scheduled within the next 7 days
+        result = supabase_client.table('social_posts').select('scheduled_time, status, post_type').order(
+            'scheduled_time', desc=False
         ).execute()
 
-        # Filter in Python for active statuses
-        latest_scheduled = None
+        # Filter in Python for:
+        # - Active statuses
+        # - Matching post_type (if media_type filter specified)
+        # - Within the next 7 days
+        existing_dates = set()
         if result.data:
             active_statuses = ['pending_approval', 'scheduled', 'approved']
-            filtered_posts = [
-                post for post in result.data
-                if post.get('status') in active_statuses and post.get('scheduled_time')
-            ]
-            if filtered_posts:
-                latest_scheduled = filtered_posts[0]['scheduled_time']
+            for post in result.data:
+                if post.get('status') not in active_statuses:
+                    continue
+                if not post.get('scheduled_time'):
+                    continue
 
-        if latest_scheduled:
-            # Parse the latest scheduled time
-            try:
-                if isinstance(latest_scheduled, str):
-                    # Handle various ISO format variations
-                    latest_date = datetime.fromisoformat(latest_scheduled.replace('Z', '+00:00'))
-                    latest_date = latest_date.astimezone(SA_TZ)
-                else:
-                    latest_date = latest_scheduled
-                # Start from the day after the latest scheduled post
-                start_date = latest_date.replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
-                log_info(f"📅 Latest scheduled post: {latest_date.date()}. Starting new batch from: {start_date.date()}")
-            except Exception as e:
-                log_warning(f"⚠️ Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
-                start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        else:
-            # No existing posts, start from tomorrow
-            start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            log_info(f"📅 No existing scheduled posts. Starting from: {start_date.date()}")
+                # Filter by post_type if media_type is specified
+                if media_type and media_type != 'all':
+                    if post.get('post_type') != media_type:
+                        continue
+
+                # Parse the scheduled time and extract the date
+                try:
+                    scheduled_str = post['scheduled_time']
+                    if isinstance(scheduled_str, str):
+                        scheduled_dt = datetime.fromisoformat(scheduled_str.replace('Z', '+00:00'))
+                        scheduled_dt = scheduled_dt.astimezone(SA_TZ)
+                    else:
+                        scheduled_dt = scheduled_str
+
+                    # Check if within the next 7 days
+                    if today <= scheduled_dt < end_date_range:
+                        existing_dates.add(scheduled_dt.date())
+                except Exception as e:
+                    log_warning(f"⚠️ Could not parse scheduled_time '{post.get('scheduled_time')}': {e}")
+                    continue
+
+        log_info(f"📅 Found {len(existing_dates)} existing {media_type} posts in next 7 days: {sorted(existing_dates)}")
 
         # Weekly themes rotation - cycles through expanded theme categories
         weekly_themes = [
@@ -6709,33 +6744,40 @@ def api_generate_weekly_content():
         from social_media.config_loader import load_config
         config = load_config('social_media/config.yaml')
 
-        # Calculate end date for response
+        # Calculate end date for response (next 7 days starting from today)
         end_date = start_date + timedelta(days=6)
+
+        # Calculate how many posts will be generated vs skipped
+        days_to_fill = 7 - len(existing_dates)
 
         # Initialize generation status
         generation_status['is_running'] = True
         generation_status['successful'] = []
         generation_status['failed'] = []
+        generation_status['skipped'] = []
         generation_status['start_time'] = datetime.now(SA_TZ).isoformat()
         generation_status['start_date'] = start_date.strftime('%Y-%m-%d')
         generation_status['end_date'] = end_date.strftime('%Y-%m-%d')
+        generation_status['existing_dates'] = [d.isoformat() for d in sorted(existing_dates)]
 
-        # Start background thread
+        # Start background thread with existing_dates
         thread = threading.Thread(
             target=generate_weekly_content_in_background,
-            args=(start_date, weekly_themes, global_hashtags, config, supabase_client, media_type)
+            args=(start_date, weekly_themes, global_hashtags, config, supabase_client, media_type, existing_dates)
         )
         thread.daemon = True
         thread.start()
 
-        log_info(f"🚀 Started background generation for {start_date.date()} - {end_date.date()}")
+        log_info(f"🚀 Started background generation for {start_date.date()} - {end_date.date()} (filling {days_to_fill} gaps, skipping {len(existing_dates)} existing)")
 
         return jsonify({
             'success': True,
-            'message': f'Generation started in background for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}. Check status in 2-3 minutes.',
+            'message': f'Generation started for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}. Filling {days_to_fill} gaps, skipping {len(existing_dates)} existing posts.',
             'status': 'processing',
             'start_date': start_date.strftime('%Y-%m-%d'),
             'end_date': end_date.strftime('%Y-%m-%d'),
+            'days_to_generate': days_to_fill,
+            'existing_dates': [d.isoformat() for d in sorted(existing_dates)],
             'check_status_url': '/api/dashboard/generation-status'
         })
 
@@ -6752,17 +6794,20 @@ def api_generation_status():
     """Get the status of background weekly content generation.
 
     Returns:
-        JSON with is_running, successful count, failed count, and details
+        JSON with is_running, successful count, skipped count, failed count, and details
     """
     return jsonify({
         'is_running': generation_status['is_running'],
         'successful': len(generation_status['successful']),
+        'skipped': len(generation_status.get('skipped', [])),
         'failed': len(generation_status['failed']),
         'start_time': generation_status['start_time'],
         'start_date': generation_status['start_date'],
         'end_date': generation_status['end_date'],
+        'existing_dates': generation_status.get('existing_dates', []),
         'details': {
             'successful_posts': generation_status['successful'],
+            'skipped_posts': generation_status.get('skipped', []),
             'failed_posts': generation_status['failed']
         }
     })
