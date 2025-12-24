@@ -11,6 +11,7 @@ import atexit
 import uuid
 import json
 import traceback
+import threading
 from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -45,6 +46,22 @@ app.config.from_object(config[env])
 scheduler = None
 supabase_client = None
 _scheduler_initialized = False
+
+# Background generation status tracking
+generation_status = {
+    "is_running": False,
+    "started_at": None,
+    "completed_at": None,
+    "total_posts": 0,
+    "generated_count": 0,
+    "failed_count": 0,
+    "successful_posts": [],
+    "failed_posts": [],
+    "error": None,
+    "start_date": None,
+    "end_date": None
+}
+generation_lock = threading.Lock()
 
 heygen_avatar_status = {
     "checked": False,
@@ -6446,16 +6463,12 @@ If that resonates, hit follow. This is just the beginning.
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
-def api_generate_weekly_content():
-    """Generate 7 posts for the upcoming week (1 post per day) for global audience.
+def _generate_weekly_content_background():
+    """Background worker function to generate weekly content.
 
-    This is ADDITIVE - it finds the latest scheduled post and adds 7 more days after it.
+    This runs in a separate thread and updates generation_status as it progresses.
     """
-    log_info("📥 Request: /api/dashboard/generate-weekly-content")
-
-    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
-        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+    global generation_status, supabase_client
 
     try:
         from social_media.content_generator import ContentGenerator
@@ -6468,7 +6481,7 @@ def api_generate_weekly_content():
         SA_TZ = pytz.timezone('Africa/Johannesburg')
 
         # Step 1: Find the latest scheduled post date (don't delete anything!)
-        log_info("📅 Finding latest scheduled post date...")
+        log_info("📅 [Background] Finding latest scheduled post date...")
 
         # Fetch all posts (SupabaseRestClient doesn't support .in_() filtering)
         result = supabase_client.table('social_posts').select('scheduled_time, status').order(
@@ -6497,17 +6510,23 @@ def api_generate_weekly_content():
                     latest_date = latest_scheduled
                 # Start from the day after the latest scheduled post
                 start_date = latest_date.replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
-                log_info(f"📅 Latest scheduled post: {latest_date.date()}. Starting new batch from: {start_date.date()}")
+                log_info(f"📅 [Background] Latest scheduled post: {latest_date.date()}. Starting new batch from: {start_date.date()}")
             except Exception as e:
-                log_warning(f"⚠️ Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
+                log_warning(f"⚠️ [Background] Could not parse latest date '{latest_scheduled}': {e}. Using tomorrow.")
                 start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
         else:
             # No existing posts, start from tomorrow
             start_date = datetime.now(SA_TZ).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            log_info(f"📅 No existing scheduled posts. Starting from: {start_date.date()}")
+            log_info(f"📅 [Background] No existing scheduled posts. Starting from: {start_date.date()}")
+
+        # Update status with date range
+        end_date = start_date + timedelta(days=6)
+        with generation_lock:
+            generation_status["start_date"] = start_date.strftime('%Y-%m-%d')
+            generation_status["end_date"] = end_date.strftime('%Y-%m-%d')
 
         # Step 2: Generate 7 posts starting from start_date
-        log_info(f"📅 Generating weekly content (7 posts) starting {start_date.date()}...")
+        log_info(f"📅 [Background] Generating weekly content (7 posts) starting {start_date.date()}...")
 
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
         generator = ContentGenerator(config_path, supabase_client)
@@ -6546,7 +6565,7 @@ def api_generate_weekly_content():
             scheduled_time = start_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=day_offset)
 
             try:
-                log_info(f"📝 Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
+                log_info(f"📝 [Background] Generating Day {day_offset + 1}: {theme_config['description']} for {scheduled_time.date()}")
 
                 # Generate content based on post type
                 if theme_config['post_type'] == 'video':
@@ -6595,94 +6614,171 @@ def api_generate_weekly_content():
 
                 if post_id:
                     created_ids.append(post_id)
-                    successful_posts.append({
+                    post_info = {
                         'day': day_offset + 1,
                         'theme': theme_config['theme'],
                         'description': theme_config['description'],
                         'date': scheduled_time.strftime('%Y-%m-%d'),
                         'post_id': post_id
-                    })
-                    log_info(f"✅ Saved Day {day_offset + 1} post: {post_id}")
+                    }
+                    successful_posts.append(post_info)
+                    log_info(f"✅ [Background] Saved Day {day_offset + 1} post: {post_id}")
+
+                    # Update status after each successful post
+                    with generation_lock:
+                        generation_status["generated_count"] = len(successful_posts)
+                        generation_status["successful_posts"] = successful_posts.copy()
                 else:
-                    failed_posts.append({
+                    post_info = {
                         'day': day_offset + 1,
                         'theme': theme_config['theme'],
                         'description': theme_config['description'],
                         'date': scheduled_time.strftime('%Y-%m-%d'),
                         'error': 'Failed to save post to database (no post_id returned)'
-                    })
-                    log_error(f"❌ Failed to save Day {day_offset + 1}: No post_id returned")
+                    }
+                    failed_posts.append(post_info)
+                    log_error(f"❌ [Background] Failed to save Day {day_offset + 1}: No post_id returned")
+
+                    # Update status after each failed post
+                    with generation_lock:
+                        generation_status["failed_count"] = len(failed_posts)
+                        generation_status["failed_posts"] = failed_posts.copy()
 
             except Exception as e:
                 error_message = str(e)
-                failed_posts.append({
+                post_info = {
                     'day': day_offset + 1,
                     'theme': theme_config['theme'],
                     'description': theme_config['description'],
                     'date': scheduled_time.strftime('%Y-%m-%d') if 'scheduled_time' in locals() else 'unknown',
                     'error': error_message
-                })
-                log_error(f"❌ Failed to generate Day {day_offset + 1}: {e}")
+                }
+                failed_posts.append(post_info)
+                log_error(f"❌ [Background] Failed to generate Day {day_offset + 1}: {e}")
+
+                # Update status after each failed post
+                with generation_lock:
+                    generation_status["failed_count"] = len(failed_posts)
+                    generation_status["failed_posts"] = failed_posts.copy()
                 continue
 
-        # Calculate date range for message
-        end_date = start_date + timedelta(days=6)
+        # Mark generation as complete
+        with generation_lock:
+            generation_status["is_running"] = False
+            generation_status["completed_at"] = datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+            generation_status["generated_count"] = len(successful_posts)
+            generation_status["failed_count"] = len(failed_posts)
+            generation_status["successful_posts"] = successful_posts
+            generation_status["failed_posts"] = failed_posts
 
-        # Determine response based on results
-        total_attempted = len(weekly_themes)
-        success_count = len(successful_posts)
-        failure_count = len(failed_posts)
-
-        # Build response based on outcome
-        if failure_count == 0 and success_count == total_attempted:
-            # All 7 posts succeeded
-            return jsonify({
-                'success': True,
-                'generated': success_count,
-                'failed': 0,
-                'post_ids': created_ids,
-                'successful_posts': successful_posts,
-                'failed_posts': [],
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'✅ Successfully generated all {success_count} posts for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")}'
-            })
-        elif success_count > 0 and failure_count > 0:
-            # Partial success - some posts succeeded, some failed
-            failed_days = [f"Day {p['day']} ({p['description']})" for p in failed_posts]
-            return jsonify({
-                'success': True,
-                'generated': success_count,
-                'failed': failure_count,
-                'post_ids': created_ids,
-                'successful_posts': successful_posts,
-                'failed_posts': failed_posts,
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'⚠️ Partial success: Generated {success_count} of {total_attempted} posts. Failed: {", ".join(failed_days)}'
-            })
-        else:
-            # All posts failed
-            error_summary = "; ".join([f"Day {p['day']}: {p['error']}" for p in failed_posts[:3]])
-            if len(failed_posts) > 3:
-                error_summary += f" (and {len(failed_posts) - 3} more errors)"
-            return jsonify({
-                'success': False,
-                'generated': 0,
-                'failed': failure_count,
-                'post_ids': [],
-                'successful_posts': [],
-                'failed_posts': failed_posts,
-                'start_date': start_date.strftime('%Y-%m-%d'),
-                'end_date': end_date.strftime('%Y-%m-%d'),
-                'message': f'❌ Failed to generate weekly content. Errors: {error_summary}'
-            }), 500
+        log_info(f"✅ [Background] Weekly content generation complete: {len(successful_posts)} succeeded, {len(failed_posts)} failed")
 
     except Exception as e:
-        log_error(f"❌ Generate weekly content failed: {e}")
+        log_error(f"❌ [Background] Generate weekly content failed: {e}")
         import traceback
         log_error(traceback.format_exc())
-        return jsonify({'success': False, 'error': str(e)}), 500
+
+        with generation_lock:
+            generation_status["is_running"] = False
+            generation_status["completed_at"] = datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat()
+            generation_status["error"] = str(e)
+
+
+@app.route('/api/dashboard/generate-weekly-content', methods=['POST'])
+def api_generate_weekly_content():
+    """Generate 7 posts for the upcoming week (1 post per day) for global audience.
+
+    This is ADDITIVE - it finds the latest scheduled post and adds 7 more days after it.
+    Generation happens in a background thread - check /api/dashboard/generation-status for progress.
+    """
+    global generation_status
+
+    log_info("📥 Request: /api/dashboard/generate-weekly-content")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    # Check if generation is already running
+    with generation_lock:
+        if generation_status["is_running"]:
+            return jsonify({
+                'success': False,
+                'error': 'Generation already in progress',
+                'message': 'Weekly content generation is already running. Check /api/dashboard/generation-status for progress.',
+                'status': 'already_running'
+            }), 409
+
+        # Reset status for new generation
+        generation_status = {
+            "is_running": True,
+            "started_at": datetime.now(pytz.timezone('Africa/Johannesburg')).isoformat(),
+            "completed_at": None,
+            "total_posts": 7,
+            "generated_count": 0,
+            "failed_count": 0,
+            "successful_posts": [],
+            "failed_posts": [],
+            "error": None,
+            "start_date": None,
+            "end_date": None
+        }
+
+    # Start background thread
+    thread = threading.Thread(target=_generate_weekly_content_background, daemon=True)
+    thread.start()
+
+    log_info("🚀 Started weekly content generation in background thread")
+
+    return jsonify({
+        'success': True,
+        'message': 'Generation started in background. Check back in 2-3 minutes.',
+        'status': 'processing',
+        'status_url': '/api/dashboard/generation-status'
+    })
+
+
+@app.route('/api/dashboard/generation-status', methods=['GET'])
+def api_generation_status():
+    """Check the status of the background weekly content generation.
+
+    Returns current progress including:
+    - is_running: Whether generation is still in progress
+    - generated_count: How many posts have been generated so far
+    - failed_count: How many posts failed to generate
+    - successful_posts: Details of successfully generated posts
+    - failed_posts: Details of failed posts with error messages
+    - error: Any fatal error that stopped the entire process
+    """
+    log_info("📥 Request: /api/dashboard/generation-status")
+
+    with generation_lock:
+        status_copy = generation_status.copy()
+        status_copy["successful_posts"] = generation_status["successful_posts"].copy()
+        status_copy["failed_posts"] = generation_status["failed_posts"].copy()
+
+    # Determine overall status
+    if status_copy["is_running"]:
+        status_copy["status"] = "processing"
+        progress = f"{status_copy['generated_count']}/{status_copy['total_posts']}"
+        status_copy["message"] = f"Generating posts... {progress} complete"
+    elif status_copy["error"]:
+        status_copy["status"] = "error"
+        status_copy["message"] = f"Generation failed: {status_copy['error']}"
+    elif status_copy["completed_at"]:
+        if status_copy["failed_count"] == 0:
+            status_copy["status"] = "completed"
+            status_copy["message"] = f"Successfully generated all {status_copy['generated_count']} posts"
+        elif status_copy["generated_count"] > 0:
+            status_copy["status"] = "partial"
+            status_copy["message"] = f"Partially complete: {status_copy['generated_count']} succeeded, {status_copy['failed_count']} failed"
+        else:
+            status_copy["status"] = "failed"
+            status_copy["message"] = f"All {status_copy['failed_count']} posts failed to generate"
+    else:
+        status_copy["status"] = "idle"
+        status_copy["message"] = "No generation in progress"
+
+    return jsonify(status_copy)
 
 
 @app.route('/api/dashboard/generate-text-card', methods=['POST'])
