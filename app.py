@@ -6935,7 +6935,7 @@ def api_generate_weekly_text_cards():
             'first_date': start_date.strftime('%Y-%m-%d'),
             'last_date': end_date.strftime('%Y-%m-%d'),
             'post_ids': created_ids,
-            'message': f'✅ Created {len(created_ids)} text cards for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} (16:00 SAST daily). Skipped {skipped_count}.'
+            'message': f'✅ Created {len(created_ids)} text cards for {start_date.strftime("%b %d")} - {end_date.strftime("%b %d")} ({text_card_time} SAST daily). Skipped {skipped_count}.'
         })
 
     except Exception as e:
