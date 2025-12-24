@@ -49,13 +49,34 @@ platform_settings:
     lighting_preset: "studio_warm_front"
     camera_framing: "Mid-shot waist up; slight left-to-right pan optional"
     notes: "Sync voice pitch shift to -2 semitones for calmer segments."
+  # NOTE: Physical characteristics (age, skin tone, hair) are NOT included in image prompts.
+  # They are handled by: 1) Reference images, 2) character_specifications section above
+  # These templates focus on: setting, outfit, pose, mood, lighting, accessories
   flux1_prompt_templates:
     default: |
-      Create a high-resolution portrait of Refiloe, an empathetic South African mentor in her early 30s with deep brown skin and a medium-length natural afro. She wears a tailored charcoal blazer over a taupe blouse, gold hoop earrings, and a confident, welcoming expression. Scene uses warm studio lighting with soft bokeh background.
+      Professional social media portrait of Refiloe.
+      Setting: Warm studio with soft bokeh background.
+      Outfit: Tailored charcoal blazer over a taupe blouse, gold hoop earrings.
+      Pose: Confident stance, welcoming expression.
+      Mood: Empathetic mentor energy, approachable and professional.
+      Lighting: Warm studio lighting, soft and flattering.
+      Style: High-resolution portrait, Instagram-ready.
     educational_series: |
-      Render Refiloe delivering practical advice, mid-shot, holding a digital tablet. Outfit: emerald green wrap dress, minimalist wrist cuff, and gold earrings. Capture poised confidence with subtle smile and attentive eye contact. Lighting: warm key light with cool rim accent.
+      Professional social media photo of Refiloe.
+      Setting: Modern office or studio space.
+      Outfit: Emerald green wrap dress, minimalist wrist cuff, gold earrings.
+      Pose: Mid-shot, holding a digital tablet, delivering practical advice.
+      Mood: Poised confidence with subtle smile and attentive eye contact.
+      Lighting: Warm key light with cool rim accent.
+      Style: Editorial, professional, educational content ready.
     community_feature: |
-      Generate Refiloe engaging with community members (abstract silhouettes) in an open market setting at golden hour. She wears a patterned Ankara blazer over neutral top, arms open in welcoming gesture. Maintain consistent facial features and hair styling.
+      Professional social media photo of Refiloe.
+      Setting: Open market at golden hour, abstract silhouettes of community members.
+      Outfit: Patterned Ankara blazer over neutral top.
+      Pose: Arms open in welcoming gesture, engaging with community.
+      Mood: Warm, inclusive, community-focused energy.
+      Lighting: Golden hour natural light.
+      Style: Lifestyle photography, authentic and connected.
   did_backup_avatar:
     avatar_id: "refiloe_did_v2"
     voice_id: "refiloe_voice_did_warm"

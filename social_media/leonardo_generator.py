@@ -77,7 +77,33 @@ def _get_valid_leonardo_dimensions(width: int, height: int) -> tuple[int, int]:
     return valid_width, valid_height
 
 
+# Image Prompt Template - focuses on context, NOT physical traits
+# Physical traits (age, skin tone, hair, facial features) are handled by:
+# 1. The reference image uploaded to Leonardo AI
+# 2. The REFILOE_CHARACTER_DESCRIPTION below (for consistency guidance only)
+#
+# When generating image prompts, focus ONLY on:
+# - Setting/location (e.g., "modern gym", "home office", "outdoor park")
+# - Outfit/clothing (e.g., "wearing athletic wear", "professional blazer")
+# - Pose/action (e.g., "confident stance", "sitting at desk", "mid-workout")
+# - Mood/expression (e.g., "warm smile", "focused expression", "laughing")
+# - Makeup/accessories (e.g., "red lipstick", "colorful Africa-shaped earrings", "Zulu bangle")
+# - Lighting/atmosphere (e.g., "soft natural lighting", "golden hour")
+IMAGE_PROMPT_TEMPLATE = """
+Professional social media photo of Refiloe.
+
+Setting: {setting}
+Outfit: {outfit}
+Pose: {pose}
+Mood: {mood}
+Lighting: {lighting}
+
+Style: Editorial lifestyle photography, warm color grading, Instagram-ready composition.
+"""
+
 # Refiloe character description for consistent image generation
+# NOTE: This description focuses on CONSISTENCY with the reference image,
+# NOT on defining physical characteristics (those come from the reference image itself)
 REFILOE_CHARACTER_DESCRIPTION = """
 If the character is wearing a sports top, it will have the word REFILOE in small font, just the same as image 1
 Face Consistency: Keep the person's facial features and braided hair exactly the same as Image 1, but
@@ -86,9 +112,9 @@ Face Consistency: Keep the person's facial features and braided hair exactly the
 - thick thighs
 """
 
-# Base character description - appended to all Refiloe generations
+# Base character description - no longer includes physical traits
+# Physical appearance is defined by the reference image
 REFILOE_BASE_DESCRIPTION = """
-
 """
 
 # Content type to prompt style mapping
@@ -459,6 +485,9 @@ class LeonardoGenerator:
     ) -> Dict[str, Any]:
         """Generate a carousel cover slide with Refiloe.
 
+        NOTE: This method focuses on contextual elements (setting, outfit, pose, mood).
+        Physical characteristics are handled by the reference image, NOT the prompt.
+
         Args:
             title: The carousel title/topic.
             content_type: Content type for styling.
@@ -471,23 +500,23 @@ class LeonardoGenerator:
         config = CONTENT_TYPE_PROMPTS.get(content_type, CONTENT_TYPE_PROMPTS["educational"])
 
         if config.get("features_refiloe", True):
+            # Build prompt with contextual elements only - NO physical characteristics
+            # Physical traits come from the reference image
             prompt = f"""
-            Professional social media carousel cover image.
-
-            {REFILOE_CHARACTER_DESCRIPTION}
-            {REFILOE_BASE_DESCRIPTION}
+            Professional social media carousel cover image featuring Refiloe.
 
             Setting: {config.get('setting', 'modern professional space')}.
             Outfit: {config.get('outfit', 'professional attire')}.
             Pose: {config.get('pose', 'confident, engaging with camera')}.
+            Mood: {config.get('mood', 'professional and approachable')}.
 
             She appears ready to share valuable information about: {title}
 
             Style: High-quality photography, professional lighting, Instagram-ready.
-            Mood: {config.get('mood', 'professional and approachable')}.
-
             Leave space at top or bottom for text overlay.
             Warm color palette with beige and earthy tones.
+
+            {REFILOE_CHARACTER_DESCRIPTION}
             """
         else:
             prompt = f"""
@@ -516,15 +545,27 @@ class LeonardoGenerator:
         content_type: Optional[str],
         use_reference: bool,
     ) -> str:
-        """Build an enhanced prompt based on content type.
+        """Build the final prompt for image generation.
+
+        IMPORTANT: This method builds prompts that focus on CONTEXT, not physical traits.
+
+        Structure:
+        1. Base context (setting, outfit, pose, mood) - from content type config
+        2. Character consistency guidance - from REFILOE_CHARACTER_DESCRIPTION
+           (only appended if featuring Refiloe AND using reference image)
+        3. Style guidance - from content type config
+        4. Additional context - from base_prompt parameter
+
+        Physical characteristics (age, skin tone, hair, facial features) should
+        ONLY come from the reference image, NOT from the prompt text.
 
         Args:
-            base_prompt: The base prompt provided.
+            base_prompt: The base prompt provided (context only, no physical traits).
             content_type: Content type for enhancement.
-            use_reference: Whether using reference image.
+            use_reference: Whether using reference image for character consistency.
 
         Returns:
-            Enhanced prompt string.
+            Enhanced prompt string focusing on context elements.
         """
         if not content_type or content_type not in CONTENT_TYPE_PROMPTS:
             return base_prompt
@@ -535,13 +576,11 @@ class LeonardoGenerator:
         if config.get("style") == "quote_graphic":
             return base_prompt
 
-        # Build character prompt
+        # Build contextual prompt (NO physical characteristics - those come from reference image)
         if config.get("features_refiloe", True):
+            # Start with contextual elements only
             enhanced = f"""
             Professional social media photo featuring Refiloe.
-
-            {REFILOE_CHARACTER_DESCRIPTION}
-            {REFILOE_BASE_DESCRIPTION}
 
             Setting: {config.get('setting', 'professional setting')}.
             Outfit: {config.get('outfit', 'professional attire')}.
@@ -554,6 +593,14 @@ class LeonardoGenerator:
             Instagram-ready, warm color palette with beige and earthy tones.
             4:5 portrait aspect ratio optimized for mobile viewing.
             """
+
+            # Only append character consistency guidance if using reference image
+            # This helps maintain consistency with the reference, not define physical traits
+            if use_reference:
+                enhanced += f"""
+            {REFILOE_CHARACTER_DESCRIPTION}
+            """
+
             return enhanced
 
         return base_prompt

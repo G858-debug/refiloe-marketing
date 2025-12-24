@@ -245,131 +245,141 @@ def generate_scroll_stopping_image_prompt(content_theme: str, content_text: str 
     These prompts are optimized for Leonardo AI with the Nano Banana Pro model
     to create engaging, thumb-stopping social media images.
 
+    IMPORTANT: Physical characteristics (age, skin tone, hair, facial features) are NOT
+    included here because they are already defined by:
+    1. The reference image used in Leonardo AI generation
+    2. The REFILOE_CHARACTER_DESCRIPTION constant in leonardo_generator.py
+
+    This prompt focuses ONLY on contextual elements:
+    - Setting/location
+    - Outfit/clothing
+    - Pose/action
+    - Mood/expression
+    - Makeup/accessories
+    - Lighting/atmosphere
+
     Args:
         content_theme: The theme of the post (e.g., 'motivation', 'admin_hacks', etc.)
         content_text: The post caption (used for context)
         post_type: Type of post (video, image, carousel)
 
     Returns:
-        A detailed image prompt string
+        A detailed image prompt string (without physical characteristics)
     """
 
-    # Base Refiloe character description for consistency
-    refiloe_base = """Refiloe, a confident South African woman in her early 30s with deep brown skin,
-    tightly coiled natural afro with copper highlights, warm expressive smile, gold hoop earrings."""
-
     # Theme-specific scroll-stopping prompts
+    # NOTE: Physical traits are handled by reference image + REFILOE_CHARACTER_DESCRIPTION
     theme_prompts = {
-        'introduction': f"""
-            {refiloe_base}
-            Standing confidently in a modern co-working space with floor-to-ceiling windows, golden hour sunlight streaming in.
-            Wearing a stylish burnt orange blazer over a cream silk blouse.
-            Direct eye contact with camera, warm welcoming smile, one hand gesturing as if mid-conversation.
-            Background: blurred laptops, green plants, warm wood tones.
+        'introduction': """
+            Professional social media photo of Refiloe.
+            Setting: Modern co-working space with floor-to-ceiling windows, golden hour sunlight streaming in, blurred laptops, green plants, warm wood tones.
+            Outfit: Stylish burnt orange blazer over a cream silk blouse.
+            Pose: Standing confidently, direct eye contact with camera, one hand gesturing as if mid-conversation.
+            Mood: Approachable, professional, trustworthy, inspiring, warm welcoming smile.
+            Lighting: Golden hour natural light, warm ambient glow.
             Style: Editorial portrait, shallow depth of field, warm color grading, Instagram-ready.
-            Mood: Approachable, professional, trustworthy, inspiring.
         """,
 
-        'motivation': f"""
-            {refiloe_base}
-            In a bright modern gym at sunrise, dramatic golden light creating lens flare.
-            Wearing a vibrant coral athletic top, looking directly at camera with fierce determination.
-            Powerful stance, hands on hips, slight forward lean conveying energy.
-            Background: sleek gym equipment softly blurred, motivational without being cliché.
+        'motivation': """
+            Professional social media photo of Refiloe.
+            Setting: Bright modern gym at sunrise, sleek gym equipment softly blurred in background.
+            Outfit: Vibrant coral athletic top with REFILOE branding.
+            Pose: Powerful stance, hands on hips, slight forward lean conveying energy, looking directly at camera.
+            Mood: Fierce determination, empowering, unstoppable, "you've got this" energy.
+            Lighting: Dramatic golden light creating lens flare, high-contrast cinematic.
             Style: High-contrast, cinematic lighting, bold colors, scroll-stopping intensity.
-            Mood: Empowering, unstoppable, "you've got this" energy.
         """,
 
-        'admin_hacks': f"""
-            {refiloe_base}
-            Sitting at a clean, organized desk with a rose gold laptop, looking up at camera with a knowing smile.
-            Wearing a soft sage green cardigan over a white tee, looking effortlessly put-together.
-            One eyebrow slightly raised as if sharing a secret hack.
-            Background: minimalist home office, floating shelves with plants, warm ambient lighting.
+        'admin_hacks': """
+            Professional social media photo of Refiloe.
+            Setting: Minimalist home office, clean organized desk with rose gold laptop, floating shelves with plants.
+            Outfit: Soft sage green cardigan over a white tee, effortlessly put-together.
+            Pose: Sitting at desk, looking up at camera, one eyebrow slightly raised as if sharing a secret hack.
+            Mood: Knowing smile, "I figured it out so you don't have to" energy, helpful, smart.
+            Lighting: Warm ambient lighting, soft natural light from window.
             Style: Lifestyle editorial, warm tones, relatable yet aspirational.
-            Mood: "I figured it out so you don't have to" energy, helpful, smart.
         """,
 
-        'client_management': f"""
-            {refiloe_base}
-            In a cozy coffee shop corner, leaning forward engagingly as if in deep conversation.
-            Wearing a cream knit sweater, holding a latte, genuine caring expression.
-            Soft window light illuminating face, bokeh of café life behind.
-            Background: warm wood, exposed brick, blurred patrons creating life.
+        'client_management': """
+            Professional social media photo of Refiloe.
+            Setting: Cozy coffee shop corner, warm wood, exposed brick, blurred café patrons creating life.
+            Outfit: Cream knit sweater, holding a latte.
+            Pose: Leaning forward engagingly as if in deep conversation.
+            Mood: Genuine caring expression, understanding, empathetic, "I get it" connection.
+            Lighting: Soft window light illuminating face, bokeh of café life behind.
             Style: Candid lifestyle shot, warm color palette, intimate feeling.
-            Mood: Understanding, empathetic, "I get it" connection.
         """,
 
-        'relatable_trainer_life': f"""
-            {refiloe_base}
-            Candid moment: sitting on gym floor, back against mirror, phone in hand, slight exhausted but amused expression.
-            Wearing black leggings and a lived-in grey hoodie, hair slightly messy.
-            Real, unposed moment - the "between sessions" reality.
-            Background: empty gym, equipment visible, harsh fluorescent lights for authenticity.
+        'relatable_trainer_life': """
+            Professional social media photo of Refiloe.
+            Setting: Empty gym, equipment visible, between-sessions moment.
+            Outfit: Black leggings and a lived-in grey hoodie.
+            Pose: Candid moment sitting on gym floor, back against mirror, phone in hand.
+            Mood: Slight exhausted but amused expression, real unposed moment, "This is the real life" vulnerability.
+            Lighting: Gym fluorescent lights for authenticity.
             Style: Documentary-style, slightly desaturated, raw and real.
-            Mood: "This is the real life" vulnerability, relatable struggle.
         """,
 
-        'business_growth': f"""
-            {refiloe_base}
-            Standing in front of a whiteboard filled with growth charts and strategies, marker in hand.
-            Wearing a sharp navy blazer, confident teaching posture, mid-explanation gesture.
-            Warm smile but serious eyes - she means business.
-            Background: modern office space, charts showing upward trends, professional setting.
+        'business_growth': """
+            Professional social media photo of Refiloe.
+            Setting: Modern office space with whiteboard filled with growth charts and strategies, charts showing upward trends.
+            Outfit: Sharp navy blazer, professional attire.
+            Pose: Standing in front of whiteboard, marker in hand, confident teaching posture, mid-explanation gesture.
+            Mood: Warm smile but serious eyes - she means business, authority, expertise, "level up" energy.
+            Lighting: Professional office lighting, clean and bright.
             Style: Corporate editorial, clean lines, aspirational business aesthetic.
-            Mood: Authority, expertise, "level up" energy.
         """,
 
-        'fitness_tips': f"""
-            {refiloe_base}
-            Mid-movement in a bright fitness studio, demonstrating perfect form on an exercise.
-            Wearing a bold purple sports bra and high-waisted black leggings, focused expression.
-            Dynamic pose captured mid-action, muscles engaged, powerful presence.
-            Background: mirrors, natural light, clean minimalist studio.
+        'fitness_tips': """
+            Professional social media photo of Refiloe.
+            Setting: Bright fitness studio with mirrors, natural light, clean minimalist design.
+            Outfit: Bold purple sports bra with REFILOE branding and high-waisted black leggings.
+            Pose: Mid-movement demonstrating perfect form on an exercise, dynamic pose captured mid-action, muscles engaged.
+            Mood: Focused expression, powerful presence, expert, capable, inspiring action.
+            Lighting: Bright natural light through studio windows.
             Style: Fitness editorial, sharp focus on movement, energetic composition.
-            Mood: Expert, capable, inspiring action.
         """,
 
-        'community_engagement': f"""
-            {refiloe_base}
-            Laughing genuinely with hand partially covering mouth, eyes crinkled with joy.
-            Casual pose, sitting cross-legged on a yoga mat, wearing comfy athleisure.
-            Breaking the fourth wall - looking directly at viewer as if sharing a joke.
-            Background: bright airy studio, other blurred figures suggesting community.
+        'community_engagement': """
+            Professional social media photo of Refiloe.
+            Setting: Bright airy studio, other blurred figures suggesting community atmosphere.
+            Outfit: Comfy athleisure, casual and approachable.
+            Pose: Sitting cross-legged on a yoga mat, breaking the fourth wall - looking directly at viewer as if sharing a joke.
+            Mood: Laughing genuinely with hand partially covering mouth, eyes crinkled with joy, inclusive, fun, "you belong here" warmth.
+            Lighting: Soft studio lighting, bright and welcoming.
             Style: Candid lifestyle, high energy, contagious joy.
-            Mood: Inclusive, fun, "you belong here" warmth.
         """,
 
-        'special_event': f"""
-            {refiloe_base}
-            Celebratory pose with confetti or sparkles, genuine excited expression.
-            Wearing something special - a statement piece that pops against the background.
-            Arms raised or clapping, caught in a moment of pure celebration.
-            Background: festive but not cluttered, color-coordinated to the occasion.
+        'special_event': """
+            Professional social media photo of Refiloe.
+            Setting: Festive but not cluttered background, color-coordinated to the occasion.
+            Outfit: Statement piece that pops against the background, something special for celebrations.
+            Pose: Celebratory pose with confetti or sparkles, arms raised or clapping, caught in a moment of pure celebration.
+            Mood: Genuine excited expression, exciting, milestone moment, share the joy.
+            Lighting: High energy, vibrant colors.
             Style: High energy, vibrant colors, celebratory mood.
-            Mood: Exciting, milestone moment, share the joy.
         """,
 
-        'educational': f"""
-            {refiloe_base}
-            Thoughtful expression, finger touching chin, as if considering a question.
-            Wearing smart casual - a structured top in warm terracotta.
-            Slight head tilt suggesting active thinking, engaged eyes.
-            Background: clean, simple, non-distracting - focus on her expertise.
+        'educational': """
+            Professional social media photo of Refiloe.
+            Setting: Clean, simple, non-distracting background to focus on expertise, with space for text overlay.
+            Outfit: Smart casual - a structured top in warm terracotta.
+            Pose: Slight head tilt suggesting active thinking, finger touching chin as if considering a question.
+            Mood: Thoughtful expression, engaged eyes, knowledgeable, approachable teacher.
+            Lighting: Soft, even lighting for professional look.
             Style: Portrait with negative space for text overlay potential.
-            Mood: Thoughtful, knowledgeable, approachable teacher.
         """,
     }
 
     # Default prompt if theme not found
-    default_prompt = f"""
-        {refiloe_base}
-        Professional lifestyle portrait in a warm, modern setting.
-        Confident, approachable expression with direct eye contact.
-        Wearing stylish but relatable athleisure or smart casual outfit.
-        Soft natural lighting, shallow depth of field, Instagram-ready composition.
-        Style: Editorial lifestyle photography, warm color grading.
+    default_prompt = """
+        Professional social media photo of Refiloe.
+        Setting: Warm, modern professional space.
+        Outfit: Stylish but relatable athleisure or smart casual.
+        Pose: Confident stance, approachable, direct eye contact.
         Mood: Professional, trustworthy, aspirational yet relatable.
+        Lighting: Soft natural lighting, shallow depth of field.
+        Style: Editorial lifestyle photography, warm color grading, Instagram-ready composition.
     """
 
     # Get theme-specific prompt or default
