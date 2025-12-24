@@ -6580,6 +6580,7 @@ def api_generate_weekly_content():
                     'platform': 'facebook',
                     'content_text': content_text,
                     'post_type': theme_config['post_type'],
+                    'media_type': theme_config['post_type'],
                     'scheduled_time': scheduled_time.isoformat(),
                     'content_theme': theme_config['theme'],
                     'title': reel_title,  # Save reel_title as title field for backwards compatibility
