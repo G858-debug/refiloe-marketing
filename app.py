@@ -7551,16 +7551,22 @@ def api_generate_missing_images():
     log_info("=" * 60)
 
     try:
-        # Find all image posts without images
+        # Find all image posts with relevant statuses
+        # Note: Custom SupabaseTable doesn't support is_() for NULL checks,
+        # so we fetch all and filter in Python
         result = supabase_client.table('social_posts').select('*').eq(
             'post_type', 'image'
-        ).is_(
-            'image_url', 'null'
-        ).in_(
-            'status', ['pending_approval', 'approved', 'scheduled']
         ).execute()
 
-        posts_without_images = result.data if result.data else []
+        all_image_posts = result.data if result.data else []
+
+        # Filter for posts without images and with active statuses
+        active_statuses = ['pending_approval', 'approved', 'scheduled']
+        posts_without_images = [
+            post for post in all_image_posts
+            if (post.get('image_url') is None or post.get('image_url') == '')
+            and post.get('status') in active_statuses
+        ]
 
         log_info(f"📊 Found {len(posts_without_images)} image posts without images")
 
