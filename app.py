@@ -7851,10 +7851,13 @@ def api_edit_text_card(post_id):
         if update_result.data:
             updated_post = update_result.data[0]
             log_info(f"✅ Text card {post_id} updated successfully")
+            import time
+            cache_bust_url = f"{image_url}?t={int(time.time() * 1000)}"
+
             return jsonify({
                 'success': True,
                 'post_id': post_id,
-                'new_image_url': image_url,
+                'new_image_url': cache_bust_url,
                 'post': updated_post,
                 'message': 'Text card updated successfully'
             })
