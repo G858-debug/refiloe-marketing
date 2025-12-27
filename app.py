@@ -421,13 +421,35 @@ def convert_carousel_format(data: dict, content_type: str = 'educational') -> di
             "bullets": slide.get('bullets', [])
         })
 
-    # CTA slide
+    # CTA slide - use random from varied messages if not provided
     cta = data.get('cta_slide', {})
+    if not cta or not cta.get('headline'):
+        import random
+        # Varied CTA messages (25% each category)
+        cta_messages = [
+            # === FOLLOW CTAs (25%) ===
+            {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+            {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+
+            # === INSPIRATIONAL QUOTES (25%) ===
+            {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+            {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+
+            # === SAVE/SHARE PROMPTS (25%) ===
+            {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+            {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+
+            # === ENGAGEMENT QUESTIONS (25%) ===
+            {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+            {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+        ]
+        cta = random.choice(cta_messages)
+
     slides.append({
         "type": "CTA",
-        "headline": cta.get('headline', 'Ready to Save Time?'),
-        "cta_text": cta.get('cta_text', 'Follow for more tips!'),
-        "subtext": cta.get('subtext', 'Save this post for later')
+        "headline": cta.get('headline', 'Ready to scale?'),
+        "cta_text": cta.get('cta_text', 'Hit follow!'),
+        "subtext": cta.get('subtext', 'Tips to grow your PT business')
     })
 
     return {"slides": slides, "content_type": content_type}
@@ -457,14 +479,23 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     if not raw_slides:
         return []
 
-    # CTA messages to rotate through
+    # CTA messages to rotate through (varied mix - 25% each category)
     cta_messages = [
+        # === FOLLOW CTAs (25%) ===
         {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
-        {"headline": "Stop the admin chaos", "cta_text": "Follow now!", "subtext": "Reclaim your time"},
-        {"headline": "Want 2x growth?", "cta_text": "Follow for the blueprint", "subtext": "Without 2x the hours"},
-        {"headline": "Time is money", "cta_text": "Follow to gain both!", "subtext": "Smart strategies for PTs"},
-        {"headline": "Build your dream business", "cta_text": "Follow me!", "subtext": "Transform exhausting to effortless"},
-        {"headline": "One step closer", "cta_text": "Follow for more!", "subtext": "To the business you actually want"},
+        {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+
+        # === INSPIRATIONAL QUOTES (25%) ===
+        {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+        {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+
+        # === SAVE/SHARE PROMPTS (25%) ===
+        {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+        {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+
+        # === ENGAGEMENT QUESTIONS (25%) ===
+        {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+        {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
     ]
 
     transformed = []

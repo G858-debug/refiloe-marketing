@@ -903,16 +903,41 @@ class ContentPipeline:
                 "bullets": bullets[:5],
             })
 
-        # Final slide: CTA
-        cta_headline = caption.get("cta_headline") or "Ready to Transform Your Workflow?"
-        cta_text = caption.get("cta_text") or caption.get("call_to_action") or "Follow for More Tips!"
-        cta_subtext = caption.get("cta_subtext") or "Save this post and share with a fellow trainer"
+        # Final slide: CTA - use random from varied messages if not provided
+        cta_headline = caption.get("cta_headline")
+        cta_text = caption.get("cta_text") or caption.get("call_to_action")
+        cta_subtext = caption.get("cta_subtext")
+
+        if not cta_headline:
+            import random
+            # Varied CTA messages (25% each category)
+            cta_messages = [
+                # === FOLLOW CTAs (25%) ===
+                {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+                {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+
+                # === INSPIRATIONAL QUOTES (25%) ===
+                {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+                {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+
+                # === SAVE/SHARE PROMPTS (25%) ===
+                {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+                {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+
+                # === ENGAGEMENT QUESTIONS (25%) ===
+                {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+                {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+            ]
+            default_cta = random.choice(cta_messages)
+            cta_headline = default_cta['headline']
+            cta_text = cta_text or default_cta['cta_text']
+            cta_subtext = cta_subtext or default_cta['subtext']
 
         slides.append({
             "type": "CTA",
             "headline": cta_headline,
-            "cta_text": cta_text,
-            "subtext": cta_subtext,
+            "cta_text": cta_text or "Hit follow!",
+            "subtext": cta_subtext or "Tips to grow your PT business",
         })
 
         return {"slides": slides}
