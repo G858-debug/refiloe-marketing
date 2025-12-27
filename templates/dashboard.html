@@ -1964,6 +1964,11 @@
                                 🎨 Generate Media
                             </button>
                         ` : ''}
+                        ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
+                                🔄 Regenerate Cover
+                            </button>
+                        ` : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
                         ` : `
@@ -1997,6 +2002,11 @@
                         ${post.post_type === 'carousel' && (!post.carousel_image_urls || post.carousel_image_urls.length === 0) ? `
                             <button class="btn btn-success" onclick="openGenerateMediaModal('${post.id}', 'carousel')" title="Generate carousel images">
                                 🎨 Generate Media
+                            </button>
+                        ` : ''}
+                        ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
+                                🔄 Regenerate Cover
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -2044,6 +2054,11 @@
                         ${post.post_type === 'carousel' ? `
                             <button class="btn btn-sm" style="background-color: #f59e0b; color: white;" onclick="openChangeLookModal('${post.id}')" title="Change Refiloe's look on the cover">
                                 🎨 Change Look
+                            </button>
+                        ` : ''}
+                        ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
+                                🔄 Regenerate Cover
                             </button>
                         ` : ''}
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
@@ -2102,6 +2117,11 @@
                                 🚀 Post Now
                             </button>
                         ` : ''}
+                        ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
+                                🔄 Regenerate Cover
+                            </button>
+                        ` : ''}
                         ${(post.post_type === 'video' || post.video_url) ? `
                             <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="openRegenerateModal('${post.id}')" title="Regenerate video with new settings">
                                 🎬 Regenerate
@@ -2136,6 +2156,11 @@
                             <a href="https://business.facebook.com/latest/content_calendar" target="_blank" class="btn btn-sm" style="background-color: #1877f2; color: white;" title="View in Facebook Business Suite">
                                 📅 View in Business Suite
                             </a>
+                        ` : ''}
+                        ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
+                                🔄 Regenerate Cover
+                            </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
                             <button class="btn btn-secondary btn-sm" onclick="openTextCardEditModal('${post.id}')">✏️ Edit Text</button>
@@ -3517,6 +3542,34 @@
             } catch (error) {
                 console.error('Error generating carousel:', error);
                 showToast('Failed to generate carousel', 'error');
+            }
+        }
+
+        // Regenerate carousel cover image only (slide 1)
+        async function regenerateCarouselCover(postId) {
+            if (!confirm('Regenerate the cover image for this carousel? This will create a new Refiloe photo for slide 1.')) {
+                return;
+            }
+
+            showToast('Regenerating cover image...', 'info');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-cover/${postId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Cover image regenerated!', 'success');
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error regenerating carousel cover:', error);
+                showToast('Failed to regenerate cover', 'error');
             }
         }
 

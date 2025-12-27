@@ -5702,6 +5702,166 @@ def change_carousel_look(post_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dashboard/regenerate-carousel-cover/<post_id>', methods=['POST'])
+def regenerate_carousel_cover(post_id):
+    """Regenerate ONLY the cover image (slide 1) of a carousel, keeping other slides intact.
+
+    This uses the same Refiloe look/avatar selection logic as the original generation.
+    """
+    log_info(f"📥 Request: /api/dashboard/regenerate-carousel-cover/{post_id}")
+
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        # Step 1: Get the post from database
+        post_result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+        if not post_result.data or len(post_result.data) == 0:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = post_result.data[0]
+
+        # Step 2: Validate it's a carousel
+        if post.get('post_type') != 'carousel':
+            return jsonify({'success': False, 'error': 'Post is not a carousel'}), 400
+
+        # Step 3: Get existing carousel_image_urls
+        carousel_urls = post.get('carousel_image_urls')
+        if not carousel_urls or len(carousel_urls) == 0:
+            return jsonify({'success': False, 'error': 'Carousel has no slides to regenerate'}), 400
+
+        log_info(f"📊 Carousel has {len(carousel_urls)} slides, regenerating cover (slide 1)")
+
+        # Step 4: Get carousel data from post (check carousel_data field first, then generation_prompt)
+        carousel_data = post.get('carousel_data')
+
+        # If carousel_data doesn't exist, try generation_prompt
+        if not carousel_data:
+            generation_prompt = post.get('generation_prompt', '{}')
+            if isinstance(generation_prompt, str):
+                try:
+                    generation_prompt = json.loads(generation_prompt)
+                except:
+                    generation_prompt = {}
+            carousel_data = generation_prompt.get('carousel_data') or generation_prompt.get('carousel_slides')
+
+        # Parse carousel_data if it's a string
+        if isinstance(carousel_data, str):
+            try:
+                carousel_data = json.loads(carousel_data)
+            except:
+                carousel_data = None
+
+        if not carousel_data:
+            return jsonify({'success': False, 'error': 'No carousel data found in post'}), 400
+
+        # Handle different carousel_data formats
+        if isinstance(carousel_data, list):
+            # Transform to dict format
+            carousel_data = {'slides': carousel_data}
+
+        slides = carousel_data.get('slides', [])
+        if not slides or len(slides) == 0:
+            return jsonify({'success': False, 'error': 'No slides found in carousel data'}), 400
+
+        # Step 5: Get content_type from metadata (same logic as original generation)
+        content_type = carousel_data.get('content_type', 'educational')
+
+        # Also check generation_prompt for content_type
+        generation_prompt = post.get('generation_prompt', '{}')
+        if isinstance(generation_prompt, str):
+            try:
+                generation_prompt = json.loads(generation_prompt)
+            except:
+                generation_prompt = {}
+
+        if not content_type or content_type == 'educational':
+            content_type = generation_prompt.get('content_type', 'educational')
+
+        log_info(f"🎨 Using content_type: {content_type}")
+
+        # Step 6: Extract cover title from carousel data
+        cover_title = carousel_data.get('cover', {}).get('title', '')
+
+        # If no title in cover key, try the first slide's title
+        if not cover_title:
+            cover_slide = slides[0]
+            cover_title = cover_slide.get('title') or cover_slide.get('text', 'Untitled')
+        else:
+            cover_slide = slides[0]
+
+        log_info(f"📝 Extracted cover title: {cover_title}")
+
+        # Ensure the cover slide has the proper title
+        cover_slide_with_title = {
+            'type': 'COVER',
+            'title': cover_title,
+            'avatar_path': cover_slide.get('avatar_path', ''),
+            'text': cover_title  # Some templates might use 'text' instead of 'title'
+        }
+
+        # Create carousel data for just the cover slide
+        cover_carousel_data = {
+            'slides': [cover_slide_with_title],
+            'content_type': content_type
+        }
+
+        log_info(f"🎨 Generating new cover slide with content_type: {content_type}")
+
+        # Step 7: Initialize carousel generator and generate new cover
+        from social_media.carousel_template_generator import CarouselTemplateGenerator
+
+        config_path = os.path.join(os.path.dirname(__file__), 'social_media', 'config.yaml')
+        if not os.path.exists(config_path):
+            return jsonify({'success': False, 'error': 'Config file not found'}), 500
+
+        carousel_generator = CarouselTemplateGenerator(config_path, supabase_client=supabase_client)
+
+        # Generate the cover slide
+        slide_paths = carousel_generator.create_carousel(cover_carousel_data)
+
+        if not slide_paths or len(slide_paths) == 0:
+            return jsonify({'success': False, 'error': 'Failed to generate cover slide'}), 500
+
+        new_cover_path = slide_paths[0]
+        log_info(f"✅ Generated new cover at: {new_cover_path}")
+
+        # Step 8: Upload new cover slide to Supabase
+        success, new_cover_url, error = upload_carousel_slide(new_cover_path, post_id, 1)
+
+        if not success or not new_cover_url:
+            return jsonify({'success': False, 'error': f'Failed to upload cover slide: {error}'}), 500
+
+        log_info(f"📤 Uploaded new cover: {new_cover_url}")
+
+        # Step 9: Replace slide 1 URL, keep slides 2-N unchanged
+        new_carousel_urls = [new_cover_url] + carousel_urls[1:]
+
+        log_info(f"🔄 Updated carousel URLs: {len(new_carousel_urls)} slides")
+
+        # Step 10: Update post with new carousel_image_urls
+        supabase_client.table('social_posts').update({
+            'carousel_image_urls': new_carousel_urls,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        log_info(f"✅ Carousel cover regenerated successfully")
+
+        # Step 11: Return success with new carousel URLs
+        return jsonify({
+            'success': True,
+            'message': 'Carousel cover regenerated successfully',
+            'carousel_urls': new_carousel_urls,
+            'new_cover_url': new_cover_url
+        }), 200
+
+    except Exception as e:
+        log_error(f"❌ Error regenerating carousel cover: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/dashboard/motion-prompts', methods=['GET'])
 def api_get_motion_prompts():
     """Get list of available motion prompts for video generation."""
