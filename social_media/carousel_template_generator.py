@@ -834,10 +834,35 @@ class CarouselTemplateGenerator:
                       (self.SLIDE_WIDTH//2 + 250, self.SLIDE_HEIGHT//2 + 250)],
                      outline=circle_color, width=2)
 
-        # Get text content
-        headline = data.get('headline', 'Ready to Save Time?')
-        cta_text = data.get('cta_text', 'Follow for more tips!')
-        subtext = data.get('subtext', 'Save this post for later')
+        # Get text content - use random from varied messages if not provided
+        if not data.get('headline'):
+            import random
+            # Varied CTA messages (25% each category)
+            cta_messages = [
+                # === FOLLOW CTAs (25%) ===
+                {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+                {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+
+                # === INSPIRATIONAL QUOTES (25%) ===
+                {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+                {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+
+                # === SAVE/SHARE PROMPTS (25%) ===
+                {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+                {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+
+                # === ENGAGEMENT QUESTIONS (25%) ===
+                {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+                {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+            ]
+            default_cta = random.choice(cta_messages)
+            headline = default_cta['headline']
+            cta_text = default_cta['cta_text']
+            subtext = default_cta['subtext']
+        else:
+            headline = data.get('headline', 'Ready to scale?')
+            cta_text = data.get('cta_text', 'Hit follow!')
+            subtext = data.get('subtext', 'Tips to grow your PT business')
 
         # Calculate vertical centering
         total_text_height = 90 + 60 + 72 + 50 + 52  # headline + gap + cta + gap + subtext

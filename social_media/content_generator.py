@@ -613,12 +613,33 @@ Generate the carousel content now:"""
 
         validated["content_slides"] = validated_slides
 
-        # Validate CTA slide
+        # Validate CTA slide - use random from varied messages if not provided
         cta = data.get("cta_slide", {})
+        if not cta or not cta.get("headline"):
+            import random
+            # Varied CTA messages (25% each category)
+            cta_messages = [
+                # === FOLLOW CTAs (25%) ===
+                {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+                {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+
+                # === INSPIRATIONAL QUOTES (25%) ===
+                {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+                {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+
+                # === SAVE/SHARE PROMPTS (25%) ===
+                {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+                {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+
+                # === ENGAGEMENT QUESTIONS (25%) ===
+                {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+                {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+            ]
+            cta = random.choice(cta_messages)
         validated["cta_slide"] = {
-            "headline": filter_banned_words(str(cta.get("headline", "Ready to Get Started?")))[:50],
-            "cta_text": filter_banned_words(str(cta.get("cta_text", "Try It Free")))[:30],
-            "subtext": filter_banned_words(str(cta.get("subtext", "Join trainers automating their admin")))[:60],
+            "headline": filter_banned_words(str(cta.get("headline", "Ready to scale?")))[:50],
+            "cta_text": filter_banned_words(str(cta.get("cta_text", "Hit follow!")))[:30],
+            "subtext": filter_banned_words(str(cta.get("subtext", "Tips to grow your PT business")))[:60],
         }
 
         # Validate caption
