@@ -480,6 +480,17 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         cleaned = ''.join(char for char in text if 32 <= ord(char) < 128)
         return cleaned.strip()
 
+    def clean_slide_prefix(text: str) -> str:
+        """Remove 'Slide X:' prefix from text."""
+        import re
+        if not text:
+            return ""
+        # Remove "Slide X:" or "Slide X :" prefix (case insensitive)
+        cleaned = re.sub(r'^Slide\s*\d+\s*:\s*', '', text, flags=re.IGNORECASE)
+        # Remove standalone slide references
+        cleaned = re.sub(r'^Slide\s*\d+\s*$', '', cleaned, flags=re.IGNORECASE)
+        return cleaned.strip()
+
     if not raw_slides:
         return []
 
@@ -529,11 +540,9 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         description = clean_text(slide.get('description', ''))
         ai_bullets = slide.get('bullets', [])
 
-        # Remove "Slide X:" prefix if present
-        import re
-        if text and re.match(r'^Slide\s*\d+\s*:', text, re.IGNORECASE):
-            # Extract just the title part after "Slide X:"
-            text = re.sub(r'^Slide\s*\d+\s*:\s*', '', text, flags=re.IGNORECASE)
+        # Clean "Slide X:" prefix from all content sources
+        text = clean_slide_prefix(text)
+        description = clean_slide_prefix(description)
 
         # Create step title - use cleaned text or fall back to generic
         if text:
@@ -546,14 +555,22 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
 
         # Priority 1: Use AI-generated bullets array if available
         if ai_bullets and isinstance(ai_bullets, list) and len(ai_bullets) > 0:
-            bullets = [clean_text(b) for b in ai_bullets if b][:5]  # Max 5 bullets
-            log_info(f"  Slide {i+2}: Using {len(bullets)} AI-generated bullets")
+            # Clean each AI bullet - remove "Slide X:" prefixes
+            cleaned_bullets = []
+            for b in ai_bullets:
+                if b:
+                    cleaned_b = clean_slide_prefix(clean_text(b))
+                    if cleaned_b and len(cleaned_b) > 3:  # Skip very short or empty bullets
+                        cleaned_bullets.append(cleaned_b)
+            bullets = cleaned_bullets[:5]  # Max 5 bullets
+            log_info(f"  Slide {i+2}: Using {len(bullets)} AI-generated bullets (cleaned)")
 
         # Priority 2: Parse description field (legacy format)
         elif description:
             if '. ' in description:
                 sentences = [s.strip() for s in description.split('. ') if s.strip()]
-                bullets = sentences[:3]
+                # Clean each sentence
+                bullets = [clean_slide_prefix(s) for s in sentences[:3] if clean_slide_prefix(s)]
             else:
                 bullets = [description]
             log_info(f"  Slide {i+2}: Parsed {len(bullets)} bullets from description")
@@ -564,8 +581,11 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
                 bullets = [text]
                 log_info(f"  Slide {i+2}: Using title text as fallback content")
             else:
-                bullets = ["More details coming soon"]
+                bullets = ["More tips coming soon!"]
                 log_warning(f"  Slide {i+2}: No content found - using placeholder!")
+
+        # Final filter - remove empty bullets
+        bullets = [b for b in bullets if b and len(b) > 3]
 
         transformed.append({
             'type': 'CONTENT',

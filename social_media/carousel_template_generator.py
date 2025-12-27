@@ -476,6 +476,59 @@ class CarouselTemplateGenerator:
 
         return lines
 
+    def _clean_bullet_text(self, text: str) -> str:
+        """Clean bullet text by removing 'Slide X:' prefixes and other artifacts.
+
+        Args:
+            text: The text to clean
+
+        Returns:
+            Cleaned text string
+        """
+        import re
+
+        if not text:
+            return ""
+
+        # Remove "Slide X:" or "Slide X :" prefix (case insensitive)
+        cleaned = re.sub(r'^Slide\s*\d+\s*:\s*', '', text, flags=re.IGNORECASE)
+
+        # Remove standalone slide references
+        cleaned = re.sub(r'^Slide\s*\d+\s*$', '', cleaned, flags=re.IGNORECASE)
+
+        # Clean up whitespace
+        cleaned = cleaned.strip()
+
+        return cleaned
+
+    def _smart_truncate(self, text: str, max_chars: int = 180) -> str:
+        """Truncate text at word boundary with ellipsis.
+
+        Args:
+            text: The text to truncate
+            max_chars: Maximum number of characters (default 180 for better readability)
+
+        Returns:
+            Truncated text with ellipsis if needed
+        """
+        if not text:
+            return ""
+
+        if len(text) <= max_chars:
+            return text
+
+        # Find last space before max_chars
+        truncated = text[:max_chars]
+        last_space = truncated.rfind(' ')
+
+        if last_space > max_chars * 0.7:  # Only truncate at space if it's not too far back
+            truncated = truncated[:last_space]
+
+        # Clean up trailing punctuation
+        truncated = truncated.rstrip('.,;:(-')
+
+        return truncated.strip() + '...'
+
     def _get_theme_shape(self, text: str) -> str:
         """Get a relevant shape type based on content keywords.
 
@@ -698,6 +751,13 @@ class CarouselTemplateGenerator:
         # Header title - with proper padding, support 2 lines
         header_title = data.get('step_title', f'Tip {slide_number - 1}')
 
+        # Clean step_title to remove "Slide X:" prefixes
+        header_title = self._clean_bullet_text(header_title)
+
+        # If step_title is now empty after cleaning, use a generic title
+        if not header_title:
+            header_title = f'Tip {slide_number - 1}'
+
         # Calculate max width with padding
         header_padding = 80
         max_header_width = self.SLIDE_WIDTH - (2 * header_padding)
@@ -729,20 +789,28 @@ class CarouselTemplateGenerator:
         current_y = content_start_y
 
         for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets
-            # Clean the bullet text
-            clean_bullet = ''.join(char for char in bullet if ord(char) < 128 and ord(char) >= 32)
+            # Clean the bullet text - remove "Slide X:" prefixes first
+            clean_bullet = self._clean_bullet_text(bullet)
+
+            # Also remove non-ASCII characters
+            clean_bullet = ''.join(char for char in clean_bullet if ord(char) < 128 and ord(char) >= 32)
             clean_bullet = clean_bullet.strip()
-            if not clean_bullet:
+
+            # Skip empty bullets after cleaning
+            if not clean_bullet or len(clean_bullet) < 3:
                 continue
+
+            # Apply smart truncation to prevent mid-word/mid-sentence cuts
+            clean_bullet = self._smart_truncate(clean_bullet, max_chars=200)
 
             # Wrap the bullet text
             wrapped = self._wrap_text(clean_bullet, large_body_font, max_width)
 
-            # Get lines, max 3 per bullet
-            max_lines = 3
+            # Get lines, max 4 per bullet (increased from 3 for longer content)
+            max_lines = 4
             lines_to_draw = wrapped[:max_lines]
 
-            # Clean up truncation
+            # Clean up truncation if we still need to truncate after wrapping
             if len(wrapped) > max_lines and lines_to_draw:
                 last_line = lines_to_draw[-1]
                 if '(' in last_line and ')' not in last_line.split('(')[-1]:
