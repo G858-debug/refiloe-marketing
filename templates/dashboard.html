@@ -1965,8 +1965,8 @@
                             </button>
                         ` : ''}
                         ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
-                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
-                                🔄 Regenerate Cover
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselMedia('${post.id}')" title="Regenerate all carousel images">
+                                🔄 Regenerate Media
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -2005,8 +2005,8 @@
                             </button>
                         ` : ''}
                         ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
-                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
-                                🔄 Regenerate Cover
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselMedia('${post.id}')" title="Regenerate all carousel images">
+                                🔄 Regenerate Media
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -2057,8 +2057,8 @@
                             </button>
                         ` : ''}
                         ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
-                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
-                                🔄 Regenerate Cover
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselMedia('${post.id}')" title="Regenerate all carousel images">
+                                🔄 Regenerate Media
                             </button>
                         ` : ''}
                         <button onclick="regenerateMedia('${post.id}')" class="btn btn-warning">
@@ -2118,8 +2118,8 @@
                             </button>
                         ` : ''}
                         ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
-                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
-                                🔄 Regenerate Cover
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselMedia('${post.id}')" title="Regenerate all carousel images">
+                                🔄 Regenerate Media
                             </button>
                         ` : ''}
                         ${(post.post_type === 'video' || post.video_url) ? `
@@ -2158,8 +2158,8 @@
                             </a>
                         ` : ''}
                         ${post.post_type === 'carousel' && post.carousel_image_urls && post.carousel_image_urls.length > 0 ? `
-                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselCover('${post.id}')" title="Regenerate only the cover image (slide 1)">
-                                🔄 Regenerate Cover
+                            <button class="btn btn-sm" style="background-color: #8b5cf6; color: white;" onclick="regenerateCarouselMedia('${post.id}')" title="Regenerate all carousel images">
+                                🔄 Regenerate Media
                             </button>
                         ` : ''}
                         ${post.post_type === 'text_card' ? `
@@ -3545,31 +3545,45 @@
             }
         }
 
-        // Regenerate carousel cover image only (slide 1)
-        async function regenerateCarouselCover(postId) {
-            if (!confirm('Regenerate the cover image for this carousel? This will create a new Refiloe photo for slide 1.')) {
+        // Regenerate all carousel media (cover + content slides)
+        async function regenerateCarouselMedia(postId) {
+            if (!confirm('Regenerate all carousel images? This will create a new cover photo and regenerate all content slides.')) {
                 return;
             }
 
-            showToast('Regenerating cover image...', 'info');
+            showToast('Regenerating carousel images... This may take 30-60 seconds.', 'info');
 
             try {
-                const response = await fetch(`${API_BASE}/api/dashboard/regenerate-carousel-cover/${postId}`, {
+                // Step 1: Reset the post to clear old media
+                const resetResponse = await fetch(`${API_BASE}/api/dashboard/posts/${postId}/reset-to-approved`, {
+                    method: 'POST'
+                });
+
+                if (!resetResponse.ok) {
+                    const error = await resetResponse.json();
+                    showToast('Failed to reset post: ' + (error.error || 'Unknown error'), 'error');
+                    return;
+                }
+
+                // Step 2: Trigger media generation
+                const generateResponse = await fetch(`${API_BASE}/api/dashboard/generate-media/${postId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
 
-                const data = await response.json();
+                const data = await generateResponse.json();
 
                 if (data.success) {
-                    showToast('Cover image regenerated!', 'success');
+                    showToast('Carousel images regenerated!', 'success');
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
+                    location.reload();
                 }
             } catch (error) {
-                console.error('Error regenerating carousel cover:', error);
-                showToast('Failed to regenerate cover', 'error');
+                console.error('Error regenerating carousel:', error);
+                showToast('Failed to regenerate carousel', 'error');
+                location.reload();
             }
         }
 
