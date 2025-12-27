@@ -1725,7 +1725,7 @@
                             ${post.hashtags.map(tag => {
                                 // Ensure tag starts with #
                                 const displayTag = tag.startsWith('#') ? tag : '#' + tag;
-                                return \`<span style="background: #f3f4f6; color: #374151; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 500;">\${escapeHtml(displayTag)}</span>\`;
+                                return '<span style="background: #f3f4f6; color: #374151; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 500;">' + escapeHtml(displayTag) + '</span>';
                             }).join('')}
                         </div>
                     </div>
