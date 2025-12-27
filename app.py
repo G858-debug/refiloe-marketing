@@ -435,11 +435,15 @@ def convert_carousel_format(data: dict, content_type: str = 'educational') -> di
 def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     """Transform raw slide data from metadata into carousel generator format.
 
-    Raw slides have: slide_number, text, description
+    Handles MULTIPLE input formats:
+    1. Legacy format: slide_number, text, description
+    2. AI-generated format: step_number, title, bullets
+    3. Mixed format: combination of the above
+
     Creates: COVER (1) + CONTENT slides (remaining items) + CTA (1)
 
     Args:
-        raw_slides: List of slides with slide_number, text, description
+        raw_slides: List of slides with various field formats
 
     Returns:
         List of slides in carousel generator format
@@ -469,7 +473,9 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     transformed = []
 
     # Extract title from the first slide for the COVER
-    first_text = clean_text(raw_slides[0].get('text', ''))
+    # Check both 'text' (legacy) and 'title' (AI-generated) fields
+    first_slide = raw_slides[0]
+    first_text = clean_text(first_slide.get('text', '') or first_slide.get('title', ''))
     cover_title = first_text[:60] if first_text else 'Tips for Personal Trainers'
 
     # Slide 1: COVER
@@ -484,8 +490,12 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     content_slides = raw_slides[1:] if len(raw_slides) > 1 else []
 
     for i, slide in enumerate(content_slides):
-        text = clean_text(slide.get('text', ''))
+        # Handle both legacy ('text') and AI-generated ('title') formats
+        text = clean_text(slide.get('text', '') or slide.get('title', ''))
+
+        # Handle both legacy ('description') and AI-generated ('bullets') formats
         description = clean_text(slide.get('description', ''))
+        ai_bullets = slide.get('bullets', [])
 
         # Remove "Slide X:" prefix if present
         import re
@@ -499,23 +509,31 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         else:
             header = f"Step {i + 1}"
 
-        # Build bullets from description
+        # Build bullets - check AI-generated 'bullets' first, then fall back to 'description'
         bullets = []
-        if description:
+
+        # Priority 1: Use AI-generated bullets array if available
+        if ai_bullets and isinstance(ai_bullets, list) and len(ai_bullets) > 0:
+            bullets = [clean_text(b) for b in ai_bullets if b][:5]  # Max 5 bullets
+            log_info(f"  Slide {i+2}: Using {len(bullets)} AI-generated bullets")
+
+        # Priority 2: Parse description field (legacy format)
+        elif description:
             if '. ' in description:
                 sentences = [s.strip() for s in description.split('. ') if s.strip()]
                 bullets = sentences[:3]
             else:
                 bullets = [description]
+            log_info(f"  Slide {i+2}: Parsed {len(bullets)} bullets from description")
 
+        # Priority 3: Use the title text as fallback content
         if not bullets:
-            # If no description, the text IS the content
-            if description:
-                bullets = [description]
-            elif text:
+            if text:
                 bullets = [text]
+                log_info(f"  Slide {i+2}: Using title text as fallback content")
             else:
                 bullets = ["More details coming soon"]
+                log_warning(f"  Slide {i+2}: No content found - using placeholder!")
 
         transformed.append({
             'type': 'CONTENT',
@@ -1006,6 +1024,130 @@ def debug_schema():
         return jsonify({
             'error': str(e),
             'message': 'Could not determine table structure'
+        }), 500
+
+
+@app.route('/api/debug/carousel-data/<post_id>')
+def debug_carousel_data(post_id):
+    """Debug endpoint to inspect carousel post data structure.
+
+    Use this to diagnose why carousel slides might be showing titles instead of content.
+    """
+    if not supabase_client:
+        return jsonify({'error': 'Database not connected'}), 503
+
+    try:
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'error': 'Post not found', 'post_id': post_id}), 404
+
+        post = result.data[0]
+
+        # Helper to safely parse JSON
+        def safe_parse(val):
+            if val is None:
+                return None
+            if isinstance(val, (dict, list)):
+                return val
+            if isinstance(val, str):
+                try:
+                    return json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    return val
+            return val
+
+        # Extract all carousel-related data
+        carousel_data = safe_parse(post.get('carousel_data'))
+        generation_prompt = safe_parse(post.get('generation_prompt'))
+        media_url = safe_parse(post.get('media_url'))
+
+        # Find carousel slides from different possible locations
+        slides = None
+        slides_source = None
+
+        if carousel_data:
+            if isinstance(carousel_data, dict) and carousel_data.get('slides'):
+                slides = carousel_data.get('slides')
+                slides_source = "carousel_data.slides"
+            elif isinstance(carousel_data, list):
+                slides = carousel_data
+                slides_source = "carousel_data (raw list)"
+
+        if not slides and generation_prompt:
+            if isinstance(generation_prompt, dict):
+                inner = generation_prompt.get('carousel_data') or generation_prompt.get('carousel_slides')
+                if inner:
+                    inner = safe_parse(inner)
+                    if isinstance(inner, dict) and inner.get('slides'):
+                        slides = inner.get('slides')
+                        slides_source = "generation_prompt.carousel_data.slides"
+                    elif isinstance(inner, list):
+                        slides = inner
+                        slides_source = "generation_prompt.carousel_slides (raw list)"
+
+        # Analyze slide content issues
+        slide_analysis = []
+        if slides:
+            for i, slide in enumerate(slides):
+                if isinstance(slide, dict):
+                    analysis = {
+                        'slide_number': i + 1,
+                        'keys': list(slide.keys()),
+                        'type': slide.get('type'),
+                        'has_text': bool(slide.get('text')),
+                        'has_description': bool(slide.get('description')),
+                        'has_bullets': bool(slide.get('bullets')),
+                        'has_step_title': bool(slide.get('step_title')),
+                        'text_preview': str(slide.get('text', ''))[:100] if slide.get('text') else None,
+                        'description_preview': str(slide.get('description', ''))[:100] if slide.get('description') else None,
+                        'bullets': slide.get('bullets', [])[:3] if slide.get('bullets') else None,
+                    }
+
+                    # Check for content issues
+                    if i > 0 and slide.get('type', '').upper() != 'CTA':  # Content slides
+                        if not slide.get('description') and not slide.get('bullets'):
+                            analysis['issue'] = "NO CONTENT - slide will only show title!"
+                        else:
+                            analysis['issue'] = None
+
+                    slide_analysis.append(analysis)
+                else:
+                    slide_analysis.append({
+                        'slide_number': i + 1,
+                        'issue': f"Not a dict: {type(slide)}",
+                        'raw_value': str(slide)[:200]
+                    })
+
+        return jsonify({
+            'post_id': post_id,
+            'title': post.get('title'),
+            'post_type': post.get('post_type'),
+            'status': post.get('status'),
+            'carousel_data': carousel_data,
+            'carousel_data_type': type(carousel_data).__name__ if carousel_data else None,
+            'generation_prompt': generation_prompt,
+            'generation_prompt_type': type(generation_prompt).__name__ if generation_prompt else None,
+            'content_text': post.get('content_text', '')[:500] if post.get('content_text') else None,
+            'caption': str(post.get('caption', ''))[:500] if post.get('caption') else None,
+            'media_url': media_url,
+            'media_url_count': len(media_url) if isinstance(media_url, list) else (1 if media_url else 0),
+            'slides_found': len(slides) if slides else 0,
+            'slides_source': slides_source,
+            'slide_analysis': slide_analysis,
+            'diagnosis': {
+                'has_carousel_data': carousel_data is not None,
+                'has_slides': slides is not None and len(slides) > 0,
+                'slides_in_generation_prompt': slides_source and 'generation_prompt' in slides_source,
+                'content_missing': any(s.get('issue') for s in slide_analysis if isinstance(s, dict)),
+            }
+        }), 200
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
         }), 500
 
 
