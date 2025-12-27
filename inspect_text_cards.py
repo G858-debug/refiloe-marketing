@@ -6,8 +6,8 @@ Usage: python inspect_text_cards.py "SUPABASE_URL" "SUPABASE_SERVICE_KEY"
 """
 import sys
 import json
+import requests
 from datetime import datetime, timezone
-from supabase import create_client
 
 def main():
     if len(sys.argv) != 3:
@@ -23,13 +23,22 @@ def main():
     print(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
 
-    # Connect to Supabase
-    supabase = create_client(supabase_url, supabase_key)
+    # Query Supabase REST API directly
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json"
+    }
 
     # Fetch all text_card posts
-    result = supabase.table("scheduled_posts").select("*").eq("post_type", "text_card").order("scheduled_time", desc=True).execute()
+    url = f"{supabase_url}/rest/v1/social_posts?post_type=eq.text_card&order=scheduled_time.desc"
+    response = requests.get(url, headers=headers)
 
-    text_cards = result.data
+    if response.status_code != 200:
+        print(f"Error fetching data: {response.status_code} - {response.text}")
+        sys.exit(1)
+
+    text_cards = response.json()
     total_count = len(text_cards)
 
     print(f"📊 TOTAL TEXT CARDS: {total_count}")
