@@ -517,9 +517,20 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
         poster = FacebookPoster(page_access_token, page_id, db.db)
 
         # Prepare post_data dict with content, hashtags, and scheduled_time
-        # Extract hashtags with fallback logic if None
+        # Try multiple sources for hashtags and parse JSON if needed
         hashtags = post.get('hashtags')
-        if hashtags is None:
+
+        # Parse hashtags if it's a JSON string
+        if hashtags and isinstance(hashtags, str):
+            try:
+                hashtags = json.loads(hashtags)
+                log_info(f"Parsed hashtags from JSON string: {hashtags}")
+            except json.JSONDecodeError:
+                log_warning(f"Failed to parse hashtags JSON: {hashtags}")
+                hashtags = None
+
+        # Fallback to metadata if hashtags not found or empty
+        if not hashtags:
             # Fallback 1: Try generation_prompt -> hashtags
             generation_prompt = post.get('generation_prompt')
             if generation_prompt:
@@ -531,6 +542,13 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
                         generation_prompt = None
                 if isinstance(generation_prompt, dict) and generation_prompt.get('hashtags'):
                     hashtags = generation_prompt['hashtags']
+                    if hashtags and isinstance(hashtags, str):
+                        try:
+                            hashtags = json.loads(hashtags)
+                            log_info(f"Parsed hashtags from generation_prompt: {hashtags}")
+                        except json.JSONDecodeError:
+                            log_warning(f"Failed to parse generation_prompt hashtags: {hashtags}")
+                            hashtags = None
 
             # Fallback 2: Try metadata -> hashtags
             if hashtags is None:
@@ -544,6 +562,13 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
                             metadata = None
                     if isinstance(metadata, dict) and metadata.get('hashtags'):
                         hashtags = metadata['hashtags']
+                        if hashtags and isinstance(hashtags, str):
+                            try:
+                                hashtags = json.loads(hashtags)
+                                log_info(f"Parsed hashtags from metadata: {hashtags}")
+                            except json.JSONDecodeError:
+                                log_warning(f"Failed to parse metadata hashtags: {hashtags}")
+                                hashtags = None
 
             # Fallback 3: Extract from content_text using regex
             if hashtags is None:
