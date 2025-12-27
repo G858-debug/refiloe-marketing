@@ -4174,8 +4174,20 @@
 
                 if (data.success) {
                     showToast('Text card updated and image regenerated!', 'success');
+
+                    // Update the specific image without full page refresh
+                    const postId = document.getElementById('text-card-edit-post-id').value;
+                    const imgElement = document.querySelector(`img[data-post-id="${postId}"]`);
+
+                    if (imgElement && data.new_image_url) {
+                        imgElement.src = data.new_image_url;
+                    }
+
                     closeTextCardEditModal();
-                    refreshPosts();
+
+                    // Optional: Still refresh posts in background to update other metadata
+                    // but user sees image update immediately
+                    setTimeout(() => refreshPosts(), 500);
                 } else {
                     showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
                 }
