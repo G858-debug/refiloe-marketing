@@ -5690,7 +5690,20 @@ def regenerate_carousel_cover(post_id):
                 carousel_data = None
 
         if not carousel_data:
-            return jsonify({'success': False, 'error': 'No carousel data found in post'}), 400
+            # Fallback: Create minimal carousel_data from post title/caption
+            log_warning(f"⚠️ No carousel_data found, using post title/caption as fallback")
+
+            # Get title from post
+            post_title = post.get('title') or post.get('caption', '')[:60] or 'Tips for Personal Trainers'
+
+            # Create minimal carousel data structure
+            carousel_data = {
+                'slides': [
+                    {'type': 'COVER', 'title': post_title}
+                ],
+                'content_type': 'educational'
+            }
+            log_info(f"📝 Created fallback carousel_data with title: {post_title[:50]}...")
 
         # Handle different carousel_data formats
         if isinstance(carousel_data, list):
@@ -5722,12 +5735,17 @@ def regenerate_carousel_cover(post_id):
 
         # If no title in cover key, try the first slide's title
         if not cover_title:
-            cover_slide = slides[0]
-            cover_title = cover_slide.get('title') or cover_slide.get('text', 'Untitled')
-        else:
-            cover_slide = slides[0]
+            if slides and len(slides) > 0:
+                first_slide = slides[0]
+                cover_title = first_slide.get('title', '') or first_slide.get('text', '')
 
-        log_info(f"📝 Extracted cover title: {cover_title}")
+        # Final fallback to post title
+        if not cover_title:
+            cover_title = post.get('title') or post.get('caption', '')[:60] or 'Tips for Personal Trainers'
+
+        cover_slide = slides[0] if slides else {'type': 'COVER', 'title': cover_title}
+
+        log_info(f"📝 Using cover title: {cover_title[:50]}...")
 
         # Ensure the cover slide has the proper title
         cover_slide_with_title = {
