@@ -10,6 +10,7 @@ import os
 import atexit
 import uuid
 import json
+import random
 import traceback
 import threading
 from flask import Flask, Blueprint, jsonify, request, render_template
@@ -621,6 +622,43 @@ def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -
     })
 
     return {"slides": slides, "content_type": content_type}
+
+
+def generate_trainer_hashtags(content_type: str = 'educational') -> list:
+    """Generate relevant hashtags for personal trainer content.
+
+    Args:
+        content_type: Type of content - 'educational', 'motivational', 'admin_hacks',
+                      'relatable', or 'business'
+
+    Returns:
+        List of hashtags (7-8 tags) including core, content-specific, SA, and brand tags
+    """
+    # Core hashtags (always include 3 of these)
+    core_hashtags = [
+        '#PersonalTrainer', '#FitnessCoach', '#PTLife', '#FitnessBusiness',
+        '#PersonalTraining', '#FitnessIndustry', '#TrainerLife'
+    ]
+
+    # Content-type specific hashtags
+    type_hashtags = {
+        'educational': ['#FitnessTips', '#TrainerTips', '#FitnessEducation', '#LearnFitness'],
+        'motivational': ['#FitnessMotivation', '#GymMotivation', '#FitInspiration', '#MondayMotivation'],
+        'admin_hacks': ['#BusinessTips', '#ProductivityHacks', '#TimeManagement', '#WorkSmarter'],
+        'relatable': ['#TrainerProblems', '#GymLife', '#FitnessHumor', '#PTProblems'],
+        'business': ['#FitnessBusiness', '#EntrepreneurLife', '#BusinessGrowth', '#SideHustle']
+    }
+
+    # South African hashtags (include 1)
+    sa_hashtags = ['#SouthAfrica', '#SAFitness', '#MzansiFitness', '#FitnessSA']
+
+    hashtags = []
+    hashtags.extend(random.sample(core_hashtags, 3))
+    hashtags.extend(random.sample(type_hashtags.get(content_type, type_hashtags['educational']), 2))
+    hashtags.extend(random.sample(sa_hashtags, 1))
+    hashtags.append('#Refiloe')  # Brand hashtag
+
+    return hashtags
 
 
 def init_scheduler():
@@ -5347,6 +5385,24 @@ def api_generate_media(post_id):
                     log_error(f"Update traceback: {traceback.format_exc()}")
                     raise
 
+                # Step 7b: Ensure hashtags exist for carousel post
+                try:
+                    existing_hashtags = post_data.get('hashtags')
+                    if not existing_hashtags or len(existing_hashtags) == 0:
+                        hashtags = generate_trainer_hashtags(content_type)
+
+                        # Update post with hashtags
+                        supabase_client.table('social_posts').update({
+                            'hashtags': hashtags
+                        }).eq('id', post_id).execute()
+
+                        log_info(f"📌 Added {len(hashtags)} hashtags to carousel post: {hashtags}")
+                    else:
+                        log_info(f"📌 Carousel post already has hashtags: {existing_hashtags}")
+                except Exception as hashtag_error:
+                    log_warning(f"⚠️ Failed to add hashtags to carousel: {hashtag_error}")
+                    # Don't fail the whole request if hashtags fail
+
                 # Step 8: Return success
                 log_info(f"🎉 Carousel generation complete for post {post_id}")
                 return jsonify({
@@ -7904,6 +7960,68 @@ def internal_error(error):
     """Handle 500 errors"""
     log_error(f"Internal server error: {str(error)}")
     return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/dashboard/fix-carousel-hashtags/<post_id>', methods=['POST'])
+def api_fix_carousel_hashtags(post_id):
+    """Fix hashtags for an existing carousel post.
+
+    Can be used to add hashtags to carousel posts that were created without them.
+    """
+    log_info(f"📥 Request: /api/dashboard/fix-carousel-hashtags/{post_id}")
+
+    if not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        # Get the post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Check if it's a carousel post
+        if post.get('post_type') != 'carousel' and post.get('media_type') != 'carousel':
+            return jsonify({
+                'success': False,
+                'error': f"Post is not a carousel (type: {post.get('post_type') or post.get('media_type')})"
+            }), 400
+
+        # Get content_type from metadata
+        content_type = 'educational'  # Default
+        if post.get('generation_prompt'):
+            try:
+                metadata = json.loads(post['generation_prompt'])
+                content_type = metadata.get('content_type', 'educational')
+            except:
+                pass
+
+        # Generate hashtags
+        hashtags = generate_trainer_hashtags(content_type)
+
+        # Update the post
+        supabase_client.table('social_posts').update({
+            'hashtags': hashtags,
+            'updated_at': datetime.now(SA_TZ).isoformat()
+        }).eq('id', post_id).execute()
+
+        log_info(f"✅ Added {len(hashtags)} hashtags to carousel post {post_id}: {hashtags}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Added {len(hashtags)} hashtags to carousel post',
+            'post_id': post_id,
+            'hashtags': hashtags,
+            'content_type': content_type
+        })
+
+    except Exception as e:
+        log_error(f"❌ Error fixing carousel hashtags: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # Initialize application
