@@ -415,9 +415,11 @@ def convert_carousel_format(data: dict, content_type: str = 'educational') -> di
     # Content slides
     content_slides = data.get('content_slides', [])
     for i, slide in enumerate(content_slides, 1):
+        # Accept both 'step_title' (preferred) and 'title' (fallback)
+        step_title = slide.get('step_title') or slide.get('title') or f"Step {i}"
         slides.append({
             "type": "CONTENT",
-            "step_title": slide.get('title', f"Step {i}"),
+            "step_title": step_title,
             "bullets": slide.get('bullets', [])
         })
 
@@ -5460,36 +5462,59 @@ def api_generate_media(post_id):
             try:
                 # Step 1: Get carousel data from metadata or parse from caption
                 caption = post_data.get('content_text', '')
-
-                # Get carousel content from metadata
-                # Note: metadata may use 'carousel_data' OR 'carousel_slides' depending on how it was created
-                carousel_data = metadata.get('carousel_data') or metadata.get('carousel_slides')
                 content_type = metadata.get('content_type', 'educational')
+                data_source = None  # Track where carousel data comes from
 
                 log_info(f"📝 Caption length: {len(caption)} chars")
                 log_info(f"🎨 Content type: {content_type}")
 
-                # Check if carousel_slides is a list (raw slides) vs dict with 'slides' key
-                if carousel_data:
-                    if isinstance(carousel_data, list):
-                        # It's a raw list of slides - need to transform to expected format
-                        log_info(f"📊 Found carousel_slides as list with {len(carousel_data)} items")
+                # Get carousel content from metadata
+                # Priority: carousel_data (preferred) > carousel_slides (legacy) > caption parsing (fallback)
+                carousel_data = metadata.get('carousel_data')
 
-                        # Transform slides to the format carousel_template_generator expects
+                if carousel_data:
+                    if isinstance(carousel_data, dict) and carousel_data.get('slides'):
+                        data_source = "generation_prompt.carousel_data (structured format)"
+                        log_info(f"✅ Using structured carousel_data with {len(carousel_data.get('slides', []))} slides")
+                    elif isinstance(carousel_data, dict) and carousel_data.get('content_slides'):
+                        # It has cover, content_slides, cta_slide format - convert it
+                        data_source = "generation_prompt.carousel_data (cover/content_slides format)"
+                        log_info(f"📊 Found carousel_data with content_slides, converting to slides format")
+                        carousel_data = convert_carousel_format(carousel_data, content_type)
+                    elif isinstance(carousel_data, list):
+                        # It's a raw list of slides - transform it
+                        data_source = "generation_prompt.carousel_data (raw list)"
+                        log_info(f"📊 Found carousel_data as raw list with {len(carousel_data)} items")
                         transformed_slides = transform_raw_slides_to_carousel_format(carousel_data)
                         carousel_data = {'slides': transformed_slides, 'content_type': content_type}
-                        log_info(f"✅ Transformed {len(transformed_slides)} slides to carousel format")
-                    elif isinstance(carousel_data, dict) and not carousel_data.get('slides'):
-                        # It might have cover, content_slides, cta_slide format - convert it
-                        log_info(f"📊 Found carousel_data dict, converting to slides format")
-                        carousel_data = convert_carousel_format(carousel_data, content_type)
                     else:
-                        log_info(f"📊 Found carousel_data with {len(carousel_data.get('slides', []))} slides")
+                        log_warning(f"⚠️ carousel_data has unexpected structure: {type(carousel_data)}")
+                        carousel_data = None
 
+                # Try carousel_slides if carousel_data didn't work
                 if not carousel_data or not carousel_data.get('slides'):
-                    log_warning(f"⚠️  No valid carousel_data in metadata, parsing from caption")
+                    carousel_slides = metadata.get('carousel_slides')
+                    if carousel_slides:
+                        if isinstance(carousel_slides, list):
+                            data_source = "generation_prompt.carousel_slides (legacy list)"
+                            log_info(f"📊 Using legacy carousel_slides with {len(carousel_slides)} items")
+                            transformed_slides = transform_raw_slides_to_carousel_format(carousel_slides)
+                            carousel_data = {'slides': transformed_slides, 'content_type': content_type}
+                            log_info(f"✅ Transformed {len(transformed_slides)} slides to carousel format")
+                        elif isinstance(carousel_slides, dict) and carousel_slides.get('slides'):
+                            data_source = "generation_prompt.carousel_slides (dict with slides)"
+                            carousel_data = carousel_slides
+                            log_info(f"✅ Found carousel_slides with {len(carousel_data.get('slides', []))} slides")
+
+                # Final fallback: parse from caption
+                if not carousel_data or not carousel_data.get('slides'):
+                    data_source = "caption parsing (fallback)"
+                    log_warning(f"⚠️ No valid carousel data in metadata, parsing from caption")
                     carousel_data = parse_caption_to_carousel(caption, content_type)
                     log_info(f"✅ Parsed carousel from caption with {len(carousel_data.get('slides', []))} slides")
+
+                # Log the final data source
+                log_info(f"📌 CAROUSEL DATA SOURCE: {data_source}")
 
                 # Ensure content_type is set
                 carousel_data['content_type'] = content_type

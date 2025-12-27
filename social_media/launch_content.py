@@ -31,6 +31,80 @@ except ImportError:  # pragma: no cover - fallback when imported from package wr
 SA_TIMEZONE = pytz.timezone("Africa/Johannesburg")
 
 
+def _transform_carousel_slides_to_carousel_data(carousel_slides: list, content_type: str = 'educational') -> dict:
+    """Transform legacy carousel_slides format to carousel_data format for CarouselTemplateGenerator.
+
+    Converts from:
+        [{"slide_number": 1, "text": "...", "description": "..."}, ...]
+
+    To:
+        {"slides": [{"type": "COVER", "title": "..."}, {"type": "CONTENT", ...}, {"type": "CTA", ...}]}
+
+    Args:
+        carousel_slides: List of slides in legacy format
+        content_type: Content type for styling (educational, motivational, etc.)
+
+    Returns:
+        Dict with 'slides' key in carousel_data format
+    """
+    import random
+
+    if not carousel_slides:
+        return {'slides': [], 'content_type': content_type}
+
+    slides = []
+
+    # CTA messages to rotate through (varied mix - 25% each category)
+    cta_messages = [
+        {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+        {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+        {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+        {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+        {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+        {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+        {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+        {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+    ]
+
+    # First slide becomes the COVER
+    first_slide = carousel_slides[0]
+    cover_title = first_slide.get('text', '') or first_slide.get('title', 'Tips for Personal Trainers')
+    if len(cover_title) > 60:
+        cover_title = cover_title[:57] + '...'
+
+    slides.append({
+        'type': 'COVER',
+        'title': cover_title,
+        'avatar_path': ''
+    })
+
+    # Remaining slides become CONTENT slides
+    for slide in carousel_slides[1:]:
+        text = slide.get('text', '') or slide.get('title', '')
+        description = slide.get('description', '') or ''
+
+        # Use text as step_title, description as bullet
+        step_title = text[:40] if text else 'Tip'
+        bullets = [description] if description else [text] if text else ['Learn more']
+
+        slides.append({
+            'type': 'CONTENT',
+            'step_title': step_title,
+            'bullets': bullets
+        })
+
+    # Add CTA slide
+    cta = random.choice(cta_messages)
+    slides.append({
+        'type': 'CTA',
+        'headline': cta['headline'],
+        'cta_text': cta['cta_text'],
+        'subtext': cta['subtext']
+    })
+
+    return {'slides': slides, 'content_type': content_type}
+
+
 class LaunchContentGenerator:
     """Generates 9 VALUE-FIRST posts for the first 3 days of Facebook launch.
 
@@ -1057,12 +1131,24 @@ def seed_launch_content(supabase_client, start_date: Optional[datetime] = None, 
         try:
             # Prepare post data for database
             # Store extended metadata in generation_prompt as JSON
+
+            # For carousel posts, transform carousel_slides to carousel_data format
+            carousel_data = None
+            carousel_slides = post.get("carousel_slides")
+            if carousel_slides and post.get("post_type") == "carousel":
+                carousel_data = _transform_carousel_slides_to_carousel_data(
+                    carousel_slides,
+                    content_type=post.get("content_theme", "educational")
+                )
+                log_info(f"📊 Transformed {len(carousel_slides)} carousel_slides to carousel_data with {len(carousel_data.get('slides', []))} slides")
+
             metadata = {
                 "day": post["day"],
                 "post_number": post["post_number"],
                 "video_script": post.get("video_script"),
                 "avatar_id_env": post.get("avatar_id_env"),
-                "carousel_slides": post.get("carousel_slides"),
+                "carousel_slides": carousel_slides,  # Keep legacy format for backwards compatibility
+                "carousel_data": carousel_data,  # Add properly structured carousel_data
                 "image_prompt": post.get("image_prompt"),
                 "hashtags": post.get("hashtags", []),
                 "call_to_action": post.get("call_to_action"),

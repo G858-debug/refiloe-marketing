@@ -468,7 +468,7 @@ OUTPUT FORMAT (JSON):
     "content_slides": [
         {{
             "step_number": 1,
-            "title": "Set Up Your System",
+            "step_title": "Set Up Your System",
             "bullets": [
                 "Create your WhatsApp Business account",
                 "Set up automated greeting messages",
@@ -580,7 +580,9 @@ Generate the carousel content now:"""
 
         for i, slide in enumerate(content_slides[:num_content_slides]):
             step_number = slide.get("step_number", i + 1)
-            title = filter_banned_words(str(slide.get("title", f"Step {step_number}")))[:40]
+            # Accept both 'step_title' (preferred) and 'title' (fallback)
+            raw_title = slide.get("step_title") or slide.get("title") or f"Step {step_number}"
+            step_title = filter_banned_words(str(raw_title))[:40]
 
             # Validate bullets (3-5 per slide, 80 chars each)
             raw_bullets = slide.get("bullets", [])
@@ -595,7 +597,8 @@ Generate the carousel content now:"""
 
             validated_slides.append({
                 "step_number": step_number,
-                "title": title,
+                "step_title": step_title,  # Use step_title for carousel template generator
+                "title": step_title,  # Keep title for backwards compatibility
                 "bullets": bullets,
             })
 
@@ -603,6 +606,7 @@ Generate the carousel content now:"""
         while len(validated_slides) < num_content_slides:
             validated_slides.append({
                 "step_number": len(validated_slides) + 1,
+                "step_title": f"Step {len(validated_slides) + 1}",
                 "title": f"Step {len(validated_slides) + 1}",
                 "bullets": [
                     "Action item one",
