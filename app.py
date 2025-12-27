@@ -487,8 +487,17 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         text = clean_text(slide.get('text', ''))
         description = clean_text(slide.get('description', ''))
 
-        # Use the text as the contextual header
-        header = text if text else f"Tip {i + 1}"
+        # Remove "Slide X:" prefix if present
+        import re
+        if text and re.match(r'^Slide\s*\d+\s*:', text, re.IGNORECASE):
+            # Extract just the title part after "Slide X:"
+            text = re.sub(r'^Slide\s*\d+\s*:\s*', '', text, flags=re.IGNORECASE)
+
+        # Create step title - use cleaned text or fall back to generic
+        if text:
+            header = f"Step {i + 1}: {text}"
+        else:
+            header = f"Step {i + 1}"
 
         # Build bullets from description
         bullets = []
@@ -500,7 +509,13 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
                 bullets = [description]
 
         if not bullets:
-            bullets = [text] if text else ["More details coming soon"]
+            # If no description, the text IS the content
+            if description:
+                bullets = [description]
+            elif text:
+                bullets = [text]
+            else:
+                bullets = ["More details coming soon"]
 
         transformed.append({
             'type': 'CONTENT',

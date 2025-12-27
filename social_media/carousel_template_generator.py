@@ -3,7 +3,7 @@ import os
 import uuid
 import textwrap
 from typing import Dict, List, Optional, Tuple
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 import yaml
 from pathlib import Path
 
@@ -1007,8 +1007,9 @@ class CarouselTemplateGenerator:
                         response.raise_for_status()
                         image = Image.open(BytesIO(response.content))
                         image = image.convert('RGB')
-                        # Resize to match our slide dimensions
-                        image = image.resize((self.SLIDE_WIDTH, self.SLIDE_HEIGHT), Image.Resampling.LANCZOS)
+                        # Use ImageOps.fit to resize and crop from center, preserving aspect ratio
+                        # centering=(0.5, 0.3) means center horizontally, crop more from bottom (keeps face in frame)
+                        image = ImageOps.fit(image, (self.SLIDE_WIDTH, self.SLIDE_HEIGHT), method=Image.Resampling.LANCZOS, centering=(0.5, 0.3))
 
                         # Add brand overlay elements for consistency with other slides
                         image = self._add_cover_overlay(image, slide_number, total_slides)
