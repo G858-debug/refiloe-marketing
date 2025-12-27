@@ -36,7 +36,7 @@ class ContentGenerator:
             raise ValueError("ANTHROPIC_API_KEY environment variable is required")
         
         self.claude_client = Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250514"  # Using the specified model
+        self.model = "claude-sonnet-4-5-20250929"  # Using the specified model
 
         # Load the Refiloe Writing Style Guide
         self.style_guide = self._load_style_guide()
