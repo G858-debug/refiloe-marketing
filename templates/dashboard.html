@@ -1672,6 +1672,16 @@
             const card = document.createElement('div');
             card.className = 'post-card';
 
+            // Parse hashtags if they're a JSON string
+            if (post.hashtags && typeof post.hashtags === 'string') {
+                try {
+                    post.hashtags = JSON.parse(post.hashtags);
+                } catch (e) {
+                    console.warn('Failed to parse hashtags:', e);
+                    post.hashtags = [];
+                }
+            }
+
             // Get post type - check multiple possible field names
             const postType = post.post_type || post.type || post.format || 'post';
             console.log(`Creating card for post ${post.id}: type="${postType}" (post_type: ${post.post_type}, format: ${post.format})`);
@@ -1706,6 +1716,20 @@
                     <strong>Caption:</strong>
                     <p>${captionText}</p>
                 </div>
+
+                <!-- Display hashtags if present -->
+                ${post.hashtags && post.hashtags.length > 0 ? `
+                    <div class="post-hashtags" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                        <strong style="display: block; margin-bottom: 8px; color: #6b7280; font-size: 13px;">Hashtags:</strong>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${post.hashtags.map(tag => {
+                                // Ensure tag starts with #
+                                const displayTag = tag.startsWith('#') ? tag : '#' + tag;
+                                return \`<span style="background: #f3f4f6; color: #374151; padding: 4px 10px; border-radius: 12px; font-size: 13px; font-weight: 500;">\${escapeHtml(displayTag)}</span>\`;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
 
                 <div class="post-meta">
                     <span class="scheduled-time">📅 ${scheduledDate}</span>
