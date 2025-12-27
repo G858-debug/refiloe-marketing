@@ -535,6 +535,7 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     for i, slide in enumerate(content_slides):
         # Handle both legacy ('text') and AI-generated ('title') formats
         text = clean_text(slide.get('text', '') or slide.get('title', ''))
+        title = clean_text(slide.get('title', ''))
 
         # Handle both legacy ('description') and AI-generated ('bullets') formats
         description = clean_text(slide.get('description', ''))
@@ -542,13 +543,12 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
 
         # Clean "Slide X:" prefix from all content sources
         text = clean_slide_prefix(text)
+        title = clean_slide_prefix(title)
         description = clean_slide_prefix(description)
 
-        # Create step title - use cleaned text or fall back to generic
-        if text:
-            header = f"Step {i + 1}: {text}"
-        else:
-            header = f"Step {i + 1}"
+        # Use title as the step header, or cleaned text, or fall back to generic
+        # Prefer title field, then text field, then generic
+        header = title or text or f"Step {i + 1}"
 
         # Build bullets - check AI-generated 'bullets' first, then fall back to 'description'
         bullets = []
@@ -575,11 +575,14 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
                 bullets = [description]
             log_info(f"  Slide {i+2}: Parsed {len(bullets)} bullets from description")
 
-        # Priority 3: Use the title text as fallback content
+        # Priority 3: Use the text as fallback content (if different from header)
         if not bullets:
-            if text:
+            if text and text != header:
                 bullets = [text]
-                log_info(f"  Slide {i+2}: Using title text as fallback content")
+                log_info(f"  Slide {i+2}: Using text as fallback content")
+            elif header:
+                bullets = [f"Learn more about {header}"]
+                log_info(f"  Slide {i+2}: Using generated fallback content")
             else:
                 bullets = ["More tips coming soon!"]
                 log_warning(f"  Slide {i+2}: No content found - using placeholder!")
@@ -608,6 +611,10 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
 def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -> dict:
     """Parse a caption/content text into carousel slide structure.
 
+    Handles the pattern:
+    Slide X: Title
+    Description text for that slide
+
     Args:
         caption: The post caption/content text
         content_type: Content type for styling
@@ -615,82 +622,121 @@ def parse_caption_to_carousel(caption: str, content_type: str = 'educational') -
     Returns:
         Dict with 'slides' key containing slide configurations
     """
+    import re
+    import random
+
     slides = []
 
-    # Extract title from first line or first sentence
-    lines = [l.strip() for l in caption.split('\n') if l.strip()]
+    if not caption:
+        return {'slides': [], 'content_type': content_type}
+
+    # Split into lines and clean
+    lines = [line.strip() for line in caption.split('\n') if line.strip()]
 
     if not lines:
-        # Fallback title
-        title = "Tips for Personal Trainers"
-    else:
-        # Use first line as title, truncate if needed
-        title = lines[0][:60]
-        if title.endswith(('...', '.', '!')):
-            pass
-        elif len(lines[0]) > 60:
-            title = title.rsplit(' ', 1)[0] + '...'
+        return {'slides': [], 'content_type': content_type}
 
-    # Slide 1: COVER
+    # Extract the hook/intro (first line before any "Slide X:")
+    hook_line = lines[0] if lines and not re.match(r'^Slide\s*\d+\s*:', lines[0], re.IGNORECASE) else None
+
+    # Find all "Slide X: Title" patterns and pair with their descriptions
+    slide_pattern = re.compile(r'^Slide\s*(\d+)\s*:\s*(.+)$', re.IGNORECASE)
+
+    parsed_slides = []
+    current_slide = None
+
+    for line in lines:
+        match = slide_pattern.match(line)
+
+        if match:
+            # Save previous slide if exists
+            if current_slide:
+                parsed_slides.append(current_slide)
+
+            # Start new slide
+            slide_num = int(match.group(1))
+            slide_title = match.group(2).strip()
+            current_slide = {
+                'number': slide_num,
+                'title': slide_title,
+                'content': []
+            }
+        elif current_slide:
+            # This line is content for the current slide
+            # Skip if it's just the hook repeated or empty
+            if line and line != hook_line:
+                current_slide['content'].append(line)
+
+    # Don't forget the last slide
+    if current_slide:
+        parsed_slides.append(current_slide)
+
+    # If no slides were parsed with the pattern, fall back to line-by-line
+    if not parsed_slides:
+        # Fallback: treat each substantial line as a slide
+        for i, line in enumerate(lines[:6]):
+            if len(line) > 10:
+                parsed_slides.append({
+                    'number': i + 1,
+                    'title': f'Tip {i + 1}',
+                    'content': [line]
+                })
+
+    # Build the cover slide
+    cover_title = hook_line if hook_line else (parsed_slides[0]['title'] if parsed_slides else 'Tips for Trainers')
+    # Truncate cover title to fit
+    if len(cover_title) > 60:
+        cover_title = cover_title[:57] + '...'
+
     slides.append({
-        "type": "COVER",
-        "title": title,
-        "avatar_path": ""
+        'type': 'COVER',
+        'title': cover_title,
+        'avatar_path': ''
     })
 
-    # Try to extract bullet points or key points from content
-    key_points = []
+    # Build content slides (limit to 5-6 content slides for good carousel length)
+    max_content_slides = 5
+    for i, parsed in enumerate(parsed_slides[:max_content_slides]):
+        # Combine content lines into a single description
+        content_text = ' '.join(parsed['content']) if parsed['content'] else parsed['title']
 
-    for line in lines[1:]:  # Skip title
-        # Skip very short lines or hashtag lines
-        if len(line) < 10 or line.startswith('#'):
-            continue
-        # Look for bullet-like patterns
-        clean_line = line.lstrip('•-*→✓✅1234567890.)')
-        clean_line = clean_line.strip()
-        if clean_line and len(clean_line) > 15:
-            key_points.append(clean_line)
+        # The title becomes the step header
+        step_title = parsed['title']
 
-    # If no bullet points found, split content into chunks
-    if not key_points:
-        # Join all non-title content
-        content = ' '.join(lines[1:])
-        # Split into sentences
-        sentences = content.replace('!', '.').replace('?', '.').split('.')
-        key_points = [s.strip() for s in sentences if len(s.strip()) > 20][:5]
-
-    # Ensure we have at least 3 key points
-    default_points = [
-        "Automate your client communication",
-        "Save hours on admin tasks every week",
-        "Focus on what you do best - training clients"
-    ]
-    while len(key_points) < 3:
-        if default_points:
-            key_points.append(default_points.pop(0))
-        else:
-            key_points.append("More tips coming soon")
-
-    # Slides 2-4: CONTENT (3 content slides)
-    for i, point in enumerate(key_points[:3], 1):
-        # Truncate bullet text if too long
-        bullet_text = point[:80] if len(point) > 80 else point
+        # The content becomes the bullet
+        bullets = [content_text] if content_text and content_text != step_title else [f"Learn more about {step_title}"]
 
         slides.append({
-            "type": "CONTENT",
-            "step_title": f"Step {i}",
-            "bullets": [bullet_text]
+            'type': 'CONTENT',
+            'step_title': step_title,
+            'bullets': bullets
         })
 
-    # Slide 5: CTA
+    # Add CTA slide with varied messaging
+    cta_messages = [
+        # Follow CTAs (25%)
+        {"headline": "Ready to scale?", "cta_text": "Hit follow!", "subtext": "Tips to grow your PT business"},
+        {"headline": "Want more tips?", "cta_text": "Follow for daily insights", "subtext": "Join the community"},
+        # Inspirational (25%)
+        {"headline": "Remember why you started", "cta_text": "Your clients need YOU", "subtext": "Keep pushing forward"},
+        {"headline": "Success is built daily", "cta_text": "Small steps, big results", "subtext": "You've got this"},
+        # Save/Share (25%)
+        {"headline": "Found this helpful?", "cta_text": "Save for later!", "subtext": "Share with a fellow trainer"},
+        {"headline": "Bookmark this", "cta_text": "You'll thank yourself later", "subtext": "Tag a trainer who needs this"},
+        # Engagement (25%)
+        {"headline": "What's your biggest challenge?", "cta_text": "Drop a comment below", "subtext": "Let's solve it together"},
+        {"headline": "Which tip resonated most?", "cta_text": "Tell us in the comments", "subtext": "We read every one"},
+    ]
+
+    cta = random.choice(cta_messages)
     slides.append({
-        "type": "CTA",
-        "headline": "Ready to Save Time?",
-        "cta_text": "Follow for more tips!",
-        "subtext": "Save this post for later"
+        'type': 'CTA',
+        'headline': cta['headline'],
+        'cta_text': cta['cta_text'],
+        'subtext': cta['subtext']
     })
 
-    return {"slides": slides, "content_type": content_type}
+    return {'slides': slides, 'content_type': content_type}
 
 
 def generate_trainer_hashtags(content_type: str = 'educational') -> list:
