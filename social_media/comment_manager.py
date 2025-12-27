@@ -176,7 +176,7 @@ Respond ONLY with a JSON object in this exact format:
 {{"category": "one_of_five_categories", "sentiment_score": 0.0, "reasoning": "brief explanation"}}"""
 
             message = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -282,7 +282,7 @@ Guidelines:
 Generate ONLY the reply text, nothing else:"""
 
             message = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}]
             )
