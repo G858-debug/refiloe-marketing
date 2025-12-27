@@ -26,7 +26,7 @@ from utils.logger import log_info, log_error, log_warning
 from utils.whatsapp_notifier import get_whatsapp_notifier
 from utils.supabase_storage import upload_carousel_slide
 
-from social_media.approval_routes import approval_bp
+from social_media.approval_routes import approval_bp, _upload_image_to_facebook_scheduler
 from social_media.analytics_routes import analytics_bp
 from social_media.admin_routes import admin_bp
 from social_media.scheduler import SocialMediaScheduler, create_social_media_scheduler
@@ -4107,7 +4107,68 @@ def api_approve_media(post_id):
         update_time = (datetime.now() - start_time).total_seconds()
 
         if update_result.data:
-            log_info(f"✅ Post {post_id} media approved (Stage 2) - ready for posting in {update_time:.2f}s")
+            log_info(f"✅ Post {post_id} media approved (Stage 2) - status set to 'scheduled' in {update_time:.2f}s")
+
+            # Auto-upload carousel posts to Facebook
+            if post.get('post_type') == 'carousel':
+                log_info(f"🚀 Carousel post detected - auto-uploading to Facebook...")
+                try:
+                    from social_media.database import SocialMediaDatabase
+                    db = SocialMediaDatabase(supabase_client)
+
+                    # Call the existing Facebook upload function
+                    facebook_result = _upload_image_to_facebook_scheduler(db, post)
+
+                    if facebook_result.get('success'):
+                        facebook_post_id = facebook_result.get('facebook_post_id')
+                        log_info(f"✅ Carousel auto-uploaded to Facebook: {facebook_post_id}")
+
+                        # Update status to 'scheduled_on_facebook' and store facebook_post_id
+                        supabase_client.table('social_posts').update({
+                            'status': 'scheduled_on_facebook',
+                            'facebook_post_id': facebook_post_id,
+                            'updated_at': datetime.now(SA_TZ).isoformat()
+                        }).eq('id', post_id).execute()
+
+                        return jsonify({
+                            'success': True,
+                            'message': 'Carousel approved and scheduled on Facebook!',
+                            'post_id': post_id,
+                            'facebook_post_id': facebook_post_id,
+                            'status': 'scheduled_on_facebook',
+                            'update_time': update_time
+                        })
+                    else:
+                        # Facebook upload failed - keep as 'scheduled' for manual retry
+                        error_msg = facebook_result.get('error', 'Unknown error')
+                        log_warning(f"⚠️ Facebook auto-upload failed for {post_id}: {error_msg}")
+                        log_warning("Post remains as 'scheduled' - can be manually uploaded later")
+
+                        return jsonify({
+                            'success': True,
+                            'message': f'Media approved! Post scheduled (Facebook upload pending: {error_msg})',
+                            'post_id': post_id,
+                            'status': 'scheduled',
+                            'facebook_upload_error': error_msg,
+                            'update_time': update_time
+                        })
+
+                except Exception as fb_error:
+                    # Log error but don't fail the approval
+                    log_error(f"❌ Exception during Facebook auto-upload for {post_id}: {fb_error}")
+                    log_error(traceback.format_exc())
+                    log_warning("Post remains as 'scheduled' - can be manually uploaded later")
+
+                    return jsonify({
+                        'success': True,
+                        'message': f'Media approved! Post scheduled (Facebook upload failed: {str(fb_error)})',
+                        'post_id': post_id,
+                        'status': 'scheduled',
+                        'facebook_upload_error': str(fb_error),
+                        'update_time': update_time
+                    })
+
+            # Non-carousel posts - just return success
             return jsonify({
                 'success': True,
                 'message': 'Media approved! Post scheduled for publishing.',
