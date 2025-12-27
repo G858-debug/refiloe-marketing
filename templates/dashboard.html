@@ -4060,11 +4060,13 @@
                 document.getElementById('text-card-edit-post-id').value = postId;
                 document.getElementById('text-card-edit-type').value = textCardType;
 
-                // Set caption
-                document.getElementById('text-card-edit-caption').value = post.content_text || '';
+                // Get caption and hashtags for the form
+                const caption = post.content_text || '';
+                const hashtagsArray = getPostHashtags(post);
+                const hashtags = Array.isArray(hashtagsArray) ? hashtagsArray.join(', ') : '';
 
-                // Build form based on type
-                buildTextCardEditForm(textCardType, textCardContent);
+                // Build form based on type (includes caption and hashtags fields)
+                buildTextCardEditForm(textCardType, textCardContent, caption, hashtags);
 
                 // Update status
                 document.getElementById('text-card-edit-status').textContent =
@@ -4079,7 +4081,7 @@
             }
         }
 
-        function buildTextCardEditForm(textCardType, content) {
+        function buildTextCardEditForm(textCardType, content, caption, hashtags) {
             const container = document.getElementById('text-card-form-container');
             let html = '';
 
@@ -4092,6 +4094,17 @@
                     <div style="margin-bottom: 15px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 500;">Attribution:</label>
                         <input type="text" id="tc-attribution" value="${escapeHtml(content.attribution || 'Refiloe')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <!-- Common hashtags field for all types -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Caption:</label>
+                        <textarea id="tc-caption" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(caption || '')}</textarea>
+                        <small style="color: #6b7280;">The main caption for the post</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Hashtags (comma-separated):</label>
+                        <input type="text" id="tc-hashtags" value="${escapeHtml(hashtags || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" placeholder="#personaltrainer, #fitnessadmin, #trainertools">
+                        <small style="color: #6b7280;">Enter hashtags separated by commas (# is optional)</small>
                     </div>
                 `;
             } else if (textCardType === 'tip') {
@@ -4108,6 +4121,17 @@
                         <label style="display: block; margin-bottom: 5px; font-weight: 500;">Subtitle:</label>
                         <input type="text" id="tc-tip-subtitle" value="${escapeHtml(content.subtitle || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                     </div>
+                    <!-- Common hashtags field for all types -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Caption:</label>
+                        <textarea id="tc-caption" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(caption || '')}</textarea>
+                        <small style="color: #6b7280;">The main caption for the post</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Hashtags (comma-separated):</label>
+                        <input type="text" id="tc-hashtags" value="${escapeHtml(hashtags || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" placeholder="#personaltrainer, #fitnessadmin, #trainertools">
+                        <small style="color: #6b7280;">Enter hashtags separated by commas (# is optional)</small>
+                    </div>
                 `;
             } else if (textCardType === 'educational') {
                 const pointsText = (content.points || []).join('\n');
@@ -4121,12 +4145,64 @@
                         <textarea id="tc-edu-points" rows="6" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(pointsText)}</textarea>
                         <small style="color: #6b7280;">Enter each bullet point on a new line</small>
                     </div>
+                    <!-- Common hashtags field for all types -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Caption:</label>
+                        <textarea id="tc-caption" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(caption || '')}</textarea>
+                        <small style="color: #6b7280;">The main caption for the post</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Hashtags (comma-separated):</label>
+                        <input type="text" id="tc-hashtags" value="${escapeHtml(hashtags || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" placeholder="#personaltrainer, #fitnessadmin, #trainertools">
+                        <small style="color: #6b7280;">Enter hashtags separated by commas (# is optional)</small>
+                    </div>
                 `;
             } else if (textCardType === 'motivation') {
                 html = `
                     <div style="margin-bottom: 15px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivation Statement:</label>
                         <textarea id="tc-motivation-text" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(content.statement || '')}</textarea>
+                    </div>
+                    <!-- Common hashtags field for all types -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Caption:</label>
+                        <textarea id="tc-caption" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(caption || '')}</textarea>
+                        <small style="color: #6b7280;">The main caption for the post</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Hashtags (comma-separated):</label>
+                        <input type="text" id="tc-hashtags" value="${escapeHtml(hashtags || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" placeholder="#personaltrainer, #fitnessadmin, #trainertools">
+                        <small style="color: #6b7280;">Enter hashtags separated by commas (# is optional)</small>
+                    </div>
+                `;
+            } else if (textCardType === 'comparison') {
+                html = `
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Left Side Label:</label>
+                        <input type="text" id="tc-comparison-left-label" value="${escapeHtml(content.left_label || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Left Side Items (one per line):</label>
+                        <textarea id="tc-comparison-left-items" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml((content.left_items || []).join('\n'))}</textarea>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Right Side Label:</label>
+                        <input type="text" id="tc-comparison-right-label" value="${escapeHtml(content.right_label || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Right Side Items (one per line):</label>
+                        <textarea id="tc-comparison-right-items" rows="4" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml((content.right_items || []).join('\n'))}</textarea>
+                    </div>
+                    <!-- Common hashtags field for all types -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Caption:</label>
+                        <textarea id="tc-caption" rows="3" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">${escapeHtml(caption || '')}</textarea>
+                        <small style="color: #6b7280;">The main caption for the post</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Hashtags (comma-separated):</label>
+                        <input type="text" id="tc-hashtags" value="${escapeHtml(hashtags || '')}" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" placeholder="#personaltrainer, #fitnessadmin, #trainertools">
+                        <small style="color: #6b7280;">Enter hashtags separated by commas (# is optional)</small>
                     </div>
                 `;
             } else {
@@ -4143,7 +4219,20 @@
         async function saveTextCardEdit() {
             const postId = document.getElementById('text-card-edit-post-id').value;
             const textCardType = document.getElementById('text-card-edit-type').value;
-            const caption = document.getElementById('text-card-edit-caption').value;
+
+            // Get and include caption from the dynamic form
+            const caption = document.getElementById('tc-caption').value;
+
+            // Get and parse hashtags
+            const hashtagsInput = document.getElementById('tc-hashtags').value;
+            const hashtagsArray = hashtagsInput
+                .split(',')
+                .map(tag => {
+                    tag = tag.trim();
+                    // Add # if not present
+                    return tag.startsWith('#') ? tag : '#' + tag;
+                })
+                .filter(tag => tag.length > 1); // Filter out empty or just '#'
 
             // Build content based on type
             let textCardContent = {};
@@ -4173,10 +4262,22 @@
                 textCardContent = {
                     statement: document.getElementById('tc-motivation-text').value
                 };
+            } else if (textCardType === 'comparison') {
+                const leftItemsEl = document.getElementById('tc-comparison-left-items');
+                const rightItemsEl = document.getElementById('tc-comparison-right-items');
+
+                textCardContent = {
+                    left_label: document.getElementById('tc-comparison-left-label').value,
+                    left_items: leftItemsEl ? leftItemsEl.value.split('\n').filter(p => p.trim() !== '') : [],
+                    right_label: document.getElementById('tc-comparison-right-label').value,
+                    right_items: rightItemsEl ? rightItemsEl.value.split('\n').filter(p => p.trim() !== '') : []
+                };
+
+                console.log('Comparison content collected:', textCardContent);
             }
 
             // Debug: Show what we're sending
-            console.log('Saving text card:', { postId, textCardType, textCardContent, caption });
+            console.log('Saving text card:', { postId, textCardType, textCardContent, caption, hashtags: hashtagsArray });
 
             // Disable save button
             const saveBtn = document.getElementById('text-card-save-btn');
@@ -4190,7 +4291,8 @@
                     body: JSON.stringify({
                         text_card_type: textCardType,
                         text_card_content: textCardContent,
-                        caption: caption
+                        caption: caption,
+                        hashtags: hashtagsArray
                     })
                 });
 
