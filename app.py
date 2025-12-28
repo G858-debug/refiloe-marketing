@@ -7295,9 +7295,13 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     video_script = None
                     # Extract title
                     reel_title = content.get('title', '')
-                    # Extract hashtags from generator response
-                    if content.get('hashtags'):
-                        generated_hashtags = content['hashtags']
+                    # Extract AI-generated hashtags for image posts
+                    generated_hashtags = content.get('hashtags', [])
+                    if not generated_hashtags:
+                        log_info(f"No hashtags in image content, using global hashtags")
+                        generated_hashtags = global_hashtags
+                    else:
+                        log_info(f"Using {len(generated_hashtags)} AI-generated hashtags for image post")
 
                 # === VALIDATION: Skip if content generation failed ===
                 # Check if content generation succeeded
@@ -7345,7 +7349,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     'content_theme': theme_config['theme'],
                     'title': reel_title,
                     'reel_title': reel_title,
-                    'hashtags': generated_hashtags if post_type == 'carousel' else global_hashtags,  # Use AI-generated hashtags for carousel
+                    'hashtags': generated_hashtags,
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
                     'is_pinned': False,
