@@ -2398,6 +2398,9 @@
 
                         showToast('Generating weekly content... Please wait ~2 minutes.', 'info');
 
+                        // Start polling for completion
+                        startWeeklyGenerationPolling();
+
                         const response = await fetch(endpoint, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -2426,6 +2429,61 @@
                     }
                 }
             );
+        }
+
+        // Poll weekly generation status and auto-refresh when complete
+        function startWeeklyGenerationPolling() {
+            console.log('⏳ Starting weekly generation status polling...');
+
+            let pollCount = 0;
+            const maxPolls = 60; // Poll for up to 10 minutes (60 × 10 sec)
+
+            const pollInterval = setInterval(async function() {
+                pollCount++;
+
+                try {
+                    const response = await fetch('/api/dashboard/generation-status');
+                    const status = await response.json();
+
+                    console.log(`🔄 Poll #${pollCount}: ${status.current_action || 'Checking...'}`);
+
+                    // Check if generation is complete
+                    if (!status.is_running) {
+                        clearInterval(pollInterval);
+
+                        const successCount = status.successful?.length || 0;
+                        const failedCount = status.failed?.length || 0;
+
+                        if (successCount > 0) {
+                            console.log(`✅ Weekly generation complete! ${successCount} posts created. Refreshing...`);
+                            showToast(`Generated ${successCount} posts successfully!`, 'success');
+
+                            // Wait 1 second then refresh to show new posts
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
+                        } else if (failedCount > 0) {
+                            console.log(`⚠️ Weekly generation complete with ${failedCount} failures`);
+                            showToast(`Generation completed with ${failedCount} failures. Check logs.`, 'warning');
+                            location.reload();
+                        } else {
+                            console.log('❌ Weekly generation complete but no posts created');
+                            showToast('Generation complete - no new posts created', 'info');
+                        }
+                    }
+
+                    // Stop polling after max attempts
+                    if (pollCount >= maxPolls) {
+                        console.log('⏰ Polling stopped after 10 minutes. Refresh manually to see updates.');
+                        clearInterval(pollInterval);
+                        showToast('Generation is taking longer than expected. Refresh manually to check.', 'info');
+                    }
+
+                } catch (error) {
+                    console.error('❌ Error polling generation status:', error);
+                }
+
+            }, 10000); // Poll every 10 seconds
         }
 
         // Update the Generate Weekly Content button label based on current filter
