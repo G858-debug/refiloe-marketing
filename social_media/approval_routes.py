@@ -536,7 +536,6 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
             if generation_prompt:
                 if isinstance(generation_prompt, str):
                     try:
-                        import json
                         generation_prompt = json.loads(generation_prompt)
                     except (json.JSONDecodeError, ValueError):
                         generation_prompt = None
@@ -556,7 +555,6 @@ def _upload_image_to_facebook_scheduler(db: SocialMediaDatabase, post: Dict) -> 
                 if metadata:
                     if isinstance(metadata, str):
                         try:
-                            import json
                             metadata = json.loads(metadata)
                         except (json.JSONDecodeError, ValueError):
                             metadata = None
