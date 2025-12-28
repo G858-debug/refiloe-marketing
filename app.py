@@ -7372,7 +7372,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         if image_prompt:
                             log_info(f"🎨 Starting Leonardo AI image generation...")
                             log_info(f"   Image prompt: {image_prompt[:100]}...")
-                            content_type = theme_config.get('content_type', 'motivational')
+                            content_type = theme_config.get('theme', 'motivational')
                             log_info(f"   Content type: {content_type}")
                             try:
                                 generation_status['current_action'] = f"Generating image for Day {day_offset + 1}"
