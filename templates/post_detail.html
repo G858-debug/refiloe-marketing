@@ -271,6 +271,97 @@
                     <textarea id="edit-script" rows="8" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">{{ post.video_script or '' }}</textarea>
                 </div>
                 {% endif %}
+                {% if post.post_type == 'carousel' %}
+                <!-- Carousel Slides Editing -->
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: 600;">Carousel Slides Content</label>
+                    <div id="carousel-slides-editor" style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Edit the text content for each slide below. Changes will update the carousel when slides are regenerated.</p>
+                        <div id="slides-container"></div>
+                    </div>
+                </div>
+
+                <script>
+                    // Load carousel slides for editing
+                    (function loadCarouselSlidesForEdit() {
+                        const slidesContainer = document.getElementById('slides-container');
+                        if (!slidesContainer) return;
+
+                        // Get carousel data from post
+                        let carouselData = {{ post.carousel_slides | tojson | safe }} || [];
+
+                        // Try generation_prompt if carousel_slides is empty
+                        if (!carouselData || carouselData.length === 0) {
+                            try {
+                                const genPrompt = JSON.parse('{{ post.generation_prompt | tojson | safe }}' || '{}');
+                                carouselData = genPrompt.carousel_data?.slides || genPrompt.carousel_slides || [];
+                            } catch (e) {
+                                console.error('Error parsing carousel data:', e);
+                            }
+                        }
+
+                        if (!carouselData || carouselData.length === 0) {
+                            slidesContainer.innerHTML = '<p style="color: #999;">No carousel slides found</p>';
+                            return;
+                        }
+
+                        // Create edit fields for each slide
+                        carouselData.forEach((slide, idx) => {
+                            const slideDiv = document.createElement('div');
+                            slideDiv.style.cssText = 'background: white; padding: 15px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #e0e0e0;';
+
+                            const slideType = slide.type || 'CONTENT';
+                            let slideHtml = `<div style="font-weight: 600; color: #666; margin-bottom: 10px;">Slide ${idx + 1} - ${slideType}</div>`;
+
+                            if (slideType === 'COVER') {
+                                slideHtml += `
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">Cover Title:</label>
+                                    <input type="text"
+                                           id="slide-${idx}-title"
+                                           value="${slide.title || ''}"
+                                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+                                `;
+                            } else if (slideType === 'CONTENT') {
+                                slideHtml += `
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">Step Title:</label>
+                                    <input type="text"
+                                           id="slide-${idx}-step-title"
+                                           value="${slide.step_title || ''}"
+                                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">Bullets (one per line):</label>
+                                    <textarea id="slide-${idx}-bullets"
+                                              rows="3"
+                                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${(slide.bullets || []).join('\n')}</textarea>
+                                `;
+                            } else if (slideType === 'CTA') {
+                                slideHtml += `
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">Headline:</label>
+                                    <input type="text"
+                                           id="slide-${idx}-headline"
+                                           value="${slide.headline || ''}"
+                                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">CTA Text:</label>
+                                    <input type="text"
+                                           id="slide-${idx}-cta-text"
+                                           value="${slide.cta_text || ''}"
+                                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+
+                                    <label style="display: block; margin-bottom: 5px; font-size: 13px;">Subtext:</label>
+                                    <input type="text"
+                                           id="slide-${idx}-subtext"
+                                           value="${slide.subtext || ''}"
+                                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                `;
+                            }
+
+                            slideDiv.innerHTML = slideHtml;
+                            slidesContainer.appendChild(slideDiv);
+                        });
+                    })();
+                </script>
+                {% endif %}
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="edit-scheduled-time" style="display: block; margin-bottom: 5px; font-weight: 600;">Scheduled Time</label>
                     <input type="datetime-local" id="edit-scheduled-time" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -377,16 +468,63 @@
             // Include video script if this is a video post
             const scriptField = document.getElementById('edit-script');
             if (scriptField) {
-                // Get existing generation_prompt and update video_script
                 const existingPrompt = '{{ post.generation_prompt | default("{}") | e }}';
                 try {
                     const metadata = JSON.parse(existingPrompt || '{}');
                     metadata.video_script = scriptField.value;
                     updateData.generation_prompt = JSON.stringify(metadata);
                 } catch (e) {
-                    // If parsing fails, create new metadata with just video_script
                     updateData.generation_prompt = JSON.stringify({ video_script: scriptField.value });
                 }
+            }
+
+            // Include carousel slides if this is a carousel post
+            const slidesContainer = document.getElementById('slides-container');
+            if (slidesContainer && slidesContainer.children.length > 0) {
+                const existingPrompt = '{{ post.generation_prompt | default("{}") | e }}';
+                let metadata = {};
+                try {
+                    metadata = JSON.parse(existingPrompt || '{}');
+                } catch (e) {
+                    metadata = {};
+                }
+
+                // Collect edited slide data
+                const editedSlides = [];
+                for (let idx = 0; idx < slidesContainer.children.length; idx++) {
+                    const titleField = document.getElementById(`slide-${idx}-title`);
+                    const stepTitleField = document.getElementById(`slide-${idx}-step-title`);
+                    const bulletsField = document.getElementById(`slide-${idx}-bullets`);
+                    const headlineField = document.getElementById(`slide-${idx}-headline`);
+                    const ctaTextField = document.getElementById(`slide-${idx}-cta-text`);
+                    const subtextField = document.getElementById(`slide-${idx}-subtext`);
+
+                    const slide = {};
+
+                    if (titleField) {
+                        slide.type = 'COVER';
+                        slide.title = titleField.value;
+                    } else if (stepTitleField && bulletsField) {
+                        slide.type = 'CONTENT';
+                        slide.step_title = stepTitleField.value;
+                        slide.bullets = bulletsField.value.split('\n').filter(b => b.trim());
+                    } else if (headlineField) {
+                        slide.type = 'CTA';
+                        slide.headline = headlineField.value;
+                        slide.cta_text = ctaTextField.value;
+                        slide.subtext = subtextField.value;
+                    }
+
+                    editedSlides.push(slide);
+                }
+
+                // Update carousel_data in metadata
+                if (!metadata.carousel_data) {
+                    metadata.carousel_data = {};
+                }
+                metadata.carousel_data.slides = editedSlides;
+
+                updateData.generation_prompt = JSON.stringify(metadata);
             }
 
             try {
