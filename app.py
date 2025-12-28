@@ -7049,6 +7049,37 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     video_script = None
                     reel_title = content.get('title', '')
 
+                # === VALIDATION: Skip if content generation failed ===
+                # Check if content generation succeeded
+                if not content_text:
+                    log_warning(f"⚠️ No content generated for {post_type} {theme_config['theme']} on day {day_offset + 1}")
+                    log_warning(f"⚠️ Skipping this day to prevent empty post")
+                    generation_status['skipped'].append({
+                        'day': day_offset + 1,
+                        'theme': theme_config['theme'],
+                        'description': theme_config['description'],
+                        'date': scheduled_time.strftime('%Y-%m-%d'),
+                        'reason': f'No content generated for {post_type}'
+                    })
+                    continue  # Skip to next day instead of saving empty post
+
+                # Validate carousel has actual content
+                if post_type == 'carousel':
+                    carousel_data = None
+                    if content:
+                        carousel_data = content.get('carousel_data') or content.get('carousel_slides')
+                    if not carousel_data:
+                        log_warning(f"⚠️ Carousel generation failed for day {day_offset + 1} - no carousel data")
+                        log_warning(f"⚠️ Skipping this day to prevent empty carousel")
+                        generation_status['skipped'].append({
+                            'day': day_offset + 1,
+                            'theme': theme_config['theme'],
+                            'description': theme_config['description'],
+                            'date': scheduled_time.strftime('%Y-%m-%d'),
+                            'reason': 'Carousel generation failed - no carousel data'
+                        })
+                        continue  # Skip to next day instead of saving empty carousel
+
                 metadata = {
                     "day": day_offset + 1,
                     "theme_description": theme_config['description'],
