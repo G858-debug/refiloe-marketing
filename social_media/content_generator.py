@@ -630,7 +630,14 @@ IMPORTANT:
 - Hashtags should be relevant to fitness business and admin automation
 - NEVER use these banned words: gnaw, gnaws, gnawing, gnawed (use alternatives like "eat away", "bother", "wear down", "frustrate")
 
-Generate ONLY the JSON object now (no other text):"""
+Generate ONLY the JSON object now (no other text):
+
+CRITICAL OUTPUT RULES:
+- Output ONLY the JSON structure shown in the example above
+- Do NOT add any extra fields (no "metadata", "analysis", "reasoning", or similar fields)
+- Do NOT include explanations before or after the JSON
+- The ONLY fields allowed are: cover, content_slides, cta_slide, caption, hashtags
+- Start your response with {{ and end with }}"""
 
         return prompt
 
