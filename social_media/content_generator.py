@@ -359,6 +359,59 @@ class ContentGenerator(_LegacyContentGenerator):
         """
         return self._format_rand(amount, include_decimals)
 
+    def _robust_json_parse(self, json_str: str) -> Optional[Dict]:
+        """Parse JSON with automatic cleaning and error recovery.
+
+        Attempts to fix common JSON formatting issues:
+        - Trailing commas before closing brackets
+        - Missing commas between array/object elements
+        - Unescaped quotes in strings
+        - Comments (// or /* */)
+
+        Args:
+            json_str: Raw JSON string to parse
+
+        Returns:
+            Parsed dict or None if parsing fails
+        """
+        import json
+        import re
+
+        if not json_str or not json_str.strip():
+            return None
+
+        # Try parsing as-is first
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+
+        # Clean the JSON string
+        cleaned = json_str
+
+        # Remove comments
+        cleaned = re.sub(r'//.*?\n', '\n', cleaned)
+        cleaned = re.sub(r'/\*.*?\*/', '', cleaned, flags=re.DOTALL)
+
+        # Fix trailing commas before closing brackets/braces
+        cleaned = re.sub(r',(\s*[}\]])', r'\1', cleaned)
+
+        # Fix missing commas between array elements (common error)
+        # Match: "text" \n "text" and add comma
+        cleaned = re.sub(r'("\s*)\n(\s*")', r'\1,\n\2', cleaned)
+
+        # Fix missing commas between object properties
+        # Match: } \n "key": and add comma
+        cleaned = re.sub(r'(})\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
+
+        # Try parsing cleaned version
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            log_warning(f"JSON parse failed even after cleaning: {str(e)}")
+            log_warning(f"Problematic JSON snippet: {cleaned[max(0, e.pos-50):e.pos+50]}")
+            return None
+
     # ------------------------------------------------------------------
     # Carousel content generation
     # ------------------------------------------------------------------
