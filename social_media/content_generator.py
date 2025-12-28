@@ -420,6 +420,10 @@ class ContentGenerator(_LegacyContentGenerator):
         # Match: } \n "key": and add comma
         cleaned = re.sub(r'(})\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
 
+        # Fix missing commas after arrays
+        # Match: ] \n "key": and add comma
+        cleaned = re.sub(r'(\])\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
+
         # Try parsing cleaned version
         try:
             return json.loads(cleaned)
