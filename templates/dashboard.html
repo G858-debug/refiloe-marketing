@@ -932,6 +932,9 @@
             <button class="btn btn-info" onclick="fetchVideosNow()">
                 🎥 Fetch Videos Now
             </button>
+            <button onclick="retryFailedScheduling()" class="btn" style="background-color: #f59e0b; color: white;" title="Retry posts that failed to upload to Facebook">
+                🔄 Retry Failed Scheduling
+            </button>
         </div>
 
         <!-- Media Type Filter Tabs -->
@@ -2301,6 +2304,60 @@
                 alert('Error: ' + error.message);
                 btn.disabled = false;
                 btn.textContent = '🎥 Fetch Videos Now';
+            }
+        }
+
+        // Retry failed Facebook scheduling
+        async function retryFailedScheduling() {
+            if (!confirm('This will retry uploading all posts that are scheduled but failed to reach Facebook. Continue?')) {
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Retrying...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/dashboard/retry-failed-scheduling', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let message = `✅ Retry complete!\n\nRetried: ${data.retried} posts\nTotal found: ${data.total_found}`;
+
+                    if (data.errors && data.errors.length > 0) {
+                        message += `\n\n⚠️ ${data.errors.length} posts still failed:`;
+                        data.errors.slice(0, 3).forEach(err => {
+                            message += `\n- ${err.post_id.substring(0, 8)}...: ${err.error}`;
+                        });
+                        if (data.errors.length > 3) {
+                            message += `\n... and ${data.errors.length - 3} more`;
+                        }
+                    }
+
+                    alert(message);
+
+                    // Refresh the posts list
+                    if (typeof fetchPosts === 'function') {
+                        fetchPosts();
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert('❌ Retry failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Retry failed:', error);
+                alert('❌ Error retrying: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         }
 
