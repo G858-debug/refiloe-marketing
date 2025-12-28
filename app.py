@@ -7089,6 +7089,9 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     video_script = None
                     reel_title = ''
 
+                    # Create 'content' variable for consistency (used later in metadata creation)
+                    content = carousel_content
+
                     log_info(f"📦 About to create metadata dict...")
                 else:
                     content = generator.generate_single_post(
