@@ -1314,3 +1314,81 @@ def post_now(post_id: str):
             "post_id": post_id
         }), 500
 
+
+@approval_bp.route('/api/dashboard/retry-failed-scheduling', methods=['POST'])
+def api_retry_failed_scheduling():
+    """Retry Facebook scheduling for posts that failed to upload.
+
+    Finds posts with status='scheduled' but no facebook_post_id and retries
+    the Facebook scheduler upload.
+    """
+    from datetime import datetime, timezone
+
+    log_info("=" * 60)
+    log_info("RETRY FAILED SCHEDULING - ENDPOINT CALLED")
+    log_info("=" * 60)
+
+    db = _ensure_database()
+    if not db:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 503
+
+    try:
+        # Find posts that are 'scheduled' but have no facebook_post_id
+        result = db.db.table('social_posts').select('*').eq('status', 'scheduled').execute()
+
+        if not result.data:
+            return jsonify({'success': True, 'message': 'No scheduled posts found', 'retried': 0})
+
+        # Filter for posts without facebook_post_id
+        failed_posts = [p for p in result.data if not p.get('facebook_post_id')]
+
+        log_info(f"Found {len(failed_posts)} posts to retry")
+
+        if not failed_posts:
+            return jsonify({'success': True, 'message': 'All scheduled posts already have facebook_post_id', 'retried': 0})
+
+        retried = 0
+        errors = []
+
+        for post in failed_posts:
+            post_id = post['id']
+            post_type = post.get('post_type', 'image')
+
+            log_info(f"Retrying Facebook upload for post {post_id} (type: {post_type})")
+
+            try:
+                if post_type in ['image', 'carousel', 'text_card']:
+                    upload_result = _upload_image_to_facebook_scheduler(db, post)
+                    if upload_result.get('success'):
+                        # Update post with facebook_post_id
+                        facebook_post_id = upload_result.get('facebook_post_id')
+                        update_fields = {
+                            'status': 'scheduled_on_facebook',
+                            'facebook_post_id': facebook_post_id,
+                            'updated_at': _current_iso_timestamp(db)
+                        }
+                        _update_post_fields(db, post_id, update_fields)
+                        retried += 1
+                        log_info(f"✅ Successfully scheduled post {post_id}")
+                    else:
+                        errors.append({'post_id': post_id, 'error': upload_result.get('error', 'Upload returned False')})
+                else:
+                    log_info(f"Skipping post {post_id} - type {post_type} not supported for retry")
+            except Exception as e:
+                log_error(f"Failed to retry post {post_id}: {e}")
+                errors.append({'post_id': post_id, 'error': str(e)})
+
+        return jsonify({
+            'success': True,
+            'message': f'Retried {retried} posts',
+            'retried': retried,
+            'total_found': len(failed_posts),
+            'errors': errors
+        })
+
+    except Exception as e:
+        log_error(f"Retry failed scheduling error: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
