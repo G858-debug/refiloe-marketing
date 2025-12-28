@@ -362,11 +362,8 @@ class ContentGenerator(_LegacyContentGenerator):
     def _robust_json_parse(self, json_str: str) -> Optional[Dict]:
         """Parse JSON with automatic cleaning and error recovery.
 
-        Attempts to fix common JSON formatting issues:
-        - Trailing commas before closing brackets
-        - Missing commas between array/object elements
-        - Unescaped quotes in strings
-        - Comments (// or /* */)
+        Attempts to fix common JSON formatting issues and extracts only
+        the first valid JSON object if multiple objects are present.
 
         Args:
             json_str: Raw JSON string to parse
@@ -385,6 +382,25 @@ class ContentGenerator(_LegacyContentGenerator):
             return json.loads(json_str)
         except json.JSONDecodeError:
             pass
+
+        # Extract ONLY the first complete JSON object
+        # This handles cases where Claude adds multiple JSON objects or explanations
+        brace_count = 0
+        first_object_end = -1
+
+        for i, char in enumerate(json_str):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    # Found the end of the first complete JSON object
+                    first_object_end = i + 1
+                    break
+
+        if first_object_end > 0:
+            # Extract only the first JSON object
+            json_str = json_str[:first_object_end]
 
         # Clean the JSON string
         cleaned = json_str
