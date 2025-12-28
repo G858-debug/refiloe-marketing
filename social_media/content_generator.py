@@ -362,8 +362,7 @@ class ContentGenerator(_LegacyContentGenerator):
     def _robust_json_parse(self, json_str: str) -> Optional[Dict]:
         """Parse JSON with automatic cleaning and error recovery.
 
-        Attempts to fix common JSON formatting issues and extracts only
-        the first valid JSON object if multiple objects are present.
+        Aggressively removes any fields not in the allowed carousel structure.
 
         Args:
             json_str: Raw JSON string to parse
@@ -377,30 +376,35 @@ class ContentGenerator(_LegacyContentGenerator):
         if not json_str or not json_str.strip():
             return None
 
+        # AGGRESSIVE CLEANING: Remove any fields that aren't allowed
+        # Allowed fields: cover, content_slides, cta_slide, caption, hashtags
+        forbidden_fields = [
+            'metadata', 'analysis', 'reasoning', 'quality', 'score',
+            'readability', 'engagement', 'virality', 'total_score',
+            'explanation', 'rationale', 'assessment', 'evaluation'
+        ]
+
+        # Remove forbidden fields and their values
+        for field in forbidden_fields:
+            # Match field with object value: "field": {...}
+            json_str = re.sub(
+                rf',?\s*"{field}"\s*:\s*\{{[^}}]*\}}',
+                '',
+                json_str,
+                flags=re.DOTALL
+            )
+            # Match field with simple value: "field": "value" or "field": 123
+            json_str = re.sub(
+                rf',?\s*"{field}"\s*:\s*[^,\}}]+',
+                '',
+                json_str
+            )
+
         # Try parsing as-is first
         try:
             return json.loads(json_str)
         except json.JSONDecodeError:
             pass
-
-        # Extract ONLY the first complete JSON object
-        # This handles cases where Claude adds multiple JSON objects or explanations
-        brace_count = 0
-        first_object_end = -1
-
-        for i, char in enumerate(json_str):
-            if char == '{':
-                brace_count += 1
-            elif char == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    # Found the end of the first complete JSON object
-                    first_object_end = i + 1
-                    break
-
-        if first_object_end > 0:
-            # Extract only the first JSON object
-            json_str = json_str[:first_object_end]
 
         # Clean the JSON string
         cleaned = json_str
@@ -412,17 +416,20 @@ class ContentGenerator(_LegacyContentGenerator):
         # Fix trailing commas before closing brackets/braces
         cleaned = re.sub(r',(\s*[}\]])', r'\1', cleaned)
 
-        # Fix missing commas between array elements (common error)
-        # Match: "text" \n "text" and add comma
+        # Fix missing commas between array elements
         cleaned = re.sub(r'("\s*)\n(\s*")', r'\1,\n\2', cleaned)
 
         # Fix missing commas between object properties
-        # Match: } \n "key": and add comma
         cleaned = re.sub(r'(})\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
 
         # Fix missing commas after arrays
-        # Match: ] \n "key": and add comma
         cleaned = re.sub(r'(\])\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
+
+        # Fix missing commas after strings
+        cleaned = re.sub(r'("\s*)\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
+
+        # Fix missing commas after numbers
+        cleaned = re.sub(r'(\d)\n(\s*"[^"]+"\s*:)', r'\1,\n\2', cleaned)
 
         # Try parsing cleaned version
         try:
