@@ -4338,6 +4338,16 @@ def api_dashboard_posts():
                 if post.get('status') in active_statuses
             ]
 
+            log_info(f"📊 Total posts in database: {len(result.data)}")
+            log_info(f"📊 Posts with active statuses: {len(active_posts)}")
+
+            # Debug: Show status breakdown
+            status_counts = {}
+            for post in result.data:
+                status = post.get('status', 'unknown')
+                status_counts[status] = status_counts.get(status, 0) + 1
+            log_info(f"📊 Status breakdown: {status_counts}")
+
             # Exclude posts that are already scheduled on Facebook (they're in Facebook's scheduler now)
             pre_filter_count = len(active_posts)
             active_posts = [post for post in active_posts if post.get('status') != 'scheduled_on_facebook']
