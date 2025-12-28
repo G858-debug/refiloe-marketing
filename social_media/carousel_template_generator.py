@@ -786,9 +786,16 @@ class CarouselTemplateGenerator:
         max_width = self.SLIDE_WIDTH - (2 * self.PADDING) - 40
         line_height = 56 + 45  # Font size + spacing
 
+        # Add bottom padding - content must stay above the bottom line
+        max_content_bottom = self.SLIDE_HEIGHT - 240  # Leave 240px from bottom for line and spacing
+
         current_y = content_start_y
 
         for idx, bullet in enumerate(bullets[:3]):  # Max 3 bullets
+            # Stop adding bullets if we're too close to the bottom line
+            if current_y > max_content_bottom:
+                break
+
             # Clean the bullet text - remove "Slide X:" prefixes first
             clean_bullet = self._clean_bullet_text(bullet)
 
@@ -836,21 +843,9 @@ class CarouselTemplateGenerator:
 
             current_y += 20  # Extra spacing between bullets
 
-        # Add themed shape icon to fill white space
-        header_title = data.get('step_title', '')
-        bullets_text = ' '.join(data.get('bullets', []))
-        combined_text = f"{header_title} {bullets_text}"
-        theme_shape = self._get_theme_shape(combined_text)
-
-        # Draw shape centered, between content and bottom line
-        icon_center_x = self.SLIDE_WIDTH // 2
-        icon_center_y = self.SLIDE_HEIGHT - 320
-        icon_size = 125  # Increased from 70
-
-        self._draw_theme_shape(draw, theme_shape, icon_center_x, icon_center_y, icon_size, accent_color)
-
-        # Decorative accent line near bottom
-        bottom_y = self.SLIDE_HEIGHT - 140
+        # Decorative accent line aligned with page numbering
+        # Position line at same y-coordinate as slide number (moved down)
+        bottom_y = self.SLIDE_HEIGHT - 120  # Align with page number position
         line_width = 350
         line_x = (self.SLIDE_WIDTH - line_width) // 2
         draw.line([(line_x, bottom_y), (line_x + line_width, bottom_y)],
