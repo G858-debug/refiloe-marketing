@@ -7283,14 +7283,21 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         theme=theme_config['theme'],
                         format_type='single_image_with_caption'
                     )
-                    log_info(f"DEBUG: Content keys returned: {list(content.keys()) if content else 'None'}")
-                    log_info(f"DEBUG: Full content: {content}")
-                    content_text = content.get('content', '') or content.get('caption', '')
+                    # Extract content - check nested selected_variation first (new generator format)
+                    if content.get('selected_variation') and content['selected_variation'].get('content'):
+                        content_text = content['selected_variation']['content']
+                    else:
+                        # Fallback to legacy flat structure
+                        content_text = content.get('content', '') or content.get('caption', '')
                     if not content_text:
                         log_warning(f"No content generated for image {theme_config['theme']}")
                         content_text = ''
                     video_script = None
+                    # Extract title
                     reel_title = content.get('title', '')
+                    # Extract hashtags from generator response
+                    if content.get('hashtags'):
+                        generated_hashtags = content['hashtags']
 
                 # === VALIDATION: Skip if content generation failed ===
                 # Check if content generation succeeded
