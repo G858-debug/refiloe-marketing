@@ -579,7 +579,13 @@ Generate the carousel content now:"""
                 return {}
 
             json_str = json_match.group()
-            data = json.loads(json_str)
+
+            # Use robust JSON parser
+            data = self._robust_json_parse(json_str)
+
+            if not data:
+                log_error("Failed to parse carousel JSON after cleaning attempts")
+                return {}
 
             # Validate and enforce character limits
             validated = self._validate_carousel_content(data, num_content_slides)
@@ -599,11 +605,8 @@ Generate the carousel content now:"""
 
             return validated
 
-        except json.JSONDecodeError as e:
-            log_warning(f"JSON decode error in carousel response: {str(e)}")
-            return {}
         except Exception as e:
-            log_warning(f"Error parsing carousel response: {str(e)}")
+            log_error(f"Error parsing carousel response: {str(e)}")
             return {}
 
     def _validate_carousel_content(
