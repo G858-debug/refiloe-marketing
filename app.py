@@ -7116,16 +7116,13 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     })
                     continue  # Skip to next day instead of saving empty post
 
-                # For carousel posts, include carousel_data in metadata
+                # For carousel posts, include carousel_data in metadata (already extracted above)
                 if post_type == 'carousel':
-                    # Extract carousel data from generated content
-                    carousel_data = content.get('carousel_data') or content.get('carousel_slides')
-
                     metadata = {
                         "day": day_offset + 1,
                         "theme_description": theme_config['description'],
                         "video_script": video_script,
-                        "carousel_data": carousel_data,  # ✅ Add carousel data to metadata
+                        "carousel_data": carousel_data,  # Already extracted in carousel generation section
                         "weekly_content": True,
                         "target_audience": "global",
                         "image_prompt": generate_scroll_stopping_image_prompt(theme_config['theme'], content_text, post_type)
