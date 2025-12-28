@@ -1064,6 +1064,17 @@
                 <small style="color: #6b7280;">This prompt will be sent to Leonardo AI for image generation.</small>
             </div>
 
+            <!-- Carousel Slides Editor (only shown for carousel posts) -->
+            <div id="edit-carousel-section" style="display: none; margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 500;">
+                    🎨 Carousel Slides Content:
+                </label>
+                <div id="carousel-slides-editor" style="background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #d1d5db; max-height: 400px; overflow-y: auto;">
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Edit the text content for each slide. Changes will update when you regenerate slides.</p>
+                    <div id="slides-container-dashboard"></div>
+                </div>
+            </div>
+
             <div style="margin-bottom: 15px;">
                 <label for="edit-hashtags" style="display: block; margin-bottom: 5px; font-weight: 500;">
                     # Hashtags:
@@ -3019,6 +3030,88 @@
         }
 
         // Edit Post functions
+        function loadCarouselSlidesInModal(post) {
+            const slidesContainer = document.getElementById('slides-container-dashboard');
+            if (!slidesContainer) return;
+
+            slidesContainer.innerHTML = ''; // Clear previous content
+
+            // Get carousel data from post
+            let carouselData = null;
+
+            // Try generation_prompt first
+            try {
+                const metadata = JSON.parse(post.generation_prompt || '{}');
+                carouselData = metadata.carousel_data?.slides || metadata.carousel_slides || null;
+            } catch (e) {
+                console.error('Error parsing carousel data:', e);
+            }
+
+            // Fallback to carousel_slides if available
+            if (!carouselData && post.carousel_slides) {
+                carouselData = post.carousel_slides;
+            }
+
+            if (!carouselData || (Array.isArray(carouselData) && carouselData.length === 0)) {
+                slidesContainer.innerHTML = '<p style="color: #999; font-size: 13px;">No carousel slides found</p>';
+                return;
+            }
+
+            console.log('Loading carousel slides:', carouselData);
+
+            // Create edit fields for each slide
+            carouselData.forEach((slide, idx) => {
+                const slideDiv = document.createElement('div');
+                slideDiv.style.cssText = 'background: white; padding: 12px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #e0e0e0;';
+
+                const slideType = slide.type || 'CONTENT';
+                let slideHtml = `<div style="font-weight: 600; color: #666; margin-bottom: 8px; font-size: 12px;">Slide ${idx + 1} - ${slideType}</div>`;
+
+                if (slideType === 'COVER') {
+                    slideHtml += `
+                        <input type="text"
+                               id="slide-${idx}-title"
+                               value="${(slide.title || '').replace(/"/g, '&quot;')}"
+                               placeholder="Cover title"
+                               style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    `;
+                } else if (slideType === 'CONTENT') {
+                    slideHtml += `
+                        <input type="text"
+                               id="slide-${idx}-step-title"
+                               value="${(slide.step_title || '').replace(/"/g, '&quot;')}"
+                               placeholder="Step title"
+                               style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; margin-bottom: 6px;">
+                        <textarea id="slide-${idx}-bullets"
+                                  rows="2"
+                                  placeholder="Bullets (one per line)"
+                                  style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">${(slide.bullets || []).join('\n')}</textarea>
+                    `;
+                } else if (slideType === 'CTA') {
+                    slideHtml += `
+                        <input type="text"
+                               id="slide-${idx}-headline"
+                               value="${(slide.headline || '').replace(/"/g, '&quot;')}"
+                               placeholder="Headline"
+                               style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; margin-bottom: 6px;">
+                        <input type="text"
+                               id="slide-${idx}-cta-text"
+                               value="${(slide.cta_text || '').replace(/"/g, '&quot;')}"
+                               placeholder="CTA button text"
+                               style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; margin-bottom: 6px;">
+                        <input type="text"
+                               id="slide-${idx}-subtext"
+                               value="${(slide.subtext || '').replace(/"/g, '&quot;')}"
+                               placeholder="Subtext"
+                               style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    `;
+                }
+
+                slideDiv.innerHTML = slideHtml;
+                slidesContainer.appendChild(slideDiv);
+            });
+        }
+
         async function openEditModal(postId) {
             try {
                 showToast('Loading post...', 'info');
@@ -3061,6 +3154,14 @@
                     imagePromptSection.style.display = 'block';
                 }
 
+                // Show carousel slides section if this is a carousel post
+                if (post.post_type === 'carousel') {
+                    document.getElementById('edit-carousel-section').style.display = 'block';
+                    loadCarouselSlidesInModal(post);
+                } else {
+                    document.getElementById('edit-carousel-section').style.display = 'none';
+                }
+
                 // Show post info
                 const scheduledDate = post.scheduled_time ? new Date(post.scheduled_time).toLocaleString() : 'Not scheduled';
                 document.getElementById('edit-post-info').innerHTML = `
@@ -3101,6 +3202,42 @@
                 image_prompt: document.getElementById('edit-image-prompt').value,
                 hashtags: document.getElementById('edit-hashtags').value
             };
+
+            // Include carousel slides if editing a carousel post
+            const slidesContainer = document.getElementById('slides-container-dashboard');
+            if (slidesContainer && slidesContainer.children.length > 0) {
+                const editedSlides = [];
+
+                for (let idx = 0; idx < slidesContainer.children.length; idx++) {
+                    const titleField = document.getElementById(`slide-${idx}-title`);
+                    const stepTitleField = document.getElementById(`slide-${idx}-step-title`);
+                    const bulletsField = document.getElementById(`slide-${idx}-bullets`);
+                    const headlineField = document.getElementById(`slide-${idx}-headline`);
+                    const ctaTextField = document.getElementById(`slide-${idx}-cta-text`);
+                    const subtextField = document.getElementById(`slide-${idx}-subtext`);
+
+                    const slide = {};
+
+                    if (titleField) {
+                        slide.type = 'COVER';
+                        slide.title = titleField.value;
+                    } else if (stepTitleField && bulletsField) {
+                        slide.type = 'CONTENT';
+                        slide.step_title = stepTitleField.value;
+                        slide.bullets = bulletsField.value.split('\n').filter(b => b.trim());
+                    } else if (headlineField) {
+                        slide.type = 'CTA';
+                        slide.headline = headlineField.value;
+                        slide.cta_text = ctaTextField ? ctaTextField.value : '';
+                        slide.subtext = subtextField ? subtextField.value : '';
+                    }
+
+                    editedSlides.push(slide);
+                }
+
+                // Add carousel_slides to editData
+                editData.carousel_slides = editedSlides;
+            }
 
             try {
                 showToast('Saving changes...', 'info');
