@@ -7027,19 +7027,28 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     else:
                         content_text = str(video_script)
                 elif post_type == 'carousel':
+                    log_info(f"🎨 Starting carousel generation for day {day_offset + 1}")
+
                     # Use specialized carousel generation method (has strict JSON-only prompt)
                     carousel_content = generator.generate_carousel_content(
                         topic=theme_config.get('description', theme_config['theme']),
                         num_slides=5
                     )
 
+                    log_info(f"✅ Carousel generation returned, checking content...")
+                    log_info(f"   carousel_content type: {type(carousel_content)}")
+                    log_info(f"   carousel_content keys: {carousel_content.keys() if isinstance(carousel_content, dict) else 'Not a dict'}")
+
                     # Extract content and carousel data
                     content_text = carousel_content.get('caption', '')
+                    log_info(f"   caption extracted: {len(content_text)} chars")
+
                     carousel_data = {
                         'cover': carousel_content.get('cover', {}),
                         'content_slides': carousel_content.get('content_slides', []),
                         'cta_slide': carousel_content.get('cta_slide', {})
                     }
+                    log_info(f"   carousel_data created with {len(carousel_data.get('content_slides', []))} content slides")
 
                     # Extract hashtags
                     generated_hashtags = carousel_content.get('hashtags', [])
@@ -7048,6 +7057,8 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         generated_hashtags = global_hashtags
                     else:
                         log_info(f"Using {len(generated_hashtags)} AI-generated hashtags: {generated_hashtags}")
+
+                    log_info(f"🔍 Validating carousel content before proceeding...")
 
                     if not content_text:
                         log_warning(f"⚠️ Carousel generation failed for day {day_offset + 1} - no caption")
@@ -7073,8 +7084,12 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         })
                         continue
 
+                    log_info(f"✅ Carousel content validated, setting up post data...")
+
                     video_script = None
                     reel_title = ''
+
+                    log_info(f"📦 About to create metadata dict...")
                 else:
                     content = generator.generate_single_post(
                         theme=theme_config['theme'],
