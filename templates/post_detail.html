@@ -245,7 +245,7 @@
         </div>
         {% endif %}
 
-        {% if post.status == 'pending_approval' %}
+        {% if post.status == 'pending_approval' or post.status == 'pending_media_approval' %}
         <div class="actions">
             <button class="btn btn-secondary" onclick="openEditForm()">Edit</button>
             <button class="btn btn-success" onclick="approvePost('{{ post.id }}')">Approve Post</button>
