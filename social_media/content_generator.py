@@ -527,7 +527,10 @@ CAPTION REQUIREMENTS:
 - Summarize the carousel value
 - Include a question or CTA at the end
 
-OUTPUT FORMAT (JSON):
+CRITICAL: You MUST respond with ONLY valid JSON. No preamble, no explanation, no markdown formatting.
+Start your response with {{ and end with }}.
+
+OUTPUT FORMAT (EXACT JSON STRUCTURE):
 {{
     "cover": {{
         "title": "How to Automate Client Onboarding"
@@ -552,6 +555,13 @@ OUTPUT FORMAT (JSON):
     "hashtags": ["#personaltrainer", "#fitnessadmin", "#trainertools"]
 }}
 
+JSON FORMATTING RULES:
+1. Use double quotes for all strings
+2. No trailing commas after last array/object element
+3. Ensure commas between all array elements
+4. No comments in the JSON
+5. Validate your JSON before responding
+
 IMPORTANT:
 - Generate exactly {num_content_slides} content slides
 - Each content slide must have step_number (1 to {num_content_slides})
@@ -559,10 +569,9 @@ IMPORTANT:
 - Make content specific, actionable, and valuable
 - Use numbers and specific examples where possible
 - Hashtags should be relevant to fitness business and admin automation
+- NEVER use these banned words: gnaw, gnaws, gnawing, gnawed (use alternatives like "eat away", "bother", "wear down", "frustrate")
 
-IMPORTANT: Never use the following words as they are not suitable for the target audience: gnaw, gnaws, gnawing, gnawed. Use simpler alternatives like "eat away", "bother", "wear down", or "frustrate" instead.
-
-Generate the carousel content now:"""
+Generate ONLY the JSON object now (no other text):"""
 
         return prompt
 
