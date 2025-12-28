@@ -7032,9 +7032,41 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         format_type='carousel_style'
                     )
                     content_text = content.get('content', '') or content.get('caption', '')
+
+                    # Extract AI-generated hashtags from content (fallback to global if not present)
+                    generated_hashtags = content.get('hashtags', [])
+                    if not generated_hashtags or len(generated_hashtags) == 0:
+                        log_warning(f"No hashtags in generated carousel content, using global hashtags")
+                        generated_hashtags = global_hashtags
+                    else:
+                        log_info(f"Using {len(generated_hashtags)} AI-generated hashtags: {generated_hashtags}")
+
                     if not content_text:
-                        log_warning(f"No content generated for carousel {theme_config['theme']}")
-                        content_text = ''
+                        log_warning(f"⚠️ Carousel generation failed for day {day_offset + 1} - no caption")
+                        log_warning(f"⚠️ Skipping this day to prevent empty carousel")
+                        generation_status['skipped'].append({
+                            'day': day_offset + 1,
+                            'theme': theme_config['theme'],
+                            'description': theme_config['description'],
+                            'date': scheduled_time.strftime('%Y-%m-%d'),
+                            'reason': 'Carousel generation failed - no caption'
+                        })
+                        continue  # Skip to next day instead of saving empty carousel
+
+                    # Extract carousel data
+                    carousel_data = content.get('carousel_data') or content.get('carousel_slides')
+                    if not carousel_data:
+                        log_warning(f"⚠️ Carousel generation failed for day {day_offset + 1} - no carousel data")
+                        log_warning(f"⚠️ Skipping this day to prevent empty carousel")
+                        generation_status['skipped'].append({
+                            'day': day_offset + 1,
+                            'theme': theme_config['theme'],
+                            'description': theme_config['description'],
+                            'date': scheduled_time.strftime('%Y-%m-%d'),
+                            'reason': 'Carousel generation failed - no carousel data'
+                        })
+                        continue  # Skip to next day instead of saving empty carousel
+
                     video_script = None
                     reel_title = content.get('title', '')
                 else:
@@ -7063,23 +7095,6 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     })
                     continue  # Skip to next day instead of saving empty post
 
-                # Validate carousel has actual content
-                if post_type == 'carousel':
-                    carousel_data = None
-                    if content:
-                        carousel_data = content.get('carousel_data') or content.get('carousel_slides')
-                    if not carousel_data:
-                        log_warning(f"⚠️ Carousel generation failed for day {day_offset + 1} - no carousel data")
-                        log_warning(f"⚠️ Skipping this day to prevent empty carousel")
-                        generation_status['skipped'].append({
-                            'day': day_offset + 1,
-                            'theme': theme_config['theme'],
-                            'description': theme_config['description'],
-                            'date': scheduled_time.strftime('%Y-%m-%d'),
-                            'reason': 'Carousel generation failed - no carousel data'
-                        })
-                        continue  # Skip to next day instead of saving empty carousel
-
                 metadata = {
                     "day": day_offset + 1,
                     "theme_description": theme_config['description'],
@@ -7099,7 +7114,7 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                     'content_theme': theme_config['theme'],
                     'title': reel_title,
                     'reel_title': reel_title,
-                    'hashtags': global_hashtags,
+                    'hashtags': generated_hashtags if post_type == 'carousel' else global_hashtags,  # Use AI-generated hashtags for carousel
                     'generation_prompt': json.dumps(metadata),
                     'status': 'pending_approval',
                     'is_pinned': False,
