@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 import pytz
 
-from utils.logger import log_info, log_warning
+from utils.logger import log_error, log_info, log_warning
 from utils.text_helpers import filter_banned_words
 
 try:  # pragma: no cover - allow absolute or package-relative import
@@ -411,6 +411,45 @@ class ContentGenerator(_LegacyContentGenerator):
             log_warning(f"JSON parse failed even after cleaning: {str(e)}")
             log_warning(f"Problematic JSON snippet: {cleaned[max(0, e.pos-50):e.pos+50]}")
             return None
+
+    def _parse_claude_response(self, response: str, theme: str, format_type: str) -> Dict:
+        """Parse Claude's response into structured post data
+
+        Args:
+            response: Raw response from Claude
+            theme: Content theme
+            format_type: Post format
+
+        Returns:
+            Dict: Structured post data
+        """
+        try:
+            # Try to extract JSON from response
+            import json
+            import re
+
+            # Look for JSON in the response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+
+            if json_match:
+                json_str = json_match.group()
+
+                # Use robust JSON parser (handles malformed JSON)
+                data = self._robust_json_parse(json_str)
+
+                if data:
+                    log_info(f"Successfully parsed response for {theme} - {format_type}")
+                    return data
+                else:
+                    log_error(f"Robust JSON parser failed for {theme} - {format_type}")
+                    return {}
+            else:
+                log_warning(f"No JSON found in response for {theme}")
+                return {}
+
+        except Exception as e:
+            log_error(f"Error parsing Claude response: {str(e)}")
+            return {}
 
     # ------------------------------------------------------------------
     # Carousel content generation
