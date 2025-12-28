@@ -7283,6 +7283,8 @@ def generate_weekly_content_in_background(start_date, weekly_themes, global_hash
                         theme=theme_config['theme'],
                         format_type='single_image_with_caption'
                     )
+                    log_info(f"DEBUG: Content keys returned: {list(content.keys()) if content else 'None'}")
+                    log_info(f"DEBUG: Full content: {content}")
                     content_text = content.get('content', '') or content.get('caption', '')
                     if not content_text:
                         log_warning(f"No content generated for image {theme_config['theme']}")
