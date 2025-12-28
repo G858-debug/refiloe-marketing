@@ -542,68 +542,62 @@ class LeonardoGenerator:
     def _build_prompt(
         self,
         base_prompt: str,
-        content_type: Optional[str],
-        use_reference: bool,
+        content_type: Optional[str] = None,
+        use_reference: bool = True,
     ) -> str:
-        """Build the final prompt for image generation.
+        """Build enhanced prompt for Leonardo AI.
 
-        IMPORTANT: This method builds prompts that focus on CONTEXT, not physical traits.
-
-        Structure:
-        1. Base context (setting, outfit, pose, mood) - from content type config
-        2. Character consistency guidance - from REFILOE_CHARACTER_DESCRIPTION
-           (only appended if featuring Refiloe AND using reference image)
-        3. Style guidance - from content type config
-        4. Additional context - from base_prompt parameter
-
-        Physical characteristics (age, skin tone, hair, facial features) should
-        ONLY come from the reference image, NOT from the prompt text.
-
-        Args:
-            base_prompt: The base prompt provided (context only, no physical traits).
-            content_type: Content type for enhancement.
-            use_reference: Whether using reference image for character consistency.
-
-        Returns:
-            Enhanced prompt string focusing on context elements.
+        The base_prompt (theme-specific) is used as PRIMARY.
+        Content type config provides FALLBACK settings only if base_prompt is generic.
         """
-        if not content_type or content_type not in CONTENT_TYPE_PROMPTS:
-            return base_prompt
+        # If we have a detailed base_prompt (theme-specific), use it directly
+        # Check if it's a detailed prompt (has Setting:, Outfit:, Pose:, etc.)
+        is_detailed_prompt = any(keyword in base_prompt for keyword in ['Setting:', 'Outfit:', 'Pose:', 'Mood:'])
 
-        config = CONTENT_TYPE_PROMPTS[content_type]
-
-        # If it's a quote graphic style, return base prompt
-        if config.get("style") == "quote_graphic":
-            return base_prompt
-
-        # Build contextual prompt (NO physical characteristics - those come from reference image)
-        if config.get("features_refiloe", True):
-            # Start with contextual elements only
+        if is_detailed_prompt:
+            # Use the theme-specific prompt as-is, just add style guidance
             enhanced = f"""
-            Professional social media photo featuring Refiloe.
+        {base_prompt}
 
-            Setting: {config.get('setting', 'professional setting')}.
-            Outfit: {config.get('outfit', 'professional attire')}.
-            Pose: {config.get('pose', 'confident stance')}.
-            Mood: {config.get('mood', 'professional and approachable')}.
+        Style: High-quality professional photography, natural lighting,
+        Instagram-ready, warm color palette with beige and earthy tones.
+        4:5 portrait aspect ratio optimized for mobile viewing.
+        """
 
-            Additional context: {base_prompt}
-
-            Style: High-quality professional photography, natural lighting,
-            Instagram-ready, warm color palette with beige and earthy tones.
-            4:5 portrait aspect ratio optimized for mobile viewing.
-            """
-
-            # Only append character consistency guidance if using reference image
-            # This helps maintain consistency with the reference, not define physical traits
             if use_reference:
                 enhanced += f"""
-            {REFILOE_CHARACTER_DESCRIPTION}
-            """
+        {REFILOE_CHARACTER_DESCRIPTION}
+        """
 
             return enhanced
 
-        return base_prompt
+        # Fallback: If base_prompt is not detailed, use content_type template
+        config = CONTENT_TYPE_PROMPTS.get(content_type, CONTENT_TYPE_PROMPTS.get('motivational', {}))
+
+        if config.get("style") == "quote_graphic":
+            return base_prompt
+
+        enhanced = f"""
+        Professional social media photo featuring Refiloe.
+
+        Setting: {config.get('setting', 'professional setting')}.
+        Outfit: {config.get('outfit', 'professional attire')}.
+        Pose: {config.get('pose', 'confident stance')}.
+        Mood: {config.get('mood', 'professional and approachable')}.
+
+        Additional context: {base_prompt}
+
+        Style: High-quality professional photography, natural lighting,
+        Instagram-ready, warm color palette with beige and earthy tones.
+        4:5 portrait aspect ratio optimized for mobile viewing.
+        """
+
+        if use_reference:
+            enhanced += f"""
+        {REFILOE_CHARACTER_DESCRIPTION}
+        """
+
+        return enhanced
 
 
     def _poll_for_completion(self, generation_id: str) -> str:
