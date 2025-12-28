@@ -420,7 +420,7 @@ class ContentGenerator(_LegacyContentGenerator):
         topic: str,
         num_slides: int = 5,
     ) -> Dict[str, Any]:
-        """Generate structured carousel content for educational/how-to posts.
+        """Generate complete carousel content with retry logic for JSON failures.
 
         Creates a complete carousel structure with cover slide, content slides,
         and CTA slide optimized for personal trainers about admin automation.
@@ -444,25 +444,39 @@ class ContentGenerator(_LegacyContentGenerator):
         num_slides = max(3, num_slides)
         num_content_slides = num_slides - 2  # Exclude cover and CTA
 
-        # Build the carousel-specific prompt
-        prompt = self._build_carousel_prompt(topic, num_content_slides)
+        # Retry logic for JSON parsing failures
+        max_retries = 2
+        carousel_data = {}
 
-        # Call Claude API
-        response = self._call_claude_with_retry(prompt)
+        for attempt in range(max_retries):
+            # Build the carousel-specific prompt
+            prompt = self._build_carousel_prompt(topic, num_content_slides)
 
-        if not response:
-            log_warning("Failed to get carousel content from Claude API")
-            return {}
+            # Call Claude API
+            response = self._call_claude_with_retry(prompt)
 
-        # Parse and validate the response
-        carousel_data = self._parse_carousel_response(response, topic, num_content_slides)
+            if not response:
+                log_warning(f"Failed to get carousel content from Claude API (attempt {attempt + 1}/{max_retries})")
+                continue
 
-        if carousel_data:
-            log_info(
-                f"Successfully generated carousel content | topic={topic} slides={num_slides}"
-            )
-        else:
-            log_warning(f"Failed to parse carousel response | topic={topic}")
+            # Parse and validate the response
+            carousel_data = self._parse_carousel_response(response, topic, num_content_slides)
+
+            if carousel_data:
+                log_info(
+                    f"Successfully generated carousel content | topic={topic} slides={num_slides}"
+                )
+                break
+            else:
+                log_warning(f"Failed to parse carousel response (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    import time
+                    wait_time = 2
+                    log_info(f"Retrying carousel generation in {wait_time} seconds...")
+                    time.sleep(wait_time)
+
+        if not carousel_data:
+            log_error(f"Failed to generate valid carousel content after {max_retries} attempts | topic={topic}")
 
         return carousel_data
 
