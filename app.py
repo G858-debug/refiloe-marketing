@@ -4987,6 +4987,30 @@ def api_edit_post(post_id: str):
         if 'video_script' in data or 'image_prompt' in data:
             update_data['generation_prompt'] = json.dumps(existing_prompt)
 
+        # Update carousel slides if provided
+        if 'carousel_slides' in data:
+            log_info(f"📝 Updating carousel slides")
+
+            # Get existing generation_prompt or create new one
+            try:
+                if isinstance(post.get('generation_prompt'), str):
+                    metadata = json.loads(post['generation_prompt'])
+                else:
+                    metadata = post.get('generation_prompt', {}) or {}
+            except:
+                metadata = {}
+
+            # Update carousel_data.slides with edited slides
+            if 'carousel_data' not in metadata:
+                metadata['carousel_data'] = {}
+
+            metadata['carousel_data']['slides'] = data['carousel_slides']
+
+            log_info(f"   Updated carousel_data with {len(data['carousel_slides'])} slides")
+
+            # Save updated metadata back to generation_prompt
+            update_data['generation_prompt'] = json.dumps(metadata)
+
         # Update content_theme if provided
         if 'content_theme' in data:
             update_data['content_theme'] = data['content_theme']
