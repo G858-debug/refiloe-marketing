@@ -464,6 +464,7 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
     1. Legacy format: slide_number, text, description
     2. AI-generated format: step_number, title, bullets
     3. Mixed format: combination of the above
+    4. String format: plain strings (converted to dicts)
 
     Creates: COVER (1) + CONTENT slides (remaining items) + CTA (1)
 
@@ -491,10 +492,39 @@ def transform_raw_slides_to_carousel_format(raw_slides: list) -> list:
         cleaned = re.sub(r'^Slide\s*\d+\s*:\s*', '', text, flags=re.IGNORECASE)
         # Remove standalone slide references
         cleaned = re.sub(r'^Slide\s*\d+\s*$', '', cleaned, flags=re.IGNORECASE)
+        # Remove patterns like "Step 1:", "Tip 1:", etc.
+        cleaned = re.sub(r'^(Step|Tip)\s*\d+\s*[:•\-–]\s*', '', cleaned, flags=re.IGNORECASE)
         return cleaned.strip()
 
-    if not raw_slides:
+    # Validate input
+    if not raw_slides or not isinstance(raw_slides, list):
+        log_warning("Invalid raw_slides - not a list or empty")
         return []
+
+    log_info(f"🔄 Transforming {len(raw_slides)} raw slides to carousel format")
+
+    # Filter out invalid items and convert strings to basic dicts
+    cleaned_slides = []
+    for idx, slide in enumerate(raw_slides):
+        if isinstance(slide, dict):
+            cleaned_slides.append(slide)
+        elif isinstance(slide, str):
+            log_warning(f"  Slide {idx+1} is a string, converting to dict: {slide[:50]}...")
+            # Convert string to basic dict
+            cleaned_slides.append({
+                'type': 'CONTENT',
+                'text': slide,
+                'description': slide
+            })
+        else:
+            log_warning(f"  Slide {idx+1} has invalid type {type(slide)}, skipping")
+
+    if not cleaned_slides:
+        log_error("No valid slides after cleaning")
+        return []
+
+    log_info(f"✅ Cleaned to {len(cleaned_slides)} valid slides")
+    raw_slides = cleaned_slides  # Use cleaned slides for transformation
 
     # CTA messages to rotate through (varied mix - 25% each category)
     cta_messages = [
