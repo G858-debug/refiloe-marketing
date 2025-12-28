@@ -3056,9 +3056,55 @@
                     carouselData = post.carousel_data;
                 }
 
-                // Extract slides if carousel_data is an object
+                // Log the structure we found
+                if (carouselData) {
+                    console.log('   carousel_data keys:', Object.keys(carouselData));
+                }
+
+                // Transform carousel_data structure to slides array
                 if (carouselData && typeof carouselData === 'object') {
-                    carouselData = carouselData.slides || carouselData;
+                    // Check if it has the new structure (cover, content_slides, cta_slide)
+                    if (carouselData.cover || carouselData.content_slides || carouselData.cta_slide) {
+                        console.log('   Transforming new carousel_data structure to slides array');
+                        const slidesArray = [];
+
+                        // Add cover slide
+                        if (carouselData.cover) {
+                            slidesArray.push({
+                                type: 'COVER',
+                                title: carouselData.cover.title || carouselData.cover.text || ''
+                            });
+                        }
+
+                        // Add content slides
+                        if (carouselData.content_slides && Array.isArray(carouselData.content_slides)) {
+                            carouselData.content_slides.forEach(slide => {
+                                slidesArray.push({
+                                    type: 'CONTENT',
+                                    step_title: slide.header || slide.title || slide.step_title || '',
+                                    bullets: slide.bullets || (slide.description ? [slide.description] : [])
+                                });
+                            });
+                        }
+
+                        // Add CTA slide
+                        if (carouselData.cta_slide) {
+                            slidesArray.push({
+                                type: 'CTA',
+                                headline: carouselData.cta_slide.headline || '',
+                                cta_text: carouselData.cta_slide.cta_text || '',
+                                subtext: carouselData.cta_slide.subtext || ''
+                            });
+                        }
+
+                        carouselData = slidesArray;
+                        console.log('   Transformed to ' + slidesArray.length + ' slides');
+                    }
+                    // Check for old structure with slides array
+                    else if (carouselData.slides && Array.isArray(carouselData.slides)) {
+                        carouselData = carouselData.slides;
+                        console.log('   Using existing slides array: ' + carouselData.length + ' slides');
+                    }
                 }
             }
 
@@ -3071,7 +3117,7 @@
                         metadata = JSON.parse(metadata);
                     }
 
-                    // Try carousel_data.slides first
+                    // Try carousel_data first
                     if (metadata.carousel_data) {
                         if (typeof metadata.carousel_data === 'string') {
                             carouselData = JSON.parse(metadata.carousel_data);
@@ -3079,9 +3125,46 @@
                             carouselData = metadata.carousel_data;
                         }
 
-                        // Extract slides array
+                        // Log the structure
+                        if (carouselData) {
+                            console.log('   carousel_data keys:', Object.keys(carouselData));
+                        }
+
+                        // Transform new structure to slides array
                         if (carouselData && typeof carouselData === 'object') {
-                            carouselData = carouselData.slides || carouselData;
+                            if (carouselData.cover || carouselData.content_slides || carouselData.cta_slide) {
+                                const slidesArray = [];
+
+                                if (carouselData.cover) {
+                                    slidesArray.push({
+                                        type: 'COVER',
+                                        title: carouselData.cover.title || carouselData.cover.text || ''
+                                    });
+                                }
+
+                                if (carouselData.content_slides && Array.isArray(carouselData.content_slides)) {
+                                    carouselData.content_slides.forEach(slide => {
+                                        slidesArray.push({
+                                            type: 'CONTENT',
+                                            step_title: slide.header || slide.title || slide.step_title || '',
+                                            bullets: slide.bullets || (slide.description ? [slide.description] : [])
+                                        });
+                                    });
+                                }
+
+                                if (carouselData.cta_slide) {
+                                    slidesArray.push({
+                                        type: 'CTA',
+                                        headline: carouselData.cta_slide.headline || '',
+                                        cta_text: carouselData.cta_slide.cta_text || '',
+                                        subtext: carouselData.cta_slide.subtext || ''
+                                    });
+                                }
+
+                                carouselData = slidesArray;
+                            } else if (carouselData.slides && Array.isArray(carouselData.slides)) {
+                                carouselData = carouselData.slides;
+                            }
                         }
                     }
 
