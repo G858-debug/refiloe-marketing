@@ -3036,28 +3036,92 @@
 
             slidesContainer.innerHTML = ''; // Clear previous content
 
-            // Get carousel data from post
+            console.log('🎨 Loading carousel slides for post:', post.id);
+            console.log('   Post type:', post.post_type);
+            console.log('   Post keys:', Object.keys(post));
+
+            // Get carousel data from post - try multiple sources
             let carouselData = null;
 
-            // Try generation_prompt first
-            try {
-                const metadata = JSON.parse(post.generation_prompt || '{}');
-                carouselData = metadata.carousel_data?.slides || metadata.carousel_slides || null;
-            } catch (e) {
-                console.error('Error parsing carousel data:', e);
+            // Source 1: Check carousel_data field directly
+            if (post.carousel_data) {
+                console.log('   Found carousel_data field');
+                if (typeof post.carousel_data === 'string') {
+                    try {
+                        carouselData = JSON.parse(post.carousel_data);
+                    } catch (e) {
+                        console.error('   Error parsing carousel_data string:', e);
+                    }
+                } else {
+                    carouselData = post.carousel_data;
+                }
+
+                // Extract slides if carousel_data is an object
+                if (carouselData && typeof carouselData === 'object') {
+                    carouselData = carouselData.slides || carouselData;
+                }
             }
 
-            // Fallback to carousel_slides if available
+            // Source 2: Check generation_prompt
+            if (!carouselData && post.generation_prompt) {
+                console.log('   Checking generation_prompt for carousel data');
+                try {
+                    let metadata = post.generation_prompt;
+                    if (typeof metadata === 'string') {
+                        metadata = JSON.parse(metadata);
+                    }
+
+                    // Try carousel_data.slides first
+                    if (metadata.carousel_data) {
+                        if (typeof metadata.carousel_data === 'string') {
+                            carouselData = JSON.parse(metadata.carousel_data);
+                        } else {
+                            carouselData = metadata.carousel_data;
+                        }
+
+                        // Extract slides array
+                        if (carouselData && typeof carouselData === 'object') {
+                            carouselData = carouselData.slides || carouselData;
+                        }
+                    }
+
+                    // Fallback to carousel_slides
+                    if (!carouselData && metadata.carousel_slides) {
+                        carouselData = metadata.carousel_slides;
+                    }
+
+                    console.log('   Extracted from generation_prompt:', carouselData ? carouselData.length + ' slides' : 'none');
+                } catch (e) {
+                    console.error('   Error parsing generation_prompt:', e);
+                }
+            }
+
+            // Source 3: Check carousel_slides field
             if (!carouselData && post.carousel_slides) {
+                console.log('   Found carousel_slides field');
                 carouselData = post.carousel_slides;
             }
 
-            if (!carouselData || (Array.isArray(carouselData) && carouselData.length === 0)) {
+            // Validate carousel data
+            if (!carouselData) {
+                console.warn('   ❌ No carousel data found in any field');
+                slidesContainer.innerHTML = '<p style="color: #999; font-size: 13px;">No carousel slides found. Generate slides first.</p>';
+                return;
+            }
+
+            if (!Array.isArray(carouselData)) {
+                console.error('   ❌ Carousel data is not an array:', typeof carouselData);
+                slidesContainer.innerHTML = '<p style="color: #999; font-size: 13px;">Invalid carousel data format</p>';
+                return;
+            }
+
+            if (carouselData.length === 0) {
+                console.warn('   ❌ Carousel data array is empty');
                 slidesContainer.innerHTML = '<p style="color: #999; font-size: 13px;">No carousel slides found</p>';
                 return;
             }
 
-            console.log('Loading carousel slides:', carouselData);
+            console.log('   ✅ Loading ' + carouselData.length + ' carousel slides');
 
             // Create edit fields for each slide
             carouselData.forEach((slide, idx) => {
@@ -3110,6 +3174,8 @@
                 slideDiv.innerHTML = slideHtml;
                 slidesContainer.appendChild(slideDiv);
             });
+
+            console.log('   ✅ Carousel slides loaded successfully');
         }
 
         async function openEditModal(postId) {
