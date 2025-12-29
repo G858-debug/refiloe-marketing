@@ -312,10 +312,16 @@ class LeonardoGenerator:
                 "quantity": num_images,
                 "prompt_enhance": LEONARDO_PROMPT_ENHANCE,
                 "seed": LEONARDO_FIXED_SEED,
-                "style_ids": [LEONARDO_STYLE_PORTRAIT_CINEMATIC],
             },
             "public": False
         }
+
+        # Only add style_ids for non-Gemini models (Gemini doesn't support style presets)
+        if not self.model_id.startswith("gemini"):
+            payload["parameters"]["style_ids"] = [LEONARDO_STYLE_PORTRAIT_CINEMATIC]
+            log_info("Added style_ids for non-Gemini model")
+        else:
+            log_info("Skipping style_ids for Gemini model (not supported)")
 
         # Add reference image for character consistency
         config = CONTENT_TYPE_PROMPTS.get(content_type, {})
@@ -364,41 +370,79 @@ class LeonardoGenerator:
             if isinstance(generation_data, list):
                 log_error(f"Leonardo V2 API returned list response: {generation_data}")
 
-                # Diagnostic: Try without style_ids and guidances to isolate the issue
+                # Diagnostic: Try without style_ids first, then fall back to minimal
                 if "guidances" in payload.get("parameters", {}) or "style_ids" in payload.get("parameters", {}):
-                    log_warning("VALIDATION_ERROR - attempting diagnostic retry without style_ids and guidances...")
+                    log_warning("⚠️ VALIDATION_ERROR - attempting diagnostic retry...")
 
-                    # Create minimal payload
-                    minimal_payload = {
-                        "model": payload["model"],
-                        "parameters": {
-                            "width": payload["parameters"]["width"],
-                            "height": payload["parameters"]["height"],
-                            "prompt": payload["parameters"]["prompt"],
-                            "quantity": payload["parameters"]["quantity"],
-                        },
-                        "public": False
-                    }
+                    # First try: with guidances but without style_ids
+                    if "style_ids" in payload.get("parameters", {}):
+                        log_warning("⚠️ Trying without style_ids but keeping guidances...")
+                        retry_payload = {
+                            "model": payload["model"],
+                            "parameters": {
+                                "width": payload["parameters"]["width"],
+                                "height": payload["parameters"]["height"],
+                                "prompt": payload["parameters"]["prompt"],
+                                "quantity": payload["parameters"]["quantity"],
+                            },
+                            "public": False
+                        }
+                        # Copy guidances if present
+                        if "guidances" in payload.get("parameters", {}):
+                            retry_payload["parameters"]["guidances"] = payload["parameters"]["guidances"]
 
-                    log_info(f"Diagnostic minimal payload: {json.dumps(minimal_payload, indent=2)}")
+                        log_info(f"Retry payload (no style_ids): {json.dumps(retry_payload, indent=2)}")
 
-                    try:
-                        retry_response = self.session.post(
-                            f"{LEONARDO_API_BASE}/generations",
-                            json=minimal_payload,
-                            timeout=30,
-                        )
-                        retry_data = retry_response.json()
-                        log_info(f"Diagnostic retry response: {retry_data}")
+                        try:
+                            retry_response = self.session.post(
+                                f"{LEONARDO_API_BASE}/generations",
+                                json=retry_payload,
+                                timeout=30,
+                            )
+                            retry_data = retry_response.json()
+                            log_info(f"Retry response: {retry_data}")
 
-                        if isinstance(retry_data, dict) and "generate" in retry_data:
-                            log_info("Minimal payload succeeded - issue is with style_ids or guidances")
-                            # Use this response and continue
-                            generation_data = retry_data
-                        else:
-                            log_error("Minimal payload also failed - issue is with base parameters")
-                    except Exception as diag_error:
-                        log_error(f"Diagnostic retry failed: {diag_error}")
+                            if isinstance(retry_data, dict) and "generate" in retry_data:
+                                log_info("✅ Succeeded without style_ids - using this response")
+                                generation_data = retry_data
+                            else:
+                                log_warning("❌ Failed without style_ids, trying minimal payload...")
+                                # Fall through to minimal payload attempt
+                        except Exception as e:
+                            log_error(f"Retry without style_ids failed: {e}")
+
+                    # If still a list, try minimal payload (no style_ids, no guidances)
+                    if isinstance(generation_data, list):
+                        log_warning("⚠️ Trying minimal payload (no style_ids, no guidances)...")
+                        minimal_payload = {
+                            "model": payload["model"],
+                            "parameters": {
+                                "width": payload["parameters"]["width"],
+                                "height": payload["parameters"]["height"],
+                                "prompt": payload["parameters"]["prompt"],
+                                "quantity": payload["parameters"]["quantity"],
+                            },
+                            "public": False
+                        }
+
+                        log_info(f"Diagnostic minimal payload: {json.dumps(minimal_payload, indent=2)}")
+
+                        try:
+                            retry_response = self.session.post(
+                                f"{LEONARDO_API_BASE}/generations",
+                                json=minimal_payload,
+                                timeout=30,
+                            )
+                            retry_data = retry_response.json()
+                            log_info(f"Diagnostic retry response: {retry_data}")
+
+                            if isinstance(retry_data, dict) and "generate" in retry_data:
+                                log_info("✅ Minimal payload succeeded - issue is with style_ids or guidances")
+                                generation_data = retry_data
+                            else:
+                                log_error("❌ Minimal payload also failed - issue is with base parameters")
+                        except Exception as diag_error:
+                            log_error(f"Diagnostic retry failed: {diag_error}")
 
                 # If still a list (diagnostic failed or not attempted), extract error and raise
                 if isinstance(generation_data, list):
