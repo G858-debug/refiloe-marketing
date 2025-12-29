@@ -363,13 +363,52 @@ class LeonardoGenerator:
             # Handle case where API returns a list instead of dict (error response)
             if isinstance(generation_data, list):
                 log_error(f"Leonardo V2 API returned list response: {generation_data}")
-                # Extract error information from the list if available
-                if generation_data and isinstance(generation_data[0], dict):
-                    error_msg = generation_data[0].get("message", "Unknown error")
-                    error_code = generation_data[0].get("code", "N/A")
-                    raise LeonardoGenerationError(f"API error [{error_code}]: {error_msg}")
-                else:
-                    raise LeonardoGenerationError(f"API returned unexpected list response: {generation_data}")
+
+                # Diagnostic: Try without style_ids and guidances to isolate the issue
+                if "guidances" in payload.get("parameters", {}) or "style_ids" in payload.get("parameters", {}):
+                    log_warning("VALIDATION_ERROR - attempting diagnostic retry without style_ids and guidances...")
+
+                    # Create minimal payload
+                    minimal_payload = {
+                        "model": payload["model"],
+                        "parameters": {
+                            "width": payload["parameters"]["width"],
+                            "height": payload["parameters"]["height"],
+                            "prompt": payload["parameters"]["prompt"],
+                            "quantity": payload["parameters"]["quantity"],
+                        },
+                        "public": False
+                    }
+
+                    log_info(f"Diagnostic minimal payload: {json.dumps(minimal_payload, indent=2)}")
+
+                    try:
+                        retry_response = self.session.post(
+                            f"{LEONARDO_API_BASE}/generations",
+                            json=minimal_payload,
+                            timeout=30,
+                        )
+                        retry_data = retry_response.json()
+                        log_info(f"Diagnostic retry response: {retry_data}")
+
+                        if isinstance(retry_data, dict) and "generate" in retry_data:
+                            log_info("Minimal payload succeeded - issue is with style_ids or guidances")
+                            # Use this response and continue
+                            generation_data = retry_data
+                        else:
+                            log_error("Minimal payload also failed - issue is with base parameters")
+                    except Exception as diag_error:
+                        log_error(f"Diagnostic retry failed: {diag_error}")
+
+                # If still a list (diagnostic failed or not attempted), extract error and raise
+                if isinstance(generation_data, list):
+                    # Extract error information from the list if available
+                    if generation_data and isinstance(generation_data[0], dict):
+                        error_msg = generation_data[0].get("message", "Unknown error")
+                        error_code = generation_data[0].get("code", "N/A")
+                        raise LeonardoGenerationError(f"API error [{error_code}]: {error_msg}")
+                    else:
+                        raise LeonardoGenerationError(f"API returned unexpected list response: {generation_data}")
 
         except requests.RequestException as e:
             log_error(f"Leonardo V2 API request failed: {e}")
