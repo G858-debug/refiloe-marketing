@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#8B7355">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Refiloe">
@@ -19,6 +19,16 @@
 
     <title>Refiloe Dashboard</title>
     <style>
+        /* Refiloe Brand Colors */
+        :root {
+            --refiloe-primary: #D4A574;
+            --refiloe-light: #F5E6D3;
+            --refiloe-dark: #8B7355;
+            --refiloe-accent: #E8D4B8;
+            --refiloe-bg: #FBF8F3;
+            --refiloe-text: #8B7355;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -27,7 +37,7 @@
             line-height: 1.6;
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D4A574 0%, #8B7355 100%);
             color: white;
             padding: 20px;
             text-align: center;
@@ -122,7 +132,7 @@
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .stat-card .number { font-size: 32px; font-weight: bold; color: #667eea; }
+        .stat-card .number { font-size: 32px; font-weight: bold; color: #D4A574; }
         .stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; }
 
         /* Action Buttons */
@@ -145,8 +155,8 @@
             align-items: center;
             gap: 8px;
         }
-        .btn-primary { background: #667eea; color: white; }
-        .btn-primary:hover { background: #5a6fd6; }
+        .btn-primary { background: #D4A574; color: white; }
+        .btn-primary:hover { background: #8B7355; }
         .btn-success { background: #4CAF50; color: white; border: none; }
         .btn-success:hover { background: #45a049; transform: translateY(-1px); }
         .btn-danger { background: #ef4444; color: white; }
@@ -1013,9 +1023,9 @@
 
         .filter-tab {
             padding: 10px 20px;
-            border: 2px solid #AAB396;
+            border: 2px solid #D4A574;
             background: white;
-            color: #674636;
+            color: #8B7355;
             border-radius: 25px;
             cursor: pointer;
             font-weight: 500;
@@ -1023,11 +1033,11 @@
         }
 
         .filter-tab:hover {
-            background: #F7EED3;
+            background: #F5E6D3;
         }
 
         .filter-tab.active {
-            background: #AAB396;
+            background: #D4A574;
             color: white;
         }
 
