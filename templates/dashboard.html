@@ -724,14 +724,6 @@
             display: flex;
         }
 
-        /* Pinned Post Modal */
-        #pinned-post-modal {
-            display: none;
-        }
-        #pinned-post-modal.active {
-            display: flex;
-        }
-
         /* Change Look Modal Styles */
         .look-btn {
             background: #f9f9f9;
@@ -901,14 +893,8 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn" onclick="generateLaunchContent()" style="background-color: #D4A574; border-color: #D4A574; color: white;">
-                🚀 Generate Launch Content
-            </button>
             <button id="generate-weekly-btn" class="btn btn-success" onclick="generateWeeklyContent()">
                 📅 Generate Weekly Content (7 days)
-            </button>
-            <button class="btn" onclick="openPinnedPostModal()" style="background-color: #9333ea; border-color: #9333ea; color: white;">
-                📌 Create Pinned Post
             </button>
             <button class="btn btn-primary" onclick="approveAll()">
                 ✅ Approve All Pending
@@ -920,21 +906,12 @@
             <button class="btn btn-secondary" onclick="refreshPosts()">
                 Refresh
             </button>
-            <button class="btn btn-secondary" onclick="backfillImagePrompts()">
-                🖼️ Backfill Image Prompts
-            </button>
-                        <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
+            <a href="/dashboard/pending-scripts" class="btn btn-warning" id="pending-scripts-btn">
                 📝 Pending Scripts <span id="pending-scripts-badge" class="badge" style="background: #fff; color: #F57C00; padding: 2px 8px; border-radius: 10px; margin-left: 5px; font-size: 12px;">0</span>
             </a>
             <a href="/upload-video" class="btn btn-info">
                 📤 Upload Video
             </a>
-            <button class="btn btn-info" onclick="fetchVideosNow()">
-                🎥 Fetch Videos Now
-            </button>
-            <button onclick="retryFailedScheduling()" class="btn" style="background-color: #f59e0b; color: white;" title="Retry posts that failed to upload to Facebook">
-                🔄 Retry Failed Scheduling
-            </button>
         </div>
 
         <!-- Media Type Filter Tabs -->
@@ -1154,96 +1131,6 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="confirmReschedule()">Reschedule</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pinned Post Modal -->
-    <div class="modal-overlay" id="pinned-post-modal">
-        <div class="modal" style="max-width: 500px;">
-            <h3>📌 Create Pinned Post</h3>
-            <p style="color: #6b7280; margin-bottom: 15px;">
-                Create a post for a specific date. Existing posts will be pushed forward automatically.
-            </p>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-date" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Date (cannot be changed later):
-                </label>
-                <input
-                    type="date"
-                    id="pinned-date"
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
-                >
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-title" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Title (e.g., "Christmas Post"):
-                </label>
-                <input
-                    type="text"
-                    id="pinned-title"
-                    placeholder="Christmas Day Post"
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
-                >
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-reason" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Reason (for your reference):
-                </label>
-                <input
-                    type="text"
-                    id="pinned-reason"
-                    placeholder="Holiday special, Product launch, etc."
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
-                >
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-type" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Post Type:
-                </label>
-                <select
-                    id="pinned-type"
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
-                >
-                    <option value="video">Video</option>
-                    <option value="image">Image</option>
-                    <option value="carousel">Carousel</option>
-                </select>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-content" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Post Content / Caption:
-                </label>
-                <textarea
-                    id="pinned-content"
-                    rows="5"
-                    placeholder="Write your post content here..."
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"
-                ></textarea>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="pinned-script" style="display: block; margin-bottom: 5px; font-weight: 500;">
-                    Video Script (if video post):
-                </label>
-                <textarea
-                    id="pinned-script"
-                    rows="4"
-                    placeholder="Script for HeyGen video generation (optional)..."
-                    style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"
-                ></textarea>
-            </div>
-
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closePinnedPostModal()">Cancel</button>
-                <button class="btn" onclick="createPinnedPost()" style="background-color: #9333ea; border-color: #9333ea; color: white;">
-                    📌 Create Pinned Post
-                </button>
             </div>
         </div>
     </div>
@@ -2279,146 +2166,6 @@
         // Keep refreshPosts as an alias for backwards compatibility
         async function refreshPosts() {
             await loadPosts();
-        }
-
-        // Fetch videos from HeyGen
-        async function fetchVideosNow() {
-            if (!confirm('Check HeyGen for completed videos?')) return;
-
-            try {
-                const btn = event.target;
-                btn.disabled = true;
-                btn.textContent = '⏳ Fetching...';
-
-                const response = await fetch('/api/dashboard/fetch-videos', { method: 'POST' });
-
-                if (response.ok) {
-                    alert('✅ Video fetch complete! Refreshing page...');
-                    location.reload();
-                } else {
-                    alert('❌ Failed to fetch videos');
-                    btn.disabled = false;
-                    btn.textContent = '🎥 Fetch Videos Now';
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-                btn.disabled = false;
-                btn.textContent = '🎥 Fetch Videos Now';
-            }
-        }
-
-        // Retry failed Facebook scheduling
-        async function retryFailedScheduling() {
-            if (!confirm('This will retry uploading all posts that are scheduled but failed to reach Facebook. Continue?')) {
-                return;
-            }
-
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳ Retrying...';
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/api/dashboard/retry-failed-scheduling', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    let message = `✅ Retry complete!\n\nRetried: ${data.retried} posts\nTotal found: ${data.total_found}`;
-
-                    if (data.errors && data.errors.length > 0) {
-                        message += `\n\n⚠️ ${data.errors.length} posts still failed:`;
-                        data.errors.slice(0, 3).forEach(err => {
-                            message += `\n- ${err.post_id.substring(0, 8)}...: ${err.error}`;
-                        });
-                        if (data.errors.length > 3) {
-                            message += `\n... and ${data.errors.length - 3} more`;
-                        }
-                    }
-
-                    alert(message);
-
-                    // Refresh the posts list
-                    if (typeof fetchPosts === 'function') {
-                        fetchPosts();
-                    } else {
-                        location.reload();
-                    }
-                } else {
-                    alert('❌ Retry failed: ' + (data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Retry failed:', error);
-                alert('❌ Error retrying: ' + error.message);
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
-        // Seed launch content
-        async function seedLaunchContent() {
-            showModal(
-                'Generate Launch Content',
-                'This will create 9 posts for your first 3 days of content. Continue?',
-                async () => {
-                    try {
-                        showToast('Generating launch content...', 'info');
-
-                        const response = await fetch(`${API_BASE}/api/dashboard/seed-launch`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            showToast(`Created ${data.posts_created} posts!`, 'success');
-                            refreshPosts();
-                        } else {
-                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error seeding content:', error);
-                        showToast('Failed to generate content', 'error');
-                    }
-                }
-            );
-        }
-
-        // Generate launch content (1 introduction post for global audience)
-        async function generateLaunchContent() {
-            showModal(
-                'Generate Launch Content',
-                'This will clear pending posts and create 1 introduction post ("Meet Refiloe") scheduled for 14:00 SAST. Continue?',
-                async () => {
-                    try {
-                        showToast('Generating introduction post...', 'info');
-
-                        const response = await fetch(`${API_BASE}/api/dashboard/generate-launch-content`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-
-                        const data = await response.json();
-
-                        if (data.success) {
-                            showToast(data.message || 'Introduction post created!', 'success');
-                            refreshPosts();
-                        } else {
-                            showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showToast('Failed to generate launch content', 'error');
-                    }
-                }
-            );
         }
 
         // Generate weekly content (7 posts for next 7 days at 14:00 SAST)
@@ -3469,79 +3216,6 @@
             }
         }
 
-        // Pinned Post functions
-        function openPinnedPostModal() {
-            // Set default date to tomorrow
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const dateStr = tomorrow.toISOString().split('T')[0];
-            document.getElementById('pinned-date').value = dateStr;
-
-            // Clear other fields
-            document.getElementById('pinned-title').value = '';
-            document.getElementById('pinned-reason').value = '';
-            document.getElementById('pinned-content').value = '';
-            document.getElementById('pinned-script').value = '';
-            document.getElementById('pinned-type').value = 'video';
-
-            // Show modal
-            document.getElementById('pinned-post-modal').classList.add('active');
-        }
-
-        function closePinnedPostModal() {
-            document.getElementById('pinned-post-modal').classList.remove('active');
-        }
-
-        async function createPinnedPost() {
-            const scheduledDate = document.getElementById('pinned-date').value;
-            const title = document.getElementById('pinned-title').value;
-            const reason = document.getElementById('pinned-reason').value;
-            const postType = document.getElementById('pinned-type').value;
-            const contentText = document.getElementById('pinned-content').value;
-            const videoScript = document.getElementById('pinned-script').value;
-
-            if (!scheduledDate) {
-                showToast('Please select a date', 'error');
-                return;
-            }
-
-            if (!contentText) {
-                showToast('Please enter post content', 'error');
-                return;
-            }
-
-            try {
-                showToast('Creating pinned post...', 'info');
-
-                const response = await fetch(`${API_BASE}/api/dashboard/create-pinned-post`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        scheduled_date: scheduledDate,
-                        title: title || `Pinned Post - ${scheduledDate}`,
-                        pinned_reason: reason,
-                        post_type: postType,
-                        content_text: contentText,
-                        video_script: videoScript,
-                        content_theme: 'special_event'
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast(data.message || 'Pinned post created!', 'success');
-                    closePinnedPostModal();
-                    refreshPosts();
-                } else {
-                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                }
-            } catch (error) {
-                console.error('Error creating pinned post:', error);
-                showToast('Failed to create pinned post', 'error');
-            }
-        }
-
         // ========== REGENERATE VIDEO FUNCTIONS ==========
         var currentRegeneratePostId = null;
         var regenerateModalOpen = false;
@@ -4144,33 +3818,6 @@
             }
         }
         // ========== END GENERATE MEDIA MODAL FUNCTIONS ==========
-
-        async function backfillImagePrompts() {
-            if (!confirm('This will generate image prompts for all posts that don\'t have one. Continue?')) {
-                return;
-            }
-
-            try {
-                showToast('Backfilling image prompts...', 'info');
-
-                const response = await fetch(`${API_BASE}/api/dashboard/backfill-image-prompts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    refreshPosts();
-                } else {
-                    showToast('Failed: ' + (data.error || 'Unknown error'), 'error');
-                }
-            } catch (error) {
-                console.error('Error backfilling prompts:', error);
-                showToast('Failed to backfill image prompts', 'error');
-            }
-        }
 
         // Generate image for a single post
         async function generateImageForPost(postId) {
