@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#8B7355">
     <title>Offline - Refiloe Dashboard</title>
     <style>
         * {
@@ -12,7 +13,7 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D4A574 0%, #8B7355 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -20,30 +21,31 @@
             padding: 20px;
         }
         .offline-container {
-            background: white;
+            background: #FBF8F3;
             border-radius: 20px;
             padding: 40px;
             text-align: center;
             max-width: 400px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(139, 115, 85, 0.4);
         }
         .offline-icon {
             font-size: 64px;
             margin-bottom: 20px;
         }
         h1 {
-            color: #1f2937;
+            color: #8B7355;
             font-size: 24px;
             margin-bottom: 12px;
         }
         p {
-            color: #6b7280;
+            color: #8B7355;
             font-size: 16px;
             line-height: 1.6;
             margin-bottom: 24px;
+            opacity: 0.8;
         }
         .retry-btn {
-            background: #667eea;
+            background: #D4A574;
             color: white;
             border: none;
             padding: 14px 32px;
@@ -51,11 +53,11 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s, background 0.2s;
         }
         .retry-btn:hover {
+            background: #8B7355;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
         .retry-btn:active {
             transform: translateY(0);
