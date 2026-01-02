@@ -3959,6 +3959,12 @@ def content_dashboard():
     return render_template('dashboard.html')
 
 
+@app.route('/offline.html')
+def offline_page():
+    """Serve offline fallback page for PWA"""
+    return render_template('offline.html')
+
+
 @app.route('/dashboard/post/<post_id>')
 def view_post_detail(post_id):
     """View single post details"""
