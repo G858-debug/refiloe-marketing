@@ -26,34 +26,67 @@
             color: #333;
             line-height: 1.6;
         }
+        /* Header Styles */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #D4A574 0%, #8B7355 100%);
             color: white;
-            padding: 20px;
-            text-align: center;
+            padding: 15px 20px;
         }
-        .header h1 { font-size: 24px; margin-bottom: 5px; }
-        .header p { opacity: 0.9; font-size: 14px; }
-        .header-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .header-title { flex: 1; }
-        .header-controls { display: flex; gap: 15px; align-items: center; }
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: contain;
+            background: rgba(255,255,255,0.2);
+            padding: 4px;
+        }
+        .header-text h1 {
+            font-size: 20px;
+            margin: 0;
+            font-weight: 600;
+        }
+        .header-subtitle {
+            font-size: 12px;
+            margin: 2px 0 0 0;
+            opacity: 0.85;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
         .connection-status {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 12px;
+            gap: 6px;
             background: rgba(255,255,255,0.15);
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 20px;
+            font-size: 12px;
+        }
+        .status-label {
+            font-size: 11px;
         }
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            display: inline-block;
+            flex-shrink: 0;
         }
-        .status-dot.online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-        .status-dot.offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .status-dot.online { background: #22c55e; }
+        .status-dot.offline { background: #ef4444; }
         .status-dot.checking { background: #fbbf24; animation: pulse 1.5s infinite; }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -62,15 +95,78 @@
         .debug-toggle {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             font-size: 12px;
+            cursor: pointer;
             background: rgba(255,255,255,0.15);
-            padding: 8px 15px;
+            padding: 6px 12px;
             border-radius: 20px;
-            cursor: pointer;
         }
-        .debug-toggle input[type="checkbox"] {
-            cursor: pointer;
+        .debug-toggle input {
+            width: 14px;
+            height: 14px;
+            margin: 0;
+        }
+
+        /* Mobile Header - Compact Version */
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+            .header-logo {
+                width: 32px;
+                height: 32px;
+                padding: 3px;
+            }
+            .header-text h1 {
+                font-size: 16px;
+            }
+            .header-subtitle {
+                display: none; /* Hide subtitle on mobile to save space */
+            }
+            .header-right {
+                gap: 8px;
+            }
+            .connection-status {
+                padding: 4px 8px;
+            }
+            .status-label {
+                display: none; /* Hide "Database" text, just show dot */
+            }
+            .debug-toggle {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            .debug-toggle span {
+                display: none; /* Hide "Debug" text on mobile */
+            }
+        }
+
+        /* Very small screens */
+        @media (max-width: 380px) {
+            .header-text h1 {
+                font-size: 14px;
+            }
+            .header-logo {
+                width: 28px;
+                height: 28px;
+            }
+        }
+
+        /* PWA standalone mode - account for notch */
+        @media (display-mode: standalone) {
+            .header {
+                padding-top: calc(10px + env(safe-area-inset-top, 0px));
+            }
+        }
+
+        @supports (padding: env(safe-area-inset-top)) {
+            .header {
+                padding-top: calc(10px + env(safe-area-inset-top));
+            }
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
 
@@ -724,11 +820,8 @@
 
         /* ========== ENHANCED MOBILE STYLES ========== */
 
-        /* Safe area padding for notched phones */
+        /* Safe area padding for notched phones (container only - header handled above) */
         @supports (padding: env(safe-area-inset-top)) {
-            .header {
-                padding-top: calc(15px + env(safe-area-inset-top));
-            }
             .container {
                 padding-left: calc(15px + env(safe-area-inset-left));
                 padding-right: calc(15px + env(safe-area-inset-right));
@@ -738,20 +831,6 @@
 
         /* Mobile breakpoint - 768px and below */
         @media (max-width: 768px) {
-            /* Header adjustments */
-            .header {
-                padding: 12px 15px;
-                position: sticky;
-                top: 0;
-                z-index: 100;
-            }
-            .header h1 {
-                font-size: 20px;
-            }
-            .header-right {
-                gap: 8px;
-            }
-
             /* Stats grid - 2 columns on mobile */
             .stats {
                 grid-template-columns: repeat(2, 1fr);
@@ -927,13 +1006,6 @@
             }
         }
 
-        /* PWA standalone mode adjustments */
-        @media (display-mode: standalone) {
-            .header {
-                padding-top: calc(15px + env(safe-area-inset-top, 20px));
-            }
-        }
-
         /* Edit Post Modal */
         #edit-post-modal {
             display: none;
@@ -1067,15 +1139,18 @@
 </head>
 <body>
     <div class="header">
-        <div class="header-top">
-            <div class="header-title">
-                <h1>Refiloe Content Dashboard</h1>
-                <p>Manage your social media content</p>
+        <div class="header-content">
+            <div class="header-left">
+                <img src="/static/icons/logo.png" alt="Refiloe" class="header-logo" onerror="this.style.display='none'">
+                <div class="header-text">
+                    <h1>Refiloe Dashboard</h1>
+                    <p class="header-subtitle">Manage your social media content</p>
+                </div>
             </div>
-            <div class="header-controls">
+            <div class="header-right">
                 <div class="connection-status">
                     <span id="connection-indicator" class="status-dot checking" title="Checking connection..."></span>
-                    <span>Database</span>
+                    <span class="status-label">Database</span>
                 </div>
                 <label class="debug-toggle">
                     <input type="checkbox" id="debug-mode" onchange="toggleDebugMode()">
