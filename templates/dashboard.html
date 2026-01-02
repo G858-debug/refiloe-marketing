@@ -2,8 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Refiloe Content Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Refiloe">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- App Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+    <title>Refiloe Dashboard</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -706,6 +720,218 @@
             .post-header { flex-direction: column; }
             .post-actions { width: 100%; }
             .post-actions .btn { flex: 1; justify-content: center; }
+        }
+
+        /* ========== ENHANCED MOBILE STYLES ========== */
+
+        /* Safe area padding for notched phones */
+        @supports (padding: env(safe-area-inset-top)) {
+            .header {
+                padding-top: calc(15px + env(safe-area-inset-top));
+            }
+            .container {
+                padding-left: calc(15px + env(safe-area-inset-left));
+                padding-right: calc(15px + env(safe-area-inset-right));
+                padding-bottom: calc(20px + env(safe-area-inset-bottom));
+            }
+        }
+
+        /* Mobile breakpoint - 768px and below */
+        @media (max-width: 768px) {
+            /* Header adjustments */
+            .header {
+                padding: 12px 15px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+            .header h1 {
+                font-size: 20px;
+            }
+            .header-right {
+                gap: 8px;
+            }
+
+            /* Stats grid - 2 columns on mobile */
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            .stat-card {
+                padding: 15px 10px;
+            }
+            .stat-card .number {
+                font-size: 24px;
+            }
+            .stat-card .label {
+                font-size: 10px;
+            }
+
+            /* Action buttons - stack vertically */
+            .action-buttons {
+                flex-direction: column;
+            }
+            .action-buttons .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            /* Other actions - scrollable row */
+            .actions {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 10px;
+                -webkit-overflow-scrolling: touch;
+            }
+            .actions .btn {
+                flex-shrink: 0;
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+
+            /* Filter tabs - scrollable */
+            .filter-tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 8px;
+                -webkit-overflow-scrolling: touch;
+                gap: 6px;
+            }
+            .filter-tab {
+                flex-shrink: 0;
+                padding: 8px 14px;
+                font-size: 13px;
+            }
+
+            /* Post cards */
+            .post-card {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            .post-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .post-title {
+                font-size: 15px;
+            }
+            .post-meta {
+                font-size: 11px;
+                flex-wrap: wrap;
+            }
+
+            /* Post actions - grid layout */
+            .post-actions {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                width: 100%;
+            }
+            .post-actions .btn {
+                padding: 10px 8px;
+                font-size: 12px;
+                justify-content: center;
+            }
+            /* Full width for primary actions */
+            .post-actions .btn-success,
+            .post-actions .btn-danger {
+                grid-column: span 2;
+            }
+
+            /* Media previews */
+            .media-preview-video,
+            .media-preview-image {
+                max-height: 250px;
+            }
+
+            /* Section headers */
+            .status-section {
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+            .status-section h3 {
+                font-size: 14px;
+                margin-bottom: 15px;
+            }
+
+            /* Modals - full screen on mobile */
+            .modal-overlay {
+                padding: 0;
+            }
+            .modal {
+                max-width: 100%;
+                width: 100%;
+                min-height: 100vh;
+                border-radius: 0;
+                margin: 0;
+            }
+            .modal h3 {
+                font-size: 18px;
+            }
+            .modal-actions {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .modal-actions .btn {
+                width: 100%;
+            }
+
+            /* Textarea improvements */
+            textarea {
+                font-size: 16px; /* Prevents iOS zoom on focus */
+            }
+
+            /* Caption text */
+            .post-caption {
+                padding: 10px;
+            }
+            .post-caption p {
+                font-size: 14px;
+            }
+        }
+
+        /* Small mobile - 480px and below */
+        @media (max-width: 480px) {
+            .stats {
+                grid-template-columns: 1fr 1fr;
+            }
+            .stat-card .number {
+                font-size: 20px;
+            }
+
+            .post-actions {
+                grid-template-columns: 1fr;
+            }
+            .post-actions .btn-success,
+            .post-actions .btn-danger {
+                grid-column: span 1;
+            }
+
+            .action-buttons .btn {
+                font-size: 13px;
+                padding: 12px 16px;
+            }
+        }
+
+        /* Touch-friendly improvements */
+        @media (hover: none) and (pointer: coarse) {
+            .btn {
+                min-height: 44px; /* Apple's recommended touch target */
+            }
+            .filter-tab {
+                min-height: 44px;
+            }
+            .post-card {
+                -webkit-tap-highlight-color: transparent;
+            }
+        }
+
+        /* PWA standalone mode adjustments */
+        @media (display-mode: standalone) {
+            .header {
+                padding-top: calc(15px + env(safe-area-inset-top, 20px));
+            }
         }
 
         /* Edit Post Modal */
@@ -4415,6 +4641,21 @@
                 closeEditTextCardModal();
             }
         });
+    </script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then((registration) => {
+                        console.log('PWA: Service Worker registered', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('PWA: Service Worker registration failed', error);
+                    });
+            });
+        }
     </script>
 </body>
 </html>
