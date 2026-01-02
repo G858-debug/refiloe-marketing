@@ -1,0 +1,39 @@
+{
+  "name": "Refiloe Marketing Dashboard",
+  "short_name": "Refiloe",
+  "description": "Social media content management for Refiloe Marketing",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Pending Approvals",
+      "short_name": "Approvals",
+      "url": "/approval/pending",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Analytics",
+      "short_name": "Analytics",
+      "url": "/analytics/",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}
