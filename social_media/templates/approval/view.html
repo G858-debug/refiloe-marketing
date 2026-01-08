@@ -60,6 +60,28 @@
             Scheduled for: <strong>{{ post.scheduled_time or 'Not scheduled' }}</strong>
           </p>
           <p class="lead">{{ post.content or 'No content available.' }}</p>
+
+          {% if post.hashtags %}
+          <div class="mt-3">
+              <h6 class="text-muted small mb-2">Hashtags</h6>
+              <p>
+                  {% if post.hashtags is iterable and post.hashtags is not string %}
+                      {% for tag in post.hashtags %}
+                          <span class="badge bg-secondary me-1">{{ tag }}</span>
+                      {% endfor %}
+                  {% else %}
+                      {{ post.hashtags }}
+                  {% endif %}
+              </p>
+          </div>
+          {% endif %}
+
+          {% if post.image_prompt %}
+          <div class="mt-3">
+              <h6 class="text-muted small mb-2">Image Generation Prompt</h6>
+              <p class="small text-muted" style="white-space: pre-wrap;">{{ post.image_prompt }}</p>
+          </div>
+          {% endif %}
         </div>
       </div>
 
