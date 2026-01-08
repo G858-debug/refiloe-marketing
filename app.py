@@ -17,6 +17,7 @@ from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta, timezone
 import pytz
 import time
+import yaml
 from anthropic import Anthropic
 
 from dotenv import load_dotenv
@@ -5864,6 +5865,167 @@ def api_generate_media(post_id):
         import traceback
         log_error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/regenerate-post/<post_id>', methods=['POST'])
+def api_regenerate_post(post_id):
+    """API: Regenerate an image post with completely new content, hashtags, and image prompt.
+
+    This creates fresh content while keeping the post record. The image_url is cleared
+    so a new image can be manually generated with the new prompt.
+    """
+    log_info(f"📥 Request: Regenerate post {post_id}")
+
+    if not app.config.get('SUPABASE_CONNECTED') or not supabase_client:
+        return jsonify({'success': False, 'error': 'Database not connected'}), 503
+
+    try:
+        # Fetch existing post
+        result = supabase_client.table('social_posts').select('*').eq('id', post_id).execute()
+
+        if not result.data or len(result.data) == 0:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+
+        post = result.data[0]
+
+        # Validate post can be regenerated
+        if post.get('status') != 'pending_approval':
+            return jsonify({
+                'success': False,
+                'error': f"Can only regenerate posts with status 'pending_approval'. Current status: {post.get('status')}"
+            }), 400
+
+        post_type = post.get('post_type') or post.get('media_type')
+        if post_type != 'image':
+            return jsonify({
+                'success': False,
+                'error': f"Can only regenerate image posts. Current type: {post_type}"
+            }), 400
+
+        log_info(f"🔄 Regenerating post {post_id} (current theme: {post.get('content_theme')})")
+
+        # Load config for theme selection
+        config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Select random theme (can be same or different)
+        content_themes = config.get('content_themes', {})
+        available_themes = list(content_themes.keys())
+
+        if not available_themes:
+            available_themes = ['admin_hacks', 'relatable_trainer_life', 'client_management_tips', 'motivation']
+
+        new_theme = random.choice(available_themes)
+        theme_config = content_themes.get(new_theme, {})
+
+        log_info(f"   Selected new theme: {new_theme}")
+
+        # Initialize ContentGenerator
+        from social_media.content_generator import ContentGenerator
+        generator = ContentGenerator(config_path, supabase_client)
+
+        # Generate new content
+        generated = generator.generate_single_post(
+            theme=new_theme,
+            format_type='single_image_with_caption'
+        )
+
+        if not generated:
+            return jsonify({'success': False, 'error': 'Failed to generate new content'}), 500
+
+        new_content_text = generated.get('caption') or generated.get('content', '')
+
+        if not new_content_text:
+            return jsonify({'success': False, 'error': 'Generated content was empty'}), 500
+
+        log_info(f"   Generated new content: {new_content_text[:80]}...")
+
+        # Generate smart hashtags
+        new_hashtags = generate_smart_hashtags(new_content_text, new_theme)
+        log_info(f"   Generated hashtags: {new_hashtags}")
+
+        # Generate new image prompt
+        new_image_prompt = generate_dynamic_image_prompt(new_content_text, new_theme, 'image')
+        log_info(f"   Generated image prompt: {new_image_prompt[:80]}...")
+
+        # Calculate next available scheduled time (after current time)
+        now = datetime.now(SA_TZ)
+
+        # Get posting times from config
+        posting_times = config.get('engagement_multipliers', {}).get('peak_times_by_day', {})
+        today_name = now.strftime('%A').lower()
+        available_times = posting_times.get(today_name, ['08:00', '12:00', '16:00', '18:00', '20:00'])
+
+        # Find next available slot
+        new_scheduled_time = None
+
+        for time_str in available_times:
+            hour, minute = map(int, time_str.split(':'))
+            candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+            if candidate > now:
+                new_scheduled_time = candidate
+                break
+
+        # If no slot today, use first slot tomorrow
+        if not new_scheduled_time:
+            tomorrow = now + timedelta(days=1)
+            tomorrow_name = tomorrow.strftime('%A').lower()
+            tomorrow_times = posting_times.get(tomorrow_name, ['08:00', '12:00', '16:00', '18:00', '20:00'])
+
+            if tomorrow_times:
+                hour, minute = map(int, tomorrow_times[0].split(':'))
+                new_scheduled_time = tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            else:
+                # Fallback: tomorrow at 12:00
+                new_scheduled_time = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+
+        log_info(f"   New scheduled time: {new_scheduled_time.isoformat()}")
+
+        # Build update data
+        update_data = {
+            'content_text': new_content_text,
+            'caption_text': new_content_text,
+            'content_theme': new_theme,
+            'hashtags': new_hashtags,
+            'image_prompt': new_image_prompt,
+            'image_url': None,  # Clear so new image can be generated
+            'scheduled_time': new_scheduled_time.isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+            'generation_prompt': json.dumps({
+                'theme': new_theme,
+                'theme_description': theme_config.get('description', ''),
+                'regenerated': True,
+                'regenerated_at': datetime.now(SA_TZ).isoformat(),
+                'image_prompt': new_image_prompt
+            })
+        }
+
+        # Update the post
+        supabase_client.table('social_posts').update(update_data).eq('id', post_id).execute()
+
+        log_info(f"✅ Successfully regenerated post {post_id}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Post regenerated successfully',
+            'post': {
+                'id': post_id,
+                'content_theme': new_theme,
+                'content_text': new_content_text[:200] + '...' if len(new_content_text) > 200 else new_content_text,
+                'hashtags': new_hashtags,
+                'image_prompt': new_image_prompt[:150] + '...' if len(new_image_prompt) > 150 else new_image_prompt,
+                'scheduled_time': new_scheduled_time.isoformat()
+            }
+        })
+
+    except Exception as e:
+        log_error(f"❌ Error regenerating post {post_id}: {str(e)}")
+        import traceback
+        log_error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/dashboard/regenerate-media/<post_id>', methods=['POST'])
 def api_regenerate_media(post_id):
