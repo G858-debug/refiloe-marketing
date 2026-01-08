@@ -2195,6 +2195,11 @@
                                 </button>
                             `
                         ) : ''}
+                        ${(post.post_type === 'image' || post.media_type === 'image') ? `
+                            <button class="btn btn-sm btn-outline-warning" onclick="regeneratePost('${post.id}')" title="Regenerate with new content">
+                                🔄 Regenerate Post
+                            </button>
+                        ` : ''}
                         ${post.post_type === 'carousel' && (!post.carousel_image_urls || post.carousel_image_urls.length === 0) ? `
                             <button class="btn btn-success" onclick="openGenerateMediaModal('${post.id}', 'carousel')" title="Generate carousel images">
                                 🎨 Generate Media
@@ -4197,6 +4202,61 @@
                 showToast('❌ Error: ' + error.message, 'error');
                 btn.innerHTML = originalText;
                 btn.disabled = false;
+            }
+        }
+
+        // Regenerate post with new content (theme, text, hashtags, image prompt)
+        async function regeneratePost(postId) {
+            if (!confirm('This will generate completely new content, hashtags, and image prompt for this post. The current content will be replaced. Continue?')) {
+                return;
+            }
+
+            // Find and update button state
+            const buttons = document.querySelectorAll(`button[onclick="regeneratePost('${postId}')"]`);
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Regenerating...';
+            });
+
+            showToast('Regenerating post content... This may take a moment.', 'info');
+
+            try {
+                const response = await fetch(`/api/dashboard/regenerate-post/${postId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showModal('✅ Post Regenerated', `
+                        <p><strong>New theme:</strong> ${data.post.content_theme}</p>
+                        <p><strong>New content:</strong></p>
+                        <p class="text-muted small">${data.post.content_text}</p>
+                        <p><strong>Hashtags:</strong> ${data.post.hashtags.join(' ')}</p>
+                        <p><strong>Scheduled:</strong> ${formatDate(data.post.scheduled_time)}</p>
+                        <p class="text-warning"><em>Note: Image needs to be regenerated separately.</em></p>
+                    `, () => {
+                        loadPosts(); // Refresh the posts list
+                    });
+                } else {
+                    showModal('❌ Regeneration Failed', `<p class="text-danger">${data.error}</p>`);
+                    // Reset button state
+                    buttons.forEach(btn => {
+                        btn.disabled = false;
+                        btn.innerHTML = '🔄 Regenerate Post';
+                    });
+                }
+            } catch (error) {
+                console.error('Error regenerating post:', error);
+                showModal('❌ Error', `<p class="text-danger">Failed to regenerate post: ${error.message}</p>`);
+                // Reset button state
+                buttons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = '🔄 Regenerate Post';
+                });
             }
         }
 
