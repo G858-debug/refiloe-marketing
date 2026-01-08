@@ -20,6 +20,18 @@
         Edit
       </a>
 
+      {% if post.post_type == 'image' or post.media_type == 'image' %}
+      <button
+          type="button"
+          class="btn btn-outline-warning"
+          id="regenerate-btn"
+          onclick="regeneratePost('{{ post.id }}')"
+          title="Generate completely new content for this post"
+      >
+          <i class="bi bi-arrow-clockwise me-1"></i> Regenerate Post
+      </button>
+      {% endif %}
+
       <form action="{{ url_for('approval.approve_post', post_id=post.id) }}" method="post" class="d-inline">
         <button type="submit" class="btn" style="background-color: #D4A574; border-color: #D4A574; color: white;" onmouseover="this.style.backgroundColor='#8B7355'; this.style.borderColor='#8B7355';" onmouseout="this.style.backgroundColor='#D4A574'; this.style.borderColor='#D4A574';">
           <i class="bi bi-check-circle me-1"></i> Approve &amp; Schedule
@@ -163,4 +175,43 @@
       </div>
     </div>
   </div>
+
+<script>
+async function regeneratePost(postId) {
+    if (!confirm('This will generate completely new content, hashtags, and image prompt for this post. The current content will be replaced. Continue?')) {
+        return;
+    }
+
+    const btn = document.getElementById('regenerate-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Regenerating...';
+
+    try {
+        const response = await fetch(`/api/dashboard/regenerate-post/${postId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Show success and reload page to see new content
+            alert('✅ Post regenerated successfully!\n\nNew theme: ' + data.post.content_theme + '\n\nThe page will refresh to show the new content.');
+            window.location.reload();
+        } else {
+            alert('❌ Regeneration failed: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    } catch (error) {
+        console.error('Error regenerating post:', error);
+        alert('❌ Error: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+</script>
 {% endblock %}
