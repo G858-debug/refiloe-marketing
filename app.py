@@ -16,6 +16,8 @@ import threading
 from flask import Flask, Blueprint, jsonify, request, render_template
 from datetime import datetime, timedelta, timezone
 import pytz
+import time
+from anthropic import Anthropic
 
 from dotenv import load_dotenv
 
@@ -237,6 +239,110 @@ def verify_supabase_connection():
                 'timestamp': datetime.now(SA_TZ).isoformat()
             }
         }
+
+
+def generate_dynamic_image_prompt(content_text: str, content_theme: str, post_type: str) -> str:
+    """
+    Use Claude AI to generate a unique, scroll-stopping image prompt based on post content.
+
+    Args:
+        content_text: The actual post caption/content
+        content_theme: Theme category (e.g., 'motivation', 'admin_hacks')
+        post_type: Type of post (video, image, carousel)
+
+    Returns:
+        A detailed image prompt string for Leonardo AI
+    """
+    log_info(f"🎨 Generating dynamic image prompt for theme: {content_theme}, post_type: {post_type}")
+
+    system_prompt = """You are an expert social media visual director specializing in creating scroll-stopping Instagram content.
+
+Your task is to generate image prompts for "Refiloe" - a fitness AI influencer. Create professional, Instagram-worthy photo descriptions.
+
+CRITICAL RULES:
+1. NEVER include physical characteristics (skin tone, age, hair color/style, facial features) - these come from reference images
+2. Focus ONLY on: Setting, Outfit, Pose/Action, Mood, Lighting
+3. The ACTION/POSE should directly relate to the post content
+4. Be creative and varied - never use the same combinations
+
+PRIORITY ORDER for scroll-stopping images:
+1. POSE/ACTION - Must relate to the post content (e.g., post about early mornings → checking phone groggily, stretching)
+2. OUTFIT - Vary creatively: athletic wear, smart casual, loungewear, professional attire, streetwear, cozy knits
+3. SETTING - Diverse locations: gym, home office, coffee shop, outdoor park, studio, kitchen, bedroom, rooftop, urban street
+4. MOOD/EXPRESSION - Match the post tone: determined, playful, confident, thoughtful, energized, peaceful
+5. LIGHTING - Create atmosphere: golden hour, soft natural, dramatic studio, warm ambient, cool morning light
+
+OUTPUT FORMAT (follow exactly):
+Setting: [describe the environment with specific details]
+Outfit: [describe clothing with colors and style]
+Pose: [describe the action/pose that relates to post content]
+Mood: [describe the expression and energy]
+Lighting: [describe the lighting style]
+Style: [photography style notes for Instagram appeal]
+
+Make every prompt unique, visually striking, and optimized for engagement. Think like a professional photographer planning a shoot."""
+
+    user_prompt = f"""Create a scroll-stopping image prompt for this social media post:
+
+POST CONTENT:
+{content_text}
+
+THEME: {content_theme}
+POST TYPE: {post_type}
+
+Generate a unique, visually compelling image prompt that:
+1. Features an action/pose that DIRECTLY relates to the post content
+2. Uses a creative outfit choice
+3. Places Refiloe in an interesting setting
+4. Captures a mood that matches the post tone
+5. Has Instagram-worthy lighting
+
+Return ONLY the image prompt in the specified format. No explanations or additional text."""
+
+    max_retries = 2
+    base_delay = 1  # 1 second base delay for exponential backoff
+
+    for attempt in range(max_retries + 1):
+        try:
+            client = Anthropic()
+
+            response = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=500,
+                temperature=0.8,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+
+            generated_prompt = response.content[0].text.strip()
+
+            # Format as a complete prompt for Leonardo AI
+            final_prompt = f"Professional social media photo of Refiloe.\n{generated_prompt}"
+
+            log_info(f"✅ Successfully generated dynamic image prompt (attempt {attempt + 1})")
+            return final_prompt
+
+        except Exception as e:
+            log_error(f"❌ Error generating dynamic image prompt (attempt {attempt + 1}/{max_retries + 1}): {str(e)}")
+
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff: 1s, 2s
+                log_info(f"⏳ Retrying in {delay} seconds...")
+                time.sleep(delay)
+            else:
+                log_error(f"❌ All {max_retries + 1} attempts failed for dynamic image prompt generation")
+                # Return a fallback prompt based on theme
+                fallback_prompt = f"""Professional social media photo of Refiloe.
+Setting: Modern, well-lit studio with clean aesthetic.
+Outfit: Stylish athletic wear with contemporary design.
+Pose: Confident stance, engaging with camera.
+Mood: Energetic and inspiring.
+Lighting: Soft, flattering studio lighting.
+Style: High-quality Instagram portrait, scroll-stopping."""
+                log_info(f"📋 Using fallback prompt for theme: {content_theme}")
+                return fallback_prompt
 
 
 def generate_scroll_stopping_image_prompt(content_theme: str, content_text: str = "", post_type: str = "image") -> str:
