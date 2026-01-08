@@ -354,6 +354,106 @@ Create a unique, visually striking image prompt. The pose/action MUST relate to 
     return _get_fallback_image_prompt(content_theme)
 
 
+def generate_smart_hashtags(content_text: str, content_theme: str) -> list:
+    """
+    Use Claude AI to generate relevant, strategic hashtags based on post content.
+
+    Args:
+        content_text: The post caption/content
+        content_theme: Theme category (e.g., 'motivation', 'admin_hacks')
+
+    Returns:
+        List of 6-8 hashtags as strings
+    """
+    import time
+    import random
+    import json
+    from anthropic import Anthropic
+
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if not api_key:
+        log_error("ANTHROPIC_API_KEY not found - using fallback hashtags")
+        return ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#PTLife", "#TrainerTips"]
+
+    client = Anthropic(api_key=api_key)
+
+    system_prompt = """You are a social media strategist specializing in fitness industry hashtags.
+
+Your task: Generate 6-8 strategic hashtags for a personal trainer's social media post.
+
+HASHTAG STRATEGY:
+1. BROAD REACH (2-3): High-volume hashtags for discovery
+   - #PersonalTrainer, #FitnessCoach, #FitnessBusiness, #TrainerLife, #FitnessMotivation
+
+2. NICHE TARGETED (2-3): Specific to the content topic
+   - Based on what the post is actually about
+   - More specific = more engaged audience
+
+3. ENGAGEMENT (1-2): Community and action-oriented
+   - #TrainerCommunity, #FitFam, #TrainerTips, #FitnessJourney
+
+RULES:
+- Return ONLY a JSON array of hashtags, nothing else
+- Each hashtag must start with #
+- No spaces in hashtags (use CamelCase for multi-word)
+- Mix of popular and niche for optimal reach
+- Make them relevant to the SPECIFIC content, not generic
+- Include 1-2 hashtags that relate directly to the post's main topic
+
+Example output format:
+["#PersonalTrainer", "#AdminHacks", "#TrainerLife", "#FitnessBusiness", "#TimeManagement", "#PTTips", "#TrainerCommunity"]"""
+
+    user_prompt = f"""Generate strategic hashtags for this fitness trainer post:
+
+THEME: {content_theme}
+CONTENT:
+{content_text[:500] if content_text else 'General fitness trainer content'}
+
+Return only a JSON array of 6-8 hashtags."""
+
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=300,
+                temperature=0.7,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}]
+            )
+
+            if response.content and len(response.content) > 0:
+                response_text = response.content[0].text.strip()
+
+                # Parse JSON array
+                try:
+                    hashtags = json.loads(response_text)
+                    if isinstance(hashtags, list) and len(hashtags) >= 4:
+                        # Ensure all start with #
+                        hashtags = [h if h.startswith('#') else f'#{h}' for h in hashtags]
+                        log_info(f"✨ Generated {len(hashtags)} smart hashtags for theme '{content_theme}'")
+                        return hashtags[:8]
+                except json.JSONDecodeError:
+                    # Try to extract hashtags from text
+                    import re
+                    found = re.findall(r'#\w+', response_text)
+                    if found and len(found) >= 4:
+                        log_info(f"✨ Extracted {len(found)} hashtags from response")
+                        return found[:8]
+
+                log_warning(f"Could not parse hashtags from response: {response_text[:100]}")
+
+        except Exception as e:
+            log_error(f"Claude API error generating hashtags (attempt {attempt + 1}): {str(e)}")
+            if attempt < max_retries:
+                wait_time = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(wait_time)
+
+    # Fallback hashtags
+    log_warning("Using fallback hashtags after failed generation")
+    return ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#PTLife", "#TrainerTips"]
+
+
 def _get_fallback_image_prompt(content_theme: str) -> str:
     """Minimal fallback if Claude API fails completely."""
     return f"""Professional social media photo of Refiloe.
