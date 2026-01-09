@@ -4231,16 +4231,10 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showModal('✅ Post Regenerated', `
-                        <p><strong>New theme:</strong> ${data.post.content_theme}</p>
-                        <p><strong>New content:</strong></p>
-                        <p class="text-muted small">${data.post.content_text}</p>
-                        <p><strong>Hashtags:</strong> ${data.post.hashtags.join(' ')}</p>
-                        <p><strong>Scheduled:</strong> ${formatDate(data.post.scheduled_time)}</p>
-                        <p class="text-warning"><em>Note: Image needs to be regenerated separately.</em></p>
-                    `, () => {
-                        loadPosts(); // Refresh the posts list
-                    });
+                    // Simple success notification - no modal confirmation needed
+                    const theme = data.post.content_theme.replace(/_/g, ' ');
+                    alert(`✅ Post regenerated!\n\nNew theme: ${theme}\nScheduled: ${formatDate(data.post.scheduled_time)}\n\nRemember to generate the image.`);
+                    loadPosts(); // Refresh immediately
                 } else {
                     showModal('❌ Regeneration Failed', `<p class="text-danger">${data.error}</p>`);
                     // Reset button state
