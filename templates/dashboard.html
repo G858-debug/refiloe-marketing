@@ -4231,10 +4231,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Simple success notification - no modal confirmation needed
+                    // Simple alert notification - no modal needed
                     const theme = data.post.content_theme.replace(/_/g, ' ');
-                    alert(`✅ Post regenerated!\n\nNew theme: ${theme}\nScheduled: ${formatDate(data.post.scheduled_time)}\n\nRemember to generate the image.`);
-                    loadPosts(); // Refresh immediately
+                    const scheduled = formatDate(data.post.scheduled_time);
+                    alert('✅ Post regenerated!\n\nNew theme: ' + theme + '\nScheduled: ' + scheduled + '\n\nRemember to generate the image.');
+                    loadPosts();
                 } else {
                     showModal('❌ Regeneration Failed', `<p class="text-danger">${data.error}</p>`);
                     // Reset button state
