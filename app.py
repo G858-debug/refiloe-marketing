@@ -5942,9 +5942,34 @@ def api_regenerate_post(post_id):
             log_error("   ❌ generate_single_post returned empty/None")
             return jsonify({'success': False, 'error': 'Failed to generate new content'}), 500
 
-        new_content_text = generated.get('caption') or generated.get('content', '')
+        # Extract content from the correct field
+        # The generator returns 'selected_variation' or 'variations', not 'caption' or 'content'
+        new_content_text = ''
 
-        log_info(f"   DEBUG: Extracted new_content_text length={len(new_content_text) if new_content_text else 0}")
+        # Try selected_variation first (this is usually the chosen content)
+        if generated.get('selected_variation'):
+            selected = generated['selected_variation']
+            if isinstance(selected, str):
+                new_content_text = selected
+            elif isinstance(selected, dict):
+                # Could be nested - try common keys
+                new_content_text = selected.get('caption') or selected.get('content') or selected.get('text') or ''
+
+        # If still empty, try variations
+        if not new_content_text and generated.get('variations'):
+            variations = generated['variations']
+            if isinstance(variations, list) and len(variations) > 0:
+                first_var = variations[0]
+                if isinstance(first_var, str):
+                    new_content_text = first_var
+                elif isinstance(first_var, dict):
+                    new_content_text = first_var.get('caption') or first_var.get('content') or first_var.get('text') or ''
+
+        # Final fallback - try other possible fields
+        if not new_content_text:
+            new_content_text = generated.get('caption') or generated.get('content') or generated.get('text') or ''
+
+        log_info(f"   DEBUG: Final extracted content length={len(new_content_text)}")
 
         if not new_content_text:
             log_error("   ❌ Generated content was empty (no caption or content field)")
@@ -5952,14 +5977,19 @@ def api_regenerate_post(post_id):
 
         log_info(f"   Generated new content: {new_content_text[:80]}...")
 
-        # Generate smart hashtags with error handling
-        try:
-            log_info(f"   Generating smart hashtags...")
-            new_hashtags = generate_smart_hashtags(new_content_text, new_theme)
-            log_info(f"   ✅ Generated hashtags: {new_hashtags}")
-        except Exception as hashtag_error:
-            log_error(f"   ❌ Hashtag generation failed: {hashtag_error}")
-            new_hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#PTLife", "#TrainerTips"]
+        # Use hashtags from generator if available, otherwise generate new ones
+        existing_hashtags = generated.get('hashtags', [])
+        if existing_hashtags and len(existing_hashtags) >= 4:
+            log_info(f"   Using hashtags from content generator: {existing_hashtags}")
+            new_hashtags = existing_hashtags
+        else:
+            try:
+                log_info(f"   Generating smart hashtags...")
+                new_hashtags = generate_smart_hashtags(new_content_text, new_theme)
+                log_info(f"   ✅ Generated hashtags: {new_hashtags}")
+            except Exception as hashtag_error:
+                log_error(f"   ❌ Hashtag generation failed: {hashtag_error}")
+                new_hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#PTLife", "#TrainerTips"]
 
         # Generate new image prompt with error handling
         try:
