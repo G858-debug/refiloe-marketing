@@ -6000,37 +6000,61 @@ def api_regenerate_post(post_id):
             log_error(f"   ❌ Image prompt generation failed: {prompt_error}")
             new_image_prompt = f"Professional social media photo of Refiloe. Theme: {new_theme}. Warm lighting, Instagram-ready."
 
-        # Calculate next available scheduled time (after current time)
+        # Calculate next available scheduled time (after current time, avoiding conflicts)
         now = datetime.now(SA_TZ)
 
         # Get posting times from config
         posting_times = config.get('engagement_multipliers', {}).get('peak_times_by_day', {})
-        today_name = now.strftime('%A').lower()
-        available_times = posting_times.get(today_name, ['08:00', '12:00', '16:00', '18:00', '20:00'])
 
-        # Find next available slot
-        new_scheduled_time = None
+        # Get existing scheduled posts to avoid conflicts
+        try:
+            existing_posts = supabase_client.table('social_posts').select('scheduled_time').in_('status', ['pending_approval', 'approved', 'scheduled', 'scheduled_on_facebook']).execute()
+            existing_times = set()
+            if existing_posts.data:
+                for p in existing_posts.data:
+                    if p.get('scheduled_time'):
+                        # Extract just the date and hour for comparison
+                        try:
+                            st = p['scheduled_time']
+                            if isinstance(st, str):
+                                # Parse ISO format and get date + hour
+                                from dateutil import parser
+                                dt = parser.parse(st)
+                                existing_times.add(dt.strftime('%Y-%m-%d %H:00'))
+                        except:
+                            pass
+            log_info(f"   Found {len(existing_times)} existing scheduled time slots")
+        except Exception as e:
+            log_warning(f"   Could not fetch existing schedules: {e}")
+            existing_times = set()
 
-        for time_str in available_times:
-            hour, minute = map(int, time_str.split(':'))
-            candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        # Build list of candidate times for next 7 days
+        candidate_slots = []
+        for day_offset in range(7):
+            check_date = now + timedelta(days=day_offset)
+            day_name = check_date.strftime('%A').lower()
+            day_times = posting_times.get(day_name, ['08:00', '12:00', '16:00', '18:00', '20:00'])
 
-            if candidate > now:
-                new_scheduled_time = candidate
-                break
+            for time_str in day_times:
+                hour, minute = map(int, time_str.split(':'))
+                candidate = check_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-        # If no slot today, use first slot tomorrow
-        if not new_scheduled_time:
+                # Only consider future times
+                if candidate > now:
+                    candidate_key = candidate.strftime('%Y-%m-%d %H:00')
+                    # Check if this slot is already taken
+                    if candidate_key not in existing_times:
+                        candidate_slots.append(candidate)
+
+        # Pick the first available slot
+        if candidate_slots:
+            new_scheduled_time = candidate_slots[0]
+            log_info(f"   Found available slot: {new_scheduled_time.isoformat()}")
+        else:
+            # Fallback: if all slots taken, just use tomorrow at noon
             tomorrow = now + timedelta(days=1)
-            tomorrow_name = tomorrow.strftime('%A').lower()
-            tomorrow_times = posting_times.get(tomorrow_name, ['08:00', '12:00', '16:00', '18:00', '20:00'])
-
-            if tomorrow_times:
-                hour, minute = map(int, tomorrow_times[0].split(':'))
-                new_scheduled_time = tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            else:
-                # Fallback: tomorrow at 12:00
-                new_scheduled_time = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+            new_scheduled_time = tomorrow.replace(hour=12, minute=0, second=0, microsecond=0)
+            log_warning(f"   No available slots found, using fallback: {new_scheduled_time.isoformat()}")
 
         log_info(f"   New scheduled time: {new_scheduled_time.isoformat()}")
 
