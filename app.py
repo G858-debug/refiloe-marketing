@@ -265,7 +265,25 @@ def generate_dynamic_image_prompt(content_text: str, content_theme: str, post_ty
 
     client = Anthropic(api_key=api_key)
 
-    system_prompt = """You are an expert social media visual director creating image prompts for Leonardo AI.
+    # Determine current season in South Africa (Southern Hemisphere)
+    current_month = datetime.now().month
+
+    if current_month in [12, 1, 2]:
+        season = "summer"
+        weather_context = "hot summer weather (25-35°C). People dress light - tank tops, shorts, sundresses, light breathable fabrics. No sweaters, jackets, or heavy clothing."
+    elif current_month in [3, 4, 5]:
+        season = "autumn"
+        weather_context = "mild autumn weather (15-25°C). Light layers acceptable - t-shirts, light cardigans, jeans. Transitional clothing."
+    elif current_month in [6, 7, 8]:
+        season = "winter"
+        weather_context = "cool winter weather (5-20°C). Warmer clothing appropriate - sweaters, jackets, long pants, layered outfits."
+    else:  # 9, 10, 11
+        season = "spring"
+        weather_context = "warm spring weather (18-28°C). Light clothing - t-shirts, light blouses, casual dresses. Minimal layering."
+
+    log_info(f"   Season context: {season} - {weather_context[:50]}...")
+
+    system_prompt = f"""You are an expert social media visual director creating image prompts for Leonardo AI.
 
 Your task: Generate a unique, scroll-stopping image prompt for "Refiloe" - a confident, successful fitness AI influencer.
 
@@ -283,12 +301,14 @@ PRIORITY ORDER (most important first):
    - Post about admin stress → overwhelmed at laptop, papers scattered
    - Post about tips → teaching gesture, pointing, explaining stance
 
-2. CLOTHING - Vary creatively based on context
-   - Athletic wear (various colors, styles)
-   - Smart casual (blazers, nice tops)
-   - Cozy loungewear (oversized hoodies, comfy clothes)
-   - Professional (business attire)
-   - Activewear with branded elements
+2. CLOTHING - CRITICAL: Must be appropriate for {season} in South Africa
+   Current weather: {weather_context}
+   Appropriate options for {season}:
+   - Athletic wear (tank tops, sports bras, shorts, light leggings)
+   - Smart casual (light blouses, breathable fabrics, summer dresses)
+   - Casual (t-shirts, crop tops, flowy tops, light cotton)
+   - If outdoors: sunglasses, caps, light accessories
+   NEVER use in {season}: sweaters, hoodies, heavy jackets, thick layers, winter clothing
 
 3. SETTING - Diverse locations that match the mood
    - Modern gym, boutique fitness studio
