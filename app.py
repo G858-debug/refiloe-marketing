@@ -5931,12 +5931,23 @@ def api_regenerate_post(post_id):
             format_type='single_image_with_caption'
         )
 
+        # DEBUG: Log exactly what we got back
+        log_info(f"   DEBUG: generate_single_post returned type={type(generated)}")
+        log_info(f"   DEBUG: generated keys={list(generated.keys()) if generated else 'None'}")
+        if generated:
+            log_info(f"   DEBUG: caption={generated.get('caption', 'NOT FOUND')[:50] if generated.get('caption') else 'None'}")
+            log_info(f"   DEBUG: content={generated.get('content', 'NOT FOUND')[:50] if generated.get('content') else 'None'}")
+
         if not generated:
+            log_error("   ❌ generate_single_post returned empty/None")
             return jsonify({'success': False, 'error': 'Failed to generate new content'}), 500
 
         new_content_text = generated.get('caption') or generated.get('content', '')
 
+        log_info(f"   DEBUG: Extracted new_content_text length={len(new_content_text) if new_content_text else 0}")
+
         if not new_content_text:
+            log_error("   ❌ Generated content was empty (no caption or content field)")
             return jsonify({'success': False, 'error': 'Generated content was empty'}), 500
 
         log_info(f"   Generated new content: {new_content_text[:80]}...")
