@@ -5941,13 +5941,23 @@ def api_regenerate_post(post_id):
 
         log_info(f"   Generated new content: {new_content_text[:80]}...")
 
-        # Generate smart hashtags
-        new_hashtags = generate_smart_hashtags(new_content_text, new_theme)
-        log_info(f"   Generated hashtags: {new_hashtags}")
+        # Generate smart hashtags with error handling
+        try:
+            log_info(f"   Generating smart hashtags...")
+            new_hashtags = generate_smart_hashtags(new_content_text, new_theme)
+            log_info(f"   ✅ Generated hashtags: {new_hashtags}")
+        except Exception as hashtag_error:
+            log_error(f"   ❌ Hashtag generation failed: {hashtag_error}")
+            new_hashtags = ["#PersonalTrainer", "#FitnessCoach", "#TrainerLife", "#FitnessBusiness", "#PTLife", "#TrainerTips"]
 
-        # Generate new image prompt
-        new_image_prompt = generate_dynamic_image_prompt(new_content_text, new_theme, 'image')
-        log_info(f"   Generated image prompt: {new_image_prompt[:80]}...")
+        # Generate new image prompt with error handling
+        try:
+            log_info(f"   Generating dynamic image prompt...")
+            new_image_prompt = generate_dynamic_image_prompt(new_content_text, new_theme, 'image')
+            log_info(f"   ✅ Generated image prompt: {new_image_prompt[:80]}...")
+        except Exception as prompt_error:
+            log_error(f"   ❌ Image prompt generation failed: {prompt_error}")
+            new_image_prompt = f"Professional social media photo of Refiloe. Theme: {new_theme}. Warm lighting, Instagram-ready."
 
         # Calculate next available scheduled time (after current time)
         now = datetime.now(SA_TZ)
